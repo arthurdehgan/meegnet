@@ -8,15 +8,28 @@ from joblib import Parallel, delayed
 import numpy as np
 from numpy.random import permutation
 from scipy.io import savemat
+from sklearn.base import clone
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 from utils import load_psd_cc_subjects
-from cc_params import SAVE_PATH, N_ELEC, WINDOW, OVERLAP, FREQ_DICT, SUB_INFO_PATH, path
+from params import SAVE_PATH, N_ELEC, WINDOW, OVERLAP, FREQ_DICT,\
+                   SUB_INFO_PATH, path
 
-N_PERMUTATIONS = 1000
+N_PERMUTATIONS = 1
 SAVE_PATH = SAVE_PATH / 'psd'
 PERM = True
 PREFIX = 'perm' if PERM else 'classif'
+
+
+def permutation_score(cv, clf, X, y):
+    clf = clone(clf)
+    perm_set = permutation(len(y))
+    y_perm = y[perm_set]
+    score = cross_val_score(cv=cv,
+                            estimator=clf,
+                            X=X, y=y_perm,
+                            n_jobs=1).mean()
+    return score
 
 
 def classification(elec):
@@ -26,7 +39,8 @@ def classification(elec):
                             PREFIX, elec, WINDOW, OVERLAP)
 
     if not path(results_file_path).isfile():
-        data, labels = load_psd_cc_subjects(SAVE_PATH, SUB_INFO_PATH, WINDOW, OVERLAP)
+        data, labels = load_psd_cc_subjects(SAVE_PATH, SUB_INFO_PATH,
+                                            WINDOW, OVERLAP)
         f, psd = np.array(data[:, 0].tolist()), data[:, 1]
         psd = np.array(list(psd))
         f = f.reshape(f.shape[0], f.shape[-1])[0]
@@ -42,16 +56,16 @@ def classification(elec):
             pvalue = 0
             good_score = cross_val_score(cv=cv,
                                          estimator=clf,
-                                         X=data, y=labels).mean()
+                                         X=data, y=labels,
+                                         n_jobs=-1).mean()
             if PERM:
-                for _ in range(N_PERMUTATIONS):
-                    clf = LDA()
-                    perm_set = permutation(len(labels))
-                    labels_perm = labels[perm_set]
-                    scores.append(cross_val_score(cv=cv,
-                                                  estimator=clf,
-                                                  X=data, y=labels_perm,
-                                                  n_jobs=-1).mean())
+                scores = Parallel(n_jobs=-1)(
+                    delayed(permutation_score)(cv=cv,
+                                               clf=LDA(),
+                                               X=data,
+                                               y=labels)
+                    for _ in range(N_PERMUTATIONS))
+
                 for score in scores:
                     if good_score <= score:
                         pvalue += 1/N_PERMUTATIONS
@@ -60,6 +74,7 @@ def classification(elec):
                         'pvalue': pvalue}
                 print('{} : {:.2f} significatif a p={:.4f}'.format(
                     key, good_score, pvalue))
+                savemat(results_file_path, data)
             else:
                 data = {'score': good_score}
                 print('{} : {:.2f}'.format(
@@ -68,7 +83,5 @@ def classification(elec):
 
 
 if __name__ == '__main__':
-    #Parallel(n_jobs=-2)(delayed(classification)(elec)
-    #                    for elec in range(N_ELEC))
     for elec in range(N_ELEC):
         classification(elec)
