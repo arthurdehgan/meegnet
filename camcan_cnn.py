@@ -6,16 +6,19 @@ import tensorflow as tf
 import pandas as pd
 import numpy as np
 from mne.io import read_raw_fif
-from cc_params import DATA_PATH
+from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
+SAVE_PATH = SAVE_PATH
+
+
 def load_subject(sub, data=None):
-    df = pd.read_csv('clean_camcan_participant_data.csv')
+    df = pd.read_csv('{}/clean_camcan_participant_data.csv'.format(SAVE_PATH))
     df = df.set_index('Observations')
     gender = (df['gender_code'] - 1)[sub]
     # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
-    subject_file = '{}/{}_rest_raw.fif'.format(DATA_PATH, sub)
+    subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
     trial = read_raw_fif(subject_file, preload=True).pick_types(meg=True)[:][0]
     n_trials = trial.shape[-1] // 5000
     for i in range(1, n_trials - 1):
@@ -113,8 +116,8 @@ def cnn_model_fn(features, labels, mode):
 
 
 def main(unused_argv):
-    train_sub_list = ['CC110033', 'CC110045']
-    test_sub_list = ['CC120795', 'CC120065']
+    train_sub_list = SUBJECT_LIST[:500]
+    test_sub_list = SUBJECT_LIST[500:]
     eval_data = None
     train_data = None
     train_labels = []
@@ -126,7 +129,7 @@ def main(unused_argv):
             train_data, train_labels = load_subject(sub)
     train_labels = np.array(train_labels)
     camcan_classifier = tf.estimator.Estimator(
-        model_fn=cnn_model_fn, model_dir="/tmp/camcan_test")
+        model_fn=cnn_model_fn, model_dir="/home/kikuko/")
 
     tensors_to_log = {"probabilities": "softmax_tensor"}
     logging_hook = tf.train.LoggingTensorHook(
@@ -136,12 +139,12 @@ def main(unused_argv):
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={"x": train_data},
         y=train_labels,
-        batch_size=10,
+        batch_size=20,
         num_epochs=None,
         shuffle=True)
     camcan_classifier.train(
         input_fn=train_input_fn,
-        steps=10000,
+        steps=100000,
         hooks=[logging_hook])
 
     # Evaluate the model and print results
