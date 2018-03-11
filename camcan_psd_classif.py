@@ -15,7 +15,7 @@ from utils import load_psd_cc_subjects
 from params import SAVE_PATH, N_ELEC, WINDOW, OVERLAP, FREQ_DICT,\
                    SUB_INFO_PATH, path
 
-N_PERMUTATIONS = 1
+N_PERMUTATIONS = 1000
 SAVE_PATH = SAVE_PATH / 'psd'
 PERM = True
 PREFIX = 'perm' if PERM else 'classif'
