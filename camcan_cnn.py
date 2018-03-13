@@ -32,7 +32,7 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
     n_trials = trial.shape[-1] // timepoints
     for i in range(1, n_trials - 1):
         curr = trial[:, i*timepoints:(i+1)*timepoints]
-        curr = curr.reshape(1, 306, timepoints)
+        curr = curr.reshape(1, len(mask), timepoints)
         data = curr if data is None else np.concatenate((data, curr))
     labels = [gender] * (n_trials - 2)
     data = data.astype(np.float32, copy=False)
@@ -42,7 +42,8 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
     # Input Layer
-    input_layer = tf.reshape(features["x"], [-1, 306, 5000, 1])
+    input_layer = tf.reshape(features["x"], [-1, features.shape[0],
+                                             features.shape[1], 1])
 
     # Convolutional Layer #1
     conv1 = tf.layers.conv2d(
