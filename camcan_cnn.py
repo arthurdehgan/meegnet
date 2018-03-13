@@ -139,7 +139,8 @@ def main(unused_argv):
                                                    ch_type='mag')
             train_labels += temp_labels
         else:
-            train_data, train_labels = load_subject(sub)
+            train_data, train_labels = load_subject(sub,
+                                                   ch_type='mag')
     train_labels = np.array(train_labels)
     camcan_classifier = tf.estimator.Estimator(
         model_fn=cnn_model_fn, model_dir="/home/kikuko/")
