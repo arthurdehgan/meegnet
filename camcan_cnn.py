@@ -22,17 +22,20 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
     trial = read_raw_fif(subject_file, preload=True).pick_types(meg=True)[:][0]
     if ch_type == 'all':
         mask = [True for _ in range(len(trial))]
+        n_channels = 306
     elif ch_type == 'mag':
         mask = CHAN_DF['mag_mask']
+        n_channels = 102
     elif ch_type == 'grad':
         mask = CHAN_DF['grad_mask']
+        n_channels = 204
     else:
         raise('Error : bad channel type selected')
     trial = trial[mask]
     n_trials = trial.shape[-1] // timepoints
     for i in range(1, n_trials - 1):
         curr = trial[:, i*timepoints:(i+1)*timepoints]
-        curr = curr.reshape(1, len(mask), timepoints)
+        curr = curr.reshape(1, n_channels, timepoints)
         data = curr if data is None else np.concatenate((data, curr))
     labels = [gender] * (n_trials - 2)
     data = data.astype(np.float32, copy=False)
@@ -140,7 +143,7 @@ def main(unused_argv):
             train_labels += temp_labels
         else:
             train_data, train_labels = load_subject(sub,
-                                                   ch_type='mag')
+                                                    ch_type='mag')
     train_labels = np.array(train_labels)
     camcan_classifier = tf.estimator.Estimator(
         model_fn=cnn_model_fn, model_dir="/home/kikuko/")
