@@ -4,13 +4,39 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 from mne.io import read_raw_fif
-from utils import load_subject
 from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH, CHAN_DF
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
 SAVE_PATH = SAVE_PATH
+
+
+def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
+    df = pd.read_csv('{}/clean_camcan_participant_data.csv'.format(SAVE_PATH))
+    df = df.set_index('Observations')
+    gender = (df['gender_code'] - 1)[sub]
+    # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
+    subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
+    trial = read_raw_fif(subject_file, preload=True).pick_types(meg=True)[:][0]
+    if ch_type == 'all':
+        mask = [True for _ in range(len(trial))]
+    elif ch_type == 'mag':
+        mask = CHAN_DF['mask_mag']
+    elif ch_type == 'grad':
+        mask = CHAN_DF['grad_mask']
+    else:
+        raise('Error : bad channel type selected')
+    trial = trial[mask]
+    n_trials = trial.shape[-1] // timepoints
+    for i in range(1, n_trials - 1):
+        curr = trial[:, i*timepoints:(i+1)*timepoints]
+        curr = curr.reshape(1, 306, timepoints)
+        data = curr if data is None else np.concatenate((data, curr))
+    labels = [gender] * (n_trials - 2)
+    data = data.astype(np.float32, copy=False)
+    return data, labels
 
 
 def cnn_model_fn(features, labels, mode):
