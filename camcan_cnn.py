@@ -23,7 +23,7 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
     if ch_type == 'all':
         mask = [True for _ in range(len(trial))]
     elif ch_type == 'mag':
-        mask = CHAN_DF['mask_mag']
+        mask = CHAN_DF['mag_mask']
     elif ch_type == 'grad':
         mask = CHAN_DF['grad_mask']
     else:
