@@ -177,7 +177,7 @@ def train(train_sub_list):
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={"x": train_data},
         y=train_labels,
-        batch_size=20,
+        batch_size=50,
         num_epochs=None,
         shuffle=True)
     camcan_classifier.train(
