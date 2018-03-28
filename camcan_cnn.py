@@ -11,9 +11,35 @@ from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH, CHAN_DF, LABELS, MODEL_PA
 
 
 N_SUB_PER_BATCH = 4
-BATCH_SIZE = 30
+BATCH_SIZE = 20
 SAVE_PATH = SAVE_PATH
-N_EPOCHS = 2
+N_EPOCHS = 1
+
+
+def prepare_data(data, labels):
+    n, m, t = data.shape
+    inputs = data.reshape(n, m, t, 1)
+    inputs = np.transpose(inputs, (0, 3, 1, 2))
+    inputs = torch.from_numpy(inputs)
+    labels = torch.from_numpy(labels)
+    inputs, labels = Variable(inputs), Variable(labels)
+    inputs, labels = inputs.cuda(), labels.cuda()
+    return inputs, labels
+
+
+def load_subs(sub_list, data=None, labels=[], ch_type='all'):
+    for sub in sub_list:
+        if data is not None:
+            data, temp_labels = load_subject(sub, data,
+                                             ch_type=ch_type)
+            labels += temp_labels
+        else:
+            data, labels = load_subject(sub, ch_type=ch_type)
+    labels = np.array(labels)
+    perm = np.random.permutation(range(len(data)))
+    labels = labels[perm]
+    data = data[perm]
+    return data, labels
 
 
 def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
@@ -85,6 +111,7 @@ if __name__ == '__main__':
 
     done_sub = set()
     for epoch in range(N_EPOCHS):
+        seen = 0
         for _ in range(len(X_train)//N_SUB_PER_BATCH):
             sub_list = set(np.random.choice(list(X_train - done_sub),
                                             N_SUB_PER_BATCH,
@@ -92,30 +119,14 @@ if __name__ == '__main__':
             print(sub_list)
             done_sub = done_sub.union(sub_list)
             running_loss = 0.0
-            train_labels = []
-            train_data = None
-            for sub in sub_list:
-                if train_data is not None:
-                    train_data, temp_labels = load_subject(sub,
-                                                           train_data,
-                                                           ch_type='mag')
-                    train_labels += temp_labels
-                else:
-                    train_data, train_labels = load_subject(sub,
-                                                            ch_type='mag')
-            train_labels = np.array(train_labels)
-            perm = np.random.permutation(range(len(train_data)))
-            train_labels = train_labels[perm]
-            train_data = train_data[perm]
+            train_data, train_labels = load_subs(sub_list,
+                                                 ch_type='mag')
             for i in range(0, train_data.shape[0], BATCH_SIZE):
                 data = train_data[i:i+BATCH_SIZE]
                 labels = train_labels[i:i+BATCH_SIZE]
-                n, m, t = data.shape
-                inputs = data.reshape(n, m, t, 1)
-                inputs = np.transpose(inputs, (0, 3, 1, 2))
-                inputs = torch.from_numpy(inputs)
-                inputs, labels = Variable(inputs), Variable(torch.from_numpy(labels))
-                inputs, labels = inputs.cuda(), labels.cuda()
+                seen += len(labels)
+                inputs, labels = prepare_data(data, labels)
+
                 optimizer.zero_grad()
 
                 outputs = net(inputs)
@@ -123,10 +134,11 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
                 running_loss += loss.data[0]
+
                 if i % 100 == 0:
                     # print('loss: {:.3f}'.format(running_loss/10))
                     print('[%d, %5d] loss: %.3f' %
-                         (epoch + 1, i + 1, running_loss / 2000))
+                         (epoch + 1, seen, running_loss / 2000))
                     running_loss = 0.0
 
     done_sub = set()
@@ -138,23 +150,12 @@ if __name__ == '__main__':
                                         replace=False))
         print(sub_list)
         done_sub = done_sub.union(sub_list)
-        eval_data = None
-        eval_labels = []
-        for sub in sub_list:
-            if eval_data is not None:
-                eval_data, temp_labels = load_subject(sub, eval_data)
-                eval_labels += temp_labels
-            else:
-                eval_data, eval_labels = load_subject(sub)
+        eval_data, eval_labels = load_subs(sub_list)
 
         for i in range(0, eval_data.shape[0], BATCH_SIZE):
             labels = np.array(eval_labels[i:i+BATCH_SIZE])
             data = eval_data[i:i+BATCH_SIZE]
-            n, m, t = data.shape
-            inputs = data.reshape(n, m, t, 1)
-            inputs = np.transpose(inputs, (0, 3, 1, 2))
-            inputs = torch.from_numpy(inputs)
-            inputs = Variable(inputs).cuda()
+            inputs, labels = prepare_data(data, labels)
             outputs = net(inputs)
             _, predicted = torch.max(outputs.data, 1)
             c = (predicted == labels).squeeze()
