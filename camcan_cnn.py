@@ -7,13 +7,16 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split as data_split
 from mne.io import read_raw_fif
-from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH, CHAN_DF, LABELS, MODEL_PATH
+from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH, CHAN_DF,\
+                   LABELS, MODEL_PATH
 
 
 N_SUB_PER_BATCH = 4
 BATCH_SIZE = 20
 SAVE_PATH = SAVE_PATH
 N_EPOCHS = 1
+CONVK = '1.5'
+POOLK = '1.5'
 
 
 def prepare_data(data, labels):
@@ -77,11 +80,13 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 4, (1, 2))
-        self.pool = nn.MaxPool2d((1, 2), (1, 2))
-        self.conv2 = nn.Conv2d(4, 8, (1, 2))
-        self.conv3 = nn.Conv2d(8, 16, (1, 2))
-        self.conv4 = nn.Conv2d(16, 32, (1, 2))
+        conv_kernel = list(map(int, CONVK.split('.')))
+        pool_kernel = list(map(int, POOLK.split('.')))
+        self.conv1 = nn.Conv2d(1, 4, conv_kernel)
+        self.pool = nn.MaxPool2d(pool_kernel, pool_kernel)
+        self.conv2 = nn.Conv2d(4, 8, conv_kernel)
+        self.conv3 = nn.Conv2d(8, 16, conv_kernel)
+        self.conv4 = nn.Conv2d(16, 32, conv_kernel)
         self.fc = nn.Linear(404736, 2)
 
     def forward(self, x):
@@ -98,6 +103,7 @@ if __name__ == '__main__':
     net = Net()
     net = net.cuda()
     params = list(net.parameters())
+    print(len(params))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
@@ -108,38 +114,45 @@ if __name__ == '__main__':
                                  test_size=.1)
     X_train = set(X_train)
     X_test = set(X_test)
+    model_filename = MODEL_PATH / 'model_c{}_p{}.pt'.format(
+        CONVK, POOLK)
 
     done_sub = set()
-    for epoch in range(N_EPOCHS):
-        seen = 0
-        for _ in range(len(X_train)//N_SUB_PER_BATCH):
-            sub_list = set(np.random.choice(list(X_train - done_sub),
-                                            N_SUB_PER_BATCH,
-                                            replace=False))
-            print(sub_list)
-            done_sub = done_sub.union(sub_list)
-            running_loss = 0.0
-            train_data, train_labels = load_subs(sub_list,
-                                                 ch_type='mag')
-            for i in range(0, train_data.shape[0], BATCH_SIZE):
-                data = train_data[i:i+BATCH_SIZE]
-                labels = train_labels[i:i+BATCH_SIZE]
-                seen += len(labels)
-                inputs, labels = prepare_data(data, labels)
+    if model_filename.exists():
+        net.load_state_dict(torch.load(model_filename))
+    else:
+        for epoch in range(N_EPOCHS):
+            seen = 0
+            for _ in range(len(X_train)//N_SUB_PER_BATCH):
+                sub_list = set(np.random.choice(list(X_train - done_sub),
+                                                N_SUB_PER_BATCH,
+                                                replace=False))
+                print(sub_list)
+                done_sub = done_sub.union(sub_list)
+                running_loss = 0.0
+                train_data, train_labels = load_subs(sub_list,
+                                                     ch_type='mag')
+                for i in range(0, train_data.shape[0], BATCH_SIZE):
+                    data = train_data[i:i+BATCH_SIZE]
+                    labels = train_labels[i:i+BATCH_SIZE]
+                    seen += len(labels)
+                    inputs, labels = prepare_data(data, labels)
 
-                optimizer.zero_grad()
+                    optimizer.zero_grad()
 
-                outputs = net(inputs)
-                loss = criterion(outputs, labels)
-                loss.backward()
-                optimizer.step()
-                running_loss += loss.data[0]
+                    outputs = net(inputs)
+                    loss = criterion(outputs, labels)
+                    loss.backward()
+                    optimizer.step()
+                    running_loss += loss.data[0]
 
-                if i % 100 == 0:
-                    # print('loss: {:.3f}'.format(running_loss/10))
-                    print('[%d, %5d] loss: %.3f' %
-                         (epoch + 1, seen, running_loss / 2000))
-                    running_loss = 0.0
+                    if i % 100 == 0:
+                        # print('loss: {:.3f}'.format(running_loss/10))
+                        print('[%d, %5d] loss: %.3f' %
+                              (epoch + 1, seen, running_loss / 2000))
+                        running_loss = 0.0
+
+        net.save_state_dict(model_filename)
 
     done_sub = set()
     correct = 0
