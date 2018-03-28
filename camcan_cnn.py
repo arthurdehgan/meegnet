@@ -6,7 +6,8 @@ import torch.optim as optim
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split as data_split
-from mne.io import read_raw_fif
+from scipy.io import loadmat
+# from mne.io import read_raw_fif
 from params import DATA_PATH, SUBJECT_LIST, SAVE_PATH, CHAN_DF,\
                    LABELS, MODEL_PATH
 
@@ -50,8 +51,10 @@ def load_subject(sub, data=None, timepoints=2000, ch_type='all'):
     df = df.set_index('Observations')
     gender = (df['gender_code'] - 1)[sub]
     # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
-    subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
-    trial = read_raw_fif(subject_file, preload=True).pick_types(meg=True)[:][0]
+    subject_file = '{}_rest.mat'.format(DATA_PATH / sub)
+    # trial = read_raw_fif(subject_file,
+    #                      preload=True).pick_types(meg=True)[:][0]
+    trial = loadmat(subject_file)['data']
     if ch_type == 'all':
         mask = [True for _ in range(len(trial))]
         n_channels = 306
@@ -135,7 +138,6 @@ if __name__ == '__main__':
                 for i in range(0, train_data.shape[0], BATCH_SIZE):
                     data = train_data[i:i+BATCH_SIZE]
                     labels = train_labels[i:i+BATCH_SIZE]
-                    seen += len(labels)
                     inputs, labels = prepare_data(data, labels)
 
                     optimizer.zero_grad()
@@ -149,8 +151,9 @@ if __name__ == '__main__':
                     if i % 100 == 0:
                         # print('loss: {:.3f}'.format(running_loss/10))
                         print('[%d, %5d] loss: %.3f' %
-                              (epoch + 1, seen, running_loss / 2000))
+                              (epoch + 1, seen, running_loss / BATCH_SIZE))
                         running_loss = 0.0
+                    seen += len(labels)
 
         net.save_state_dict(model_filename)
 
