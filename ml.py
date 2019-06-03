@@ -47,13 +47,17 @@ def load_freq_data(dataframe, path=DATA_PATH):
     for row in dataframe[: int(len(dataframe))].iterrows():
         sub = row[1]["Observations"]
         # lab = row[1]["gender_code"]
-        sub_data = extract_bands(np.load(path + "{}_rest_psd.npy".format(sub)))
+        sub_data = sp.stats.zscore(
+            extract_bands(np.load(path + "{}_rest_psd.npy".format(sub)))
+        )
         # sub_data = np.load(path + "{}_rest_psd.npy".format(sub))
-        sub_data = sub_data - sub_data.mean(axis=0)[None, :]
+        # sub_data = sub_data - sub_data.mean(axis=0)[None, :]
         try:
-            sub_data2 = extract_bands(np.load(path + "{}_task_psd.npy".format(sub)))
+            sub_data2 = sp.stats.zscore(
+                extract_bands(np.load(path + "{}_task_psd.npy".format(sub)))
+            )
             # sub_data2 = np.load(path + "{}_task_psd.npy".format(sub))
-            sub_data2 = sub_data2 - sub_data2.mean(axis=0)[None, :]
+            # sub_data2 = sub_data2 - sub_data2.mean(axis=0)[None, :]
         except:
             sub_data2 = np.array([]).reshape(shape)
         # y += [lab] * len(sub_data)
@@ -70,6 +74,15 @@ def load_freq_data(dataframe, path=DATA_PATH):
 
 if __name__ == "__main__":
 
+    # from sklearn.datasets import load_breast_cancer
+
+    # data = load_breast_cancer()
+    # X, y = data["data"][:100], data["target"][:100]
+    # idx = np.random.RandomState(0).permutation(range(len(X)))
+    # X, y = X[idx], y[idx]
+    # X_test_og, y_test = X[60:], y[60:]
+    # X_og, y = X[:60], y[:60]
+
     data_df = SUB_DF[["Observations", "gender_code"]]
     idx = np.random.RandomState(0).permutation(range(len(data_df)))
     data_df = data_df.iloc[idx]
@@ -82,6 +95,7 @@ if __name__ == "__main__":
     idx = np.random.RandomState(0).permutation(range(len(X_og)))
     X_og = X_og[idx]
     y = y[idx]
+    print(X_og[[0, 33, 166]], y[[0, 33, 166]])
 
     idx = np.random.RandomState(0).permutation(range(len(X_test_og)))
     X_test_og = X_test_og[idx]
@@ -95,10 +109,9 @@ if __name__ == "__main__":
         "C": sp.stats.expon(scale=10),
         "gamma": sp.stats.expon(scale=0.1),
     }
-    train = []
-    tests = []
-    params = []
     for elec in range(N_ELEC):
+        # X = X_og
+        # X_test = X_test_og
         X = X_og[:, elec]
         X_test = X_test_og[:, elec]
         # if len(X.shape) < 2:
@@ -114,14 +127,15 @@ if __name__ == "__main__":
             n_jobs=-1,
         )
         randsearch.fit(X, y)
-        params.append(randsearch.best_params_)
-        train.append(randsearch.best_score_)
+        param = randsearch.best_params_
+        train = randsearch.best_score_
         clf = SVC(**randsearch.best_params_)
-        tests.append(np.mean(cross_val_score(clf, X_test, y_test, cv=cv, n_jobs=-1)))
+        test = np.mean(cross_val_score(clf, X_test, y_test, cv=cv, n_jobs=-1))
 
+        print(train, test, param)
         np.save(SAVE_PATH + f"SVM_train_scores_elec{elec}", train)
-        np.save(SAVE_PATH + f"SVM_test_scores_elec{elec}", tests)
-        np.save(SAVE_PATH + f"SVM_params_elec{elec}", params)
+        np.save(SAVE_PATH + f"SVM_test_scores_elec{elec}", test)
+        np.save(SAVE_PATH + f"SVM_params_elec{elec}", param)
 
     # all_scores = np.asarray(all_scores)
     # final = all_scores[np.argmax(np.max(all_scores, axis=0))]
