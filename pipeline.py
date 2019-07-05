@@ -10,12 +10,12 @@ from sklearn.model_selection import (
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.linear_model import Perceptron
 from sklearn.svm import SVC
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, StratifiedShuffleSplit as SSS
 from sklearn.discriminant_analysis import (
     LinearDiscriminantAnalysis as LDA,
     QuadraticDiscriminantAnalysis as QDA,
 )
-from mlneurotools.ml import StratifiedShuffleGroupSplit
+from mlneurotools.ml import StratifiedShuffleGroupSplit as SSGS
 from params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF, LABELS
 
 
@@ -36,7 +36,7 @@ parser.add_argument(
 parser.add_argument(
     "-l",
     "--label",
-    choices=["gender", "age_all", "age", "subject"],
+    choices=["gender", "age", "subject"],
     default="gender",
     help="The type of classification to run",
 )
@@ -53,12 +53,6 @@ parser.add_argument(
     choices=["bands", "bins"],
     default="bands",
     help="The type of features to use",
-)
-parser.add_argument(
-    "--n_subjout",
-    type=int,
-    default=4,
-    help="The number of subjects to leave out for cross_validations",
 )
 parser.add_argument(
     "--n_crossval", type=int, default=1000, help="The number of cross-validations to do"
@@ -128,7 +122,7 @@ def load_data(label, feature, args):
     else:
         col = "age"
 
-    if label in ["age_all", "subject"]:
+    if label in ["subject"]:
         stratify = None
 
     if feature == "bands":
@@ -163,7 +157,10 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
     elec_name = CHAN_DF.iloc[elec]["ch_name"]
     X_og, y, groups = train_set
     X_test_og, y_test, groups_test = test_set
-    cv = StratifiedShuffleGroupSplit(args.n_subjout, args.n_crossval)
+    if label != "subject":
+        cv = SSGS(len(np.unique(y)) * 1, args.n_crossval)
+    else:
+        cv = SSS(10)
     savename = SAVE_PATH + f"{args.clf}_{label}_test_scores_elec{elec_name}.npy"
     if args.verbose:
         print(CHAN_DF.iloc[elec])
@@ -180,8 +177,8 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
             print(
                 f"example groups train: {groups[pattern]}, test: {groups_test[pattern]}"
             )
-        if args.clf in ["LDA"] and len(np.unique(y)) > 2:
-            return
+        # if args.clf in ["LDA"] and len(np.unique(y)) > 2:
+        #     return
 
         if args.clf == "RF":
             n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
@@ -209,7 +206,6 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
                 n_jobs=args.cores,
             )
             clf = RF(**randsearch.best_params_)
-            cv = StratifiedShuffleGroupSplit(args.n_subjout, args.n_crossval)
 
         elif args.clf == "perceptron":
             random_grid = {
@@ -224,8 +220,8 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
                 random_state=42,
                 n_jobs=args.cores,
             )
+            print("BOOM")
             clf = Perceptron(**randsearch.best_params_)
-            cv = StratifiedShuffleGroupSplit(args.n_subjout, args.n_crossval)
 
         elif args.clf == "SVM":
             param_distributions = {
@@ -246,7 +242,6 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
             param = randsearch.best_params_
             train = randsearch.best_score_
             clf = SVC(**randsearch.best_params_)
-            cv = StratifiedShuffleGroupSplit(args.n_subjout, args.n_crossval)
             if args.verbose:
                 print("Done")
         elif args.clf == "LDA":
@@ -256,6 +251,11 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
 
         if args.verbose:
             print("Testing...", sep="")
+        if label != "subject":
+            cv = SSGS(len(np.unique(y_test)) * 1, args.n_crossval)
+        else:
+            cv = SSS(10)
+
         test = np.mean(
             cross_val_score(
                 clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
         for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
-            for label in ["subject", "age_all", "age", "gender"]:
+            for label in ["subject", "age", "gender"]:
                 for feature in ["bins", "bands"]:
                     print("\n", clf, label, feature)
                     train_set, test_set = load_data(label, feature, args)
