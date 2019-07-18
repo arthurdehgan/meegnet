@@ -1,4 +1,5 @@
 import sys
+import argparse
 from itertools import product
 from time import time
 import torch
@@ -10,7 +11,29 @@ import pandas as pd
 import numpy as np
 from scipy.signal import decimate
 from path import Path as path
-from params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF
+from params import DATA_PATH, CHAN_DF, SUB_DF
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-d", "--dropout", type=float, help="The dropout rate of the linear layers"
+)
+parser.add_argument(
+    "--dropout_option",
+    choices=["same", "double", "inverted"],
+    help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
+)
+parser.add_argument(
+    "-l", "--linear", type=int, help="The size of the second linear layer"
+)
+parser.add_argument(
+    "-f", "--filters", type=int, help="The size of the first convolution"
+)
+parser.add_argument(
+    "-n",
+    "--nchan",
+    type=int,
+    help="the number of channels for the first convolution, the other channel numbers scale with this one",
+)
 
 PATIENCE = 20
 MAX_SUBJ = 200
@@ -24,7 +47,7 @@ DECIMATE = 10
 TRIAL_LENGTH = 500
 OFFSET = 2500
 np.random.seed(42)
-DATA_PATH = path(DATA_PATH).parent + "/time_series/"
+SAVE_PATH = "./models/"
 
 
 def accuracy(y_pred, target):
@@ -66,8 +89,8 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 
-def load_subject(sub, data_path=SAVE_PATH, data=None, timepoints=500, ch_type="all"):
-    df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(SAVE_PATH))
+def load_subject(sub, data_path=DATA_PATH, data=None, timepoints=500, ch_type="all"):
+    df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
     df = df.set_index("Observations")
     gender = (df["gender"])[sub]
     # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
@@ -205,9 +228,9 @@ def train(net, dataloader, validloader, save_model=False):
                     "state_dict": best_net.state_dict(),
                     "optimizer": optimizer.state_dict(),
                 }
-                model_filepath = DATA_PATH / net.name + ".pt"
+                model_filepath = SAVE_PATH / net.name + ".pt"
                 save_checkpoint(checkpoint, model_filepath)
-                net.save_model(DATA_PATH)
+                net.save_model(SAVE_PATH)
         else:
             j += 1
 
@@ -239,6 +262,11 @@ def evaluate(net, dataloader, criterion):
     return floss, faccuracy
 
 
+def compute_lin_size(X, network):
+    X = torch.Tensor(X)
+    return network.feature_extraction.forward(X).shape[-1]
+
+
 class FullNet(nn.Module):
     def __init__(
         self,
@@ -247,10 +275,27 @@ class FullNet(nn.Module):
         n_channels=5,
         n_linear=150,
         dropout=.3,
-        lin_size=None,
+        dropout_option="same",
+        lin_size=200,
     ):
+        if dropout_option == "same":
+            dropout1 = dropout
+            dropout2 = dropout
+        else:
+            assert (
+                dropout < .5
+            ), "dropout cannot be higher than .5 in this configuration"
+            if dropout_option == "double":
+                dropout1 = dropout
+                dropout2 = dropout * 2
+            elif dropout_option == "inverted":
+                dropout1 = dropout * 2
+                dropout2 = dropout
+            else:
+                print(f"{dropout_option} is not a valid option")
+
         super(FullNet, self).__init__()
-        self.model = nn.Sequential(
+        self.feature_extraction = nn.Sequential(
             nn.Conv2d(1, 5 * n_channels, (1, filter_size)),
             nn.BatchNorm2d(5 * n_channels),
             nn.ReLU(),
@@ -266,9 +311,11 @@ class FullNet(nn.Module):
             nn.BatchNorm2d(16 * n_channels),
             nn.ReLU(),
             Flatten(),
-            nn.Dropout(dropout),
+        )
+        self.model = nn.Sequential(
+            nn.Dropout(dropout1),
             nn.Linear(lin_size, n_linear),
-            nn.Dropout(dropout * 2),
+            nn.Dropout(dropout2),
             nn.Linear(n_linear, 2),
             nn.Softmax(dim=-1),
         )
@@ -276,7 +323,7 @@ class FullNet(nn.Module):
         self.name = model_name
 
     def forward(self, x):
-        return self.model(x)
+        return self.model(self.feature_extraction(x))
 
     def save_model(self, filepath="."):
         if not filepath.endswith("/"):
@@ -291,27 +338,30 @@ class FullNet(nn.Module):
 
 if __name__ == "__main__":
 
+    args = parser.parse_args()
+    filters = args.filters
+    nchan = args.nchan
+    dropout = args.dropout
+    dropout_option = args.dropout_option
+    linear = args.linear
+
+    net = FullNet("", filters, nchan)
+    lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+
+    net = FullNet(
+        f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        filters,
+        nchan,
+        linear,
+        dropout,
+        dropout_option,
+        lin_size,
+    )
+    net = net.cuda()
+    print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
+
     a = time()
     trainloader, validloader, testloader = create_loaders(TRAIN_SIZE)
     print(time() - a)
 
-    for dropout, filters, nchan, nlin in product(
-        (0.2, 0.3), (25, 40), (1, 2, 5), (50, 100, 150, 200)
-    ):
-        if filters == 25:
-            lin_size = 224 * nchan
-        if filters == 40:
-            lin_size = 160 * nchan
-        net = FullNet(
-            f"dropout{dropout}_filter{filters}_nchan{nchan}_nlin{nlin}",
-            filters,
-            nchan,
-            nlin,
-            dropout,
-            lin_size,
-        )
-        net = net.cuda()
-        print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
-        net.save_model(".")
-
-        train(net, trainloader, validloader, True)
+    train(net, trainloader, validloader, True)
