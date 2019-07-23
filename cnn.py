@@ -10,7 +10,6 @@ from torchsummary import summary
 import pandas as pd
 import numpy as np
 from scipy.signal import decimate
-from path import Path as path
 from params import DATA_PATH, CHAN_DF, SUB_DF
 
 parser = argparse.ArgumentParser()
@@ -150,7 +149,7 @@ def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
     data_df = SUB_DF[["Observations", "gender"]]
     idx = np.random.permutation(range(len(data_df)))
     data_df = data_df.iloc[idx]
-    data_df = data_df.iloc[:MAX_SUBJ]
+    data_df = data_df.iloc[:max_subj]
     N = len(data_df)
     train_size = int(N * train_size)
     remaining_size = N - train_size
@@ -228,7 +227,7 @@ def train(net, dataloader, validloader, save_model=False):
                     "state_dict": best_net.state_dict(),
                     "optimizer": optimizer.state_dict(),
                 }
-                model_filepath = SAVE_PATH / net.name + ".pt"
+                model_filepath = SAVE_PATH + net.name + ".pt"
                 save_checkpoint(checkpoint, model_filepath)
                 net.save_model(SAVE_PATH)
         else:
