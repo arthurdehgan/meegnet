@@ -9,6 +9,7 @@ import torch.optim as optim
 from torchsummary import summary
 import pandas as pd
 import numpy as np
+import scipy as sp
 from scipy.signal import decimate
 from params import DATA_PATH, CHAN_DF, SUB_DF
 
@@ -41,7 +42,7 @@ BATCH_SIZE = 128
 N_EPOCHS = 50
 N_CHANNELS = 102
 LEARNING_RATE = 0.0001
-TRAIN_SIZE = .75
+TRAIN_SIZE = 0.75
 DECIMATE = 10
 TRIAL_LENGTH = 500
 OFFSET = 2500
@@ -236,6 +237,19 @@ def train(net, dataloader, validloader, save_model=False):
         print("epoch: {}".format(epoch))
         print(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
         print(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+        if save_model:
+            results = {
+                "acc_score": [best_vacc],
+                "loss_score": [best_vloss],
+                "acc": valid_accs,
+                "train_acc": train_accs,
+                "valid_loss": valid_losses,
+                "train_loss": train_losses,
+                "best_epoch": best_epoch,
+                "n_epochs": epoch,
+            }
+            sp.io.savemat(SAVE_PATH + net.name, results)
+
     return net
 
 
@@ -273,7 +287,7 @@ class FullNet(nn.Module):
         filter_size=50,
         n_channels=5,
         n_linear=150,
-        dropout=.3,
+        dropout=0.3,
         dropout_option="same",
         lin_size=200,
     ):
@@ -282,7 +296,7 @@ class FullNet(nn.Module):
             dropout2 = dropout
         else:
             assert (
-                dropout < .5
+                dropout < 0.5
             ), "dropout cannot be higher than .5 in this configuration"
             if dropout_option == "double":
                 dropout1 = dropout
