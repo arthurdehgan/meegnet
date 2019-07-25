@@ -9,7 +9,7 @@ import torch.optim as optim
 from torchsummary import summary
 import pandas as pd
 import numpy as np
-import scipy as sp
+from scipy.io import savemat
 from scipy.signal import decimate
 from params import DATA_PATH, CHAN_DF, SUB_DF
 
@@ -248,7 +248,7 @@ def train(net, dataloader, validloader, save_model=False):
                 "best_epoch": best_epoch,
                 "n_epochs": epoch,
             }
-            sp.io.savemat(SAVE_PATH + net.name, results)
+            savemat(SAVE_PATH + net.name + ".mat", results)
 
     return net
 
