@@ -184,6 +184,7 @@ def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
 
 
 def train(net, dataloader, validloader, save_model=False):
+    net.train()
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
 
@@ -204,6 +205,7 @@ def train(net, dataloader, validloader, save_model=False):
             X = X.view(-1, 1, N_CHANNELS, TRIAL_LENGTH).cuda()
             y = y.cuda()
 
+            net.train()
             out = net.forward(X)
             loss = criterion(out, y)
             loss.backward()
@@ -254,6 +256,7 @@ def train(net, dataloader, validloader, save_model=False):
 
 
 def evaluate(net, dataloader, criterion):
+    net.eval()
     with torch.no_grad():
         LOSSES = 0
         ACCURACY = 0
