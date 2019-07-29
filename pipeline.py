@@ -60,7 +60,7 @@ parser.add_argument(
 parser.add_argument(
     "--test_size",
     type=float,
-    default=.5,
+    default=0.5,
     help="The percentage of the dataset to use as test set",
 )
 parser.add_argument(
@@ -83,7 +83,7 @@ def extract_bands(data):
     f = np.asarray([float(i / 3) for i in range(data.shape[-1])])
     # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
     data = [
-        data[:, :, (f >= .5) * (f <= 4)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
         data[:, :, (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
         data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
         data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
@@ -166,6 +166,9 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
         print(CHAN_DF.iloc[elec])
 
     if not os.path.exists(savename) or args.test:
+        with open(savename, "w") as f:
+            f.write("")
+
         if args.verbose:
             print(savename)
         X = X_og[:, elec].squeeze()
