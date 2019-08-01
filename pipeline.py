@@ -184,8 +184,8 @@ def classif(train_set, test_set, clf, datatype, elec, label, feature, args):
     if not os.path.isdir(savepath):
         os.makedirs(savepath)
     savename = savepath + f"test_scores_elec{elec_name}.npy"
-    if args.verbose:
-        print(CHAN_DF.iloc[elec])
+    # if args.verbose:
+    # print(CHAN_DF.iloc[elec])
 
     if not os.path.exists(savename) or args.test:
         with open(savename, "w") as f:
