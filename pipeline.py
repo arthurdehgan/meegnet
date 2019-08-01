@@ -34,6 +34,13 @@ parser.add_argument(
     "-p", "--permutations", type=int, default=None, help="The number of permutations"
 )
 parser.add_argument(
+    "-d",
+    "--datatype",
+    choices=["task", "rest", "passive"],
+    default="rest",
+    help="The type of data to use for classification",
+)
+parser.add_argument(
     "-l",
     "--label",
     choices=["gender", "age", "subject"],
@@ -44,7 +51,7 @@ parser.add_argument(
     "-e",
     "--elec",
     choices=["MAG", "GRAD", "all"],
-    default="all",
+    default="MAG",
     help="The type of electrodes to keep",
 )
 parser.add_argument(
@@ -75,7 +82,15 @@ parser.add_argument(
     action="store_true",
     help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
 )
-
+parser.add_argument(
+    "-o",
+    "--out_path",
+    default=SAVE_PATH + "results/",
+    help="Where to save the result matrices",
+)
+parser.add_argument(
+    "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
+)
 args = parser.parse_args()
 
 
@@ -93,16 +108,18 @@ def extract_bands(data):
     return data
 
 
-def load_freq_data(dataframe, get_features, labels, args, path=DATA_PATH):
+def load_freq_data(dataframe, datatype, get_features, labels, args, path=args.in_path):
     X = None
     y, groups = [], []
     for i, row in enumerate(dataframe[: int(len(dataframe))].iterrows()):
         sub = row[1]["Observations"]
-        sub_data = get_features(np.load(path + "{}_rest_psd.npy".format(sub)))
+        try:
+            data = np.load(path + f"{sub}_{datatype}_psd.npy")
+        except FileNotFoundError:
+            print(sub, "could not be loaded with datatype", datatype)
+        sub_data = get_features(data)
         if NORM:
-            sub_data = sp.stats.zscore(
-                get_features(np.load(path + "{}_rest_psd.npy".format(sub)))
-            )
+            sub_data = sp.stats.zscore(sub_data)
         y += [labels[i]] * len(sub_data)
         groups += [i] * len(sub_data)
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
@@ -114,7 +131,7 @@ def load_freq_data(dataframe, get_features, labels, args, path=DATA_PATH):
     return np.array(X), np.array(y), np.array(groups)
 
 
-def load_data(label, feature, args):
+def load_data(label, datatype, feature, args):
     og_labels = np.array(LABELS[label])
     stratify = og_labels
     if label == "gender":
@@ -146,14 +163,14 @@ def load_data(label, feature, args):
     test_df = data_df.iloc[test_index]
     test_labels = og_labels[train_index]
 
-    train_set = load_freq_data(train_df, get_features, train_labels, args)
-    test_set = load_freq_data(test_df, get_features, test_labels, args)
+    train_set = load_freq_data(train_df, datatype, get_features, train_labels, args)
+    test_set = load_freq_data(test_df, datatype, get_features, test_labels, args)
     if args.verbose:
         print("Done")
     return train_set, test_set
 
 
-def classif(train_set, test_set, clf, elec, label, feature, args):
+def classif(train_set, test_set, clf, datatype, elec, label, feature, args):
     elec_name = CHAN_DF.iloc[elec]["ch_name"]
     X_og, y, groups = train_set
     X_test_og, y_test, groups_test = test_set
@@ -161,7 +178,12 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
         cv = SSGS(len(np.unique(y)) * 1, args.n_crossval)
     else:
         cv = SSS(10)
-    savename = SAVE_PATH + f"{args.clf}_{label}_test_scores_elec{elec_name}.npy"
+    savepath = (
+        args.out_path + f"{args.label}/{args.datatype}/{args.feature}/{args.clf}/"
+    )
+    if not os.path.isdir(savepath):
+        os.makedirs(savepath)
+    savename = savepath + f"test_scores_elec{elec_name}.npy"
     if args.verbose:
         print(CHAN_DF.iloc[elec])
 
@@ -253,7 +275,7 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
             clf = QDA()
 
         if args.verbose:
-            print("Testing...", sep="")
+            print("Evaluating...", sep="")
         if label != "subject":
             cv = SSGS(len(np.unique(y_test)) * 1, args.n_crossval)
         else:
@@ -269,10 +291,8 @@ def classif(train_set, test_set, clf, elec, label, feature, args):
 
         if not args.test:
             if args.clf in ["perceptron", "RF", "SVM"]:
-                np.save(
-                    SAVE_PATH + f"{args.clf}_gender_train_scores_elec{elec_name}", train
-                )
-                np.save(SAVE_PATH + f"{args.clf}_gender_params_elec{elec_name}", param)
+                np.save(savepath + f"train_scores_elec{elec_name}", train)
+                np.save(savepath + f"params_elec{elec_name}", param)
             np.save(savename, test)
 
 
@@ -295,13 +315,32 @@ if __name__ == "__main__":
         args.n_crossval = 2
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
-        for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
-            for label in ["subject", "age", "gender"]:
-                for feature in ["bins", "bands"]:
-                    print("\n", clf, label, feature)
-                    train_set, test_set = load_data(label, feature, args)
-                    classif(train_set, test_set, clf, elec, label, feature, args)
+        for datatype in ["rest", "task", "passive"]:
+            for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
+                for label in ["subject", "age", "gender"]:
+                    for feature in ["bins", "bands"]:
+                        print("\n", clf, label, feature)
+                        train_set, test_set = load_data(label, datatype, feature, args)
+                        classif(
+                            train_set,
+                            test_set,
+                            clf,
+                            datatype,
+                            elec,
+                            label,
+                            feature,
+                            args,
+                        )
     else:
-        train_set, test_set = load_data(args.label, args.feature, args)
+        train_set, test_set = load_data(args.label, args.datatype, args.feature, args)
         for elec in elec_index:
-            classif(train_set, test_set, args.clf, elec, args.label, args.feature, args)
+            classif(
+                train_set,
+                test_set,
+                args.clf,
+                args.datatype,
+                elec,
+                args.label,
+                args.feature,
+                args,
+            )

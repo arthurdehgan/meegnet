@@ -1,3 +1,4 @@
+from itertools import product
 import mne
 from mne.viz import plot_topomap
 import scipy as sp
@@ -13,21 +14,25 @@ if __name__ == "__main__":
     dtype = "rest"
     rtype = "bands"
     classifiers = ["LDA", "QDA"]
-    classif = "gender"
-    RES_PATH = SAVE_PATH + f"results/{rtype}/"
+    classifs = ["gender", "age", "subject"]
 
     data_path = "/home/arthur/data/raw_camcan/data/data/CC110033/"
     file_path = data_path + f"{dtype}/{dtype}_raw.fif"
     a = mne.io.read_raw_fif(file_path, preload=True).pick_types(meg=True)
     ch_names = a.info["ch_names"]
 
-    for classifier in classifiers:
+    for classif, classifier in product(classifs, classifiers):
+        if classif == "gender":
+            chance_level = 0.5
+        if classif == "subject":
+            chance_level = 1 / 622
+        if classif == "age":
+            chance_level = 1 / 7
         all_scores = []
         for i, elec in enumerate(ch_names):
+            RES_PATH = SAVE_PATH + f"results/{classif}/{dtype}/{rtype}/{classifier}/"
             if i % 3 == 0:
-                file_path = (
-                    RES_PATH + f"{classifier}_{classif}_test_scores_elec{elec}.npy"
-                )
+                file_path = RES_PATH + f"test_scores_elec{elec}.npy"
                 all_scores.append(float(np.load(file_path)))
 
         all_scores = np.asarray(all_scores)
@@ -38,7 +43,7 @@ if __name__ == "__main__":
         # pval_corr = np.asarray([pval_corr[i] for i in range(2, 306, 3)])
 
         tt_mask = np.full((len(CHANNEL_NAMES)), False, dtype=bool)
-        tt_mask[all_scores > 0.53] = True
+        tt_mask[all_scores > chance_level] = True
 
         fig, ax = plt.subplots()
         im, cn = plot_topomap(
@@ -49,8 +54,6 @@ if __name__ == "__main__":
             show=False,
             names=CHANNEL_NAMES,
             show_names=False,
-            vmin=0.5,
-            vmax=0.76,
             mask=tt_mask,
             mask_params=mask_params,
             contours=1,
