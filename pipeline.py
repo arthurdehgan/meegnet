@@ -259,7 +259,6 @@ def classif(
                 random_state=42,
                 n_jobs=args.cores,
             )
-            print("BOOM")
             clf = Perceptron(**randsearch.best_params_)
 
         elif args.clf == "SVM":
@@ -331,11 +330,12 @@ if __name__ == "__main__":
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
         # for clean_type in ["mf", "transdef_mf", "raw"]:
         for clean_type in ["mf"]:
-            for data_type in ["rest", "task", "passive"]:
+            # for data_type in ["rest", "task", "passive"]:
+            for data_type in ["rest"]
                 for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
                     for label in ["subject", "age", "gender"]:
                         for feature in ["bins", "bands"]:
-                            print("\n", clf, label, feature)
+                            print("\n", clf, label, feature, data_type, clean_type)
                             train_set, test_set = load_data(
                                 label, data_type, clean_type, feature, args
                             )
