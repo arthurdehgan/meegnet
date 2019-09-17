@@ -35,9 +35,15 @@ parser.add_argument(
 )
 parser.add_argument(
     "-d",
-    "--datatype",
+    "--data_type",
     choices=["task", "rest", "passive"],
     default="rest",
+    help="The type of data to use for classification",
+)
+parser.add_argument(
+    "--clean_type",
+    choices=["mf", "transdef_mf", "raw"],
+    default="mf",
     help="The type of data to use for classification",
 )
 parser.add_argument(
@@ -108,15 +114,15 @@ def extract_bands(data):
     return data
 
 
-def load_freq_data(dataframe, datatype, get_features, labels, args, path=args.in_path):
+def load_freq_data(dataframe, data_type, clean_type, get_features, labels, args, path):
     X = None
     y, groups = [], []
     for i, row in enumerate(dataframe[: int(len(dataframe))].iterrows()):
         sub = row[1]["participant_id"]
         try:
-            data = np.load(path + f"{sub}_{datatype}_psd.npy")
+            data = np.load(path + f"{sub}_{data_type}_{clean_type}_psd.npy")
         except FileNotFoundError:
-            print(sub, "could not be loaded with datatype", datatype)
+            print(sub, "could not be loaded with datatype", data_type, clean_type)
         sub_data = get_features(data)
         if NORM:
             sub_data = sp.stats.zscore(sub_data)
@@ -131,7 +137,8 @@ def load_freq_data(dataframe, datatype, get_features, labels, args, path=args.in
     return np.array(X), np.array(y), np.array(groups)
 
 
-def load_data(label, datatype, feature, args):
+def load_data(label, data_type, clean_type, feature, args):
+    data_path = args.in_path + f"{args.clean_type}/"
     og_labels = np.array(LABELS[label])
     stratify = og_labels
     if label == "gender":
@@ -163,14 +170,20 @@ def load_data(label, datatype, feature, args):
     test_df = data_df.iloc[test_index]
     test_labels = og_labels[train_index]
 
-    train_set = load_freq_data(train_df, datatype, get_features, train_labels, args)
-    test_set = load_freq_data(test_df, datatype, get_features, test_labels, args)
+    train_set = load_freq_data(
+        train_df, data_type, clean_type, get_features, train_labels, args, data_path
+    )
+    test_set = load_freq_data(
+        test_df, data_type, clean_type, get_features, test_labels, args, data_path
+    )
     if args.verbose:
         print("Done")
     return train_set, test_set
 
 
-def classif(train_set, test_set, clf, datatype, elec, label, feature, args):
+def classif(
+    train_set, test_set, clf, data_type, clean_type, elec, label, feature, args
+):
     elec_name = CHAN_DF.iloc[elec]["ch_name"]
     X_og, y, groups = train_set
     X_test_og, y_test, groups_test = test_set
@@ -179,7 +192,8 @@ def classif(train_set, test_set, clf, datatype, elec, label, feature, args):
     else:
         cv = SSS(10)
     savepath = (
-        args.out_path + f"{args.label}/{args.datatype}/{args.feature}/{args.clf}/"
+        args.out_path
+        + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
     )
     if not os.path.isdir(savepath):
         os.makedirs(savepath)
@@ -315,30 +329,38 @@ if __name__ == "__main__":
         args.n_crossval = 2
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
-        for datatype in ["rest", "task", "passive"]:
-            for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
-                for label in ["subject", "age", "gender"]:
-                    for feature in ["bins", "bands"]:
-                        print("\n", clf, label, feature)
-                        train_set, test_set = load_data(label, datatype, feature, args)
-                        classif(
-                            train_set,
-                            test_set,
-                            clf,
-                            datatype,
-                            elec,
-                            label,
-                            feature,
-                            args,
-                        )
+        # for clean_type in ["mf", "transdef_mf", "raw"]:
+        for clean_type in ["mf"]:
+            for data_type in ["rest", "task", "passive"]:
+                for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
+                    for label in ["subject", "age", "gender"]:
+                        for feature in ["bins", "bands"]:
+                            print("\n", clf, label, feature)
+                            train_set, test_set = load_data(
+                                label, data_type, clean_type, feature, args
+                            )
+                            classif(
+                                train_set,
+                                test_set,
+                                clf,
+                                data_type,
+                                clean_type,
+                                elec,
+                                label,
+                                feature,
+                                args,
+                            )
     else:
-        train_set, test_set = load_data(args.label, args.datatype, args.feature, args)
+        train_set, test_set = load_data(
+            args.label, args.data_type, args.clean_type, args.feature, args
+        )
         for elec in elec_index:
             classif(
                 train_set,
                 test_set,
                 args.clf,
-                args.datatype,
+                args.data_type,
+                args.clean_type,
                 elec,
                 args.label,
                 args.feature,
