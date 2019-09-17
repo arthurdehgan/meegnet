@@ -331,7 +331,7 @@ if __name__ == "__main__":
         # for clean_type in ["mf", "transdef_mf", "raw"]:
         for clean_type in ["mf"]:
             # for data_type in ["rest", "task", "passive"]:
-            for data_type in ["rest"]
+            for data_type in ["rest"]:
                 for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
                     for label in ["subject", "age", "gender"]:
                         for feature in ["bins", "bands"]:
