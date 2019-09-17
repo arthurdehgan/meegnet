@@ -5,6 +5,7 @@ Outputs one PSD file per subject.
 
 Author: Arthur Dehgan
 """
+import os
 from itertools import product
 import numpy as np
 from scipy.io import savemat
@@ -16,10 +17,13 @@ from params import SUBJECT_LIST
 
 SF = 1000  # Sampling Frequency
 WINDOW = 3000  # windows for computation of PSD
-OVERLAP = 0.25  # overlap for computation of PSD (0 = no overlap)
+OVERLAP = 0.75  # overlap for computation of PSD (0 = no overlap)
 SAVE_PATH = "/home/arthur/data/camcan/spectral"
-DATA_PATH = "/home/arthur/data/raw_camcan/data/data"
-DATATYPES = ["rest", "passive", "task"]
+DATA_PATH = "/home/arthur/data/camcan/data"
+# DATA_TYPES = ["rest", "passive", "smt"]
+# CLEAN_TYPES = ["mf", "transdef_mf", "raw"]
+DATA_TYPES = ["rest"]
+CLEAN_TYPES = ["mf"]
 
 
 def load_subject(subject_file):
@@ -43,22 +47,42 @@ def compute_psd(signal, segment_size, sf, window, overlap):
         return f, np.asarray(data)
 
 
-def compute_save_psd(save_path, datatype, segment_size, subject, sf, window, overlap):
-    subject_file = f"{DATA_PATH}/{subject}/{datatype}/{datatype}_raw.fif"
-    out_file = f"{save_path}/{subject}_{datatype}_psd.npy"
-    try:
-        data = load_subject(subject_file)
-        f, psd = compute_psd(data, segment_size, sf, window, overlap)
-        np.save(out_file, psd)
-    except:
-        print(subject_file, "doesnt exist")
+def compute_save_psd(
+    save_path, data_type, clean_type, segment_size, subject, sf, window, overlap
+):
+    fname = f"sub-{subject}_ses-{data_type}_task-{data_type}"
+    if clean_type != "raw":
+        fname += "_proc-sss"
+    subject_path = f"{DATA_PATH}/meg_{data_type}_{clean_type}/sub-{subject}"
+    subject_file = f"{subject_path}/ses-{data_type}/meg/{fname}.fif"
+    out_path = f"{save_path}/{clean_type}"
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
+    out_file = f"{out_path}/{subject}_{data_type}_{clean_type}_psd.npy"
+
+    if not os.path.exists(out_file):
+        try:
+            data = load_subject(subject_file)
+            f, psd = compute_psd(data, segment_size, sf, window, overlap)
+            np.save(out_file, psd)
+        except:
+            print(subject_file, "doesnt exist")
 
 
 if __name__ == "__main__":
     """Main function."""
     Parallel(n_jobs=3)(
         delayed(compute_save_psd)(
-            SAVE_PATH, datatype, 30000, subject, sf=SF, window=WINDOW, overlap=OVERLAP
+            SAVE_PATH,
+            data_type,
+            clean_type,
+            30000,
+            subject,
+            sf=SF,
+            window=WINDOW,
+            overlap=OVERLAP,
         )
-        for subject, datatype in product(SUBJECT_LIST, DATATYPES)
+        for subject, data_type, clean_type in product(
+            SUBJECT_LIST, DATA_TYPES, CLEAN_TYPES
+        )
     )

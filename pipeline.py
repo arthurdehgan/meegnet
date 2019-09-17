@@ -112,7 +112,7 @@ def load_freq_data(dataframe, datatype, get_features, labels, args, path=args.in
     X = None
     y, groups = [], []
     for i, row in enumerate(dataframe[: int(len(dataframe))].iterrows()):
-        sub = row[1]["Observations"]
+        sub = row[1]["participant_id"]
         try:
             data = np.load(path + f"{sub}_{datatype}_psd.npy")
         except FileNotFoundError:
@@ -149,7 +149,7 @@ def load_data(label, datatype, feature, args):
 
     if args.verbose:
         print("Loading data...", sep="")
-    data_df = SUB_DF[["Observations", col]]
+    data_df = SUB_DF[["participant_id", col]]
     train_index, test_index = train_test_split(
         list(range(len(data_df))),
         test_size=int(args.test_size * len(data_df)),
