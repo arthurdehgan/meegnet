@@ -155,7 +155,7 @@ def load_data(label, data_type, clean_type, feature, args):
         get_features = lambda x: x
 
     if args.verbose:
-        print("Loading data...", sep="")
+        print("Loading data...")
     data_df = SUB_DF[["participant_id", col]]
     train_index, test_index = train_test_split(
         list(range(len(data_df))),
@@ -178,6 +178,8 @@ def load_data(label, data_type, clean_type, feature, args):
     )
     if args.verbose:
         print("Done")
+        print(f"train_size: {train_set[0].shape} (Used for hyperparameter tuning)")
+        print(f"test_size: {test_set[0].shape} (used to evaluate the model)")
     return train_set, test_set
 
 
@@ -219,6 +221,9 @@ def classif(
         # if args.clf in ["LDA"] and len(np.unique(y)) > 2:
         #     return
 
+        if args.verbose:
+            print(f"classification using {args.clf}")
+
         if args.clf == "RF":
             n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
             max_features = ["auto", "sqrt"]
@@ -236,6 +241,8 @@ def classif(
                 "min_samples_leaf": min_samples_leaf,
                 "bootstrap": bootstrap,
             }
+            if args.verbose:
+                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 estimator=RF(),
                 param_distributions=random_grid,
@@ -244,6 +251,11 @@ def classif(
                 random_state=42,
                 n_jobs=args.cores,
             )
+            randsearch.fit(X, y, groups)
+            param = randsearch.best_params_
+            train = randsearch.best_score_
+            if args.verbose:
+                print("Done")
             clf = RF(**randsearch.best_params_)
 
         elif args.clf == "perceptron":
@@ -251,6 +263,8 @@ def classif(
                 "penality": ["l2", "l1", "elasticnet"],
                 "alpha": [0.0001, 0.001, 0.00001, 0.0005],
             }
+            if args.verbose:
+                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 estimator=Perceptron(),
                 param_distributions=random_grid,
@@ -259,6 +273,11 @@ def classif(
                 random_state=42,
                 n_jobs=args.cores,
             )
+            randsearch.fit(X, y, groups)
+            param = randsearch.best_params_
+            train = randsearch.best_score_
+            if args.verbose:
+                print("Done")
             clf = Perceptron(**randsearch.best_params_)
 
         elif args.clf == "SVM":
@@ -267,7 +286,7 @@ def classif(
                 "gamma": sp.stats.expon(scale=0.1),
             }
             if args.verbose:
-                print("Random Search...", sep="")
+                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 SVC(),
                 param_distributions=param_distributions,
@@ -279,19 +298,21 @@ def classif(
             randsearch.fit(X, y, groups)
             param = randsearch.best_params_
             train = randsearch.best_score_
-            clf = SVC(**randsearch.best_params_)
             if args.verbose:
                 print("Done")
+            clf = SVC(**randsearch.best_params_)
         elif args.clf == "LDA":
             clf = LDA()
         elif args.clf == "QDA":
             clf = QDA()
 
-        if args.verbose:
-            print("Evaluating...", sep="")
         if label != "subject":
+            if args.verbose:
+                print("Evaluating using Stratified Leave Groups Out ...")
             cv = SSGS(len(np.unique(y_test)) * 1, args.n_crossval)
         else:
+            if args.verbose:
+                print("Evaluating using Stratified Shuffle Split...")
             cv = SSS(10)
 
         test = np.mean(

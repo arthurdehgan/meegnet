@@ -12,12 +12,15 @@ N_ELEC = 102
 if __name__ == "__main__":
 
     dtype = "rest"
+    ctype = "mf"
     rtype = "bands"
-    classifiers = ["LDA", "QDA"]
-    classifs = ["gender", "age", "subject"]
+    classifiers = ["LDA"]
+    # classifs = ["gender", "age", "subject"]
+    classifs = ["gender"]
 
-    data_path = "/home/arthur/data/raw_camcan/data/data/CC110033/"
-    file_path = data_path + f"{dtype}/{dtype}_raw.fif"
+    fname = f"sub-CC110033_ses-{dtype}_task-{dtype}_proc-sss.fif"
+    data_path = f"/home/arthur/data/camcan/data/meg_{dtype}_{ctype}/"
+    file_path = data_path + f"sub-CC110033/ses-{dtype}/meg/{fname}"
     a = mne.io.read_raw_fif(file_path, preload=True).pick_types(meg=True)
     ch_names = a.info["ch_names"]
 
@@ -30,10 +33,15 @@ if __name__ == "__main__":
             chance_level = 1 / 7
         all_scores = []
         for i, elec in enumerate(ch_names):
-            RES_PATH = SAVE_PATH + f"results/{classif}/{dtype}/{rtype}/{classifier}/"
-            if i % 3 == 0:
+            RES_PATH = (
+                SAVE_PATH + f"results/{classif}/{dtype}_{ctype}/{rtype}/{classifier}/"
+            )
+            try:
                 file_path = RES_PATH + f"test_scores_elec{elec}.npy"
                 all_scores.append(float(np.load(file_path)))
+                print(CHAN_DF.iloc[i])
+            except:
+                pass
 
         all_scores = np.asarray(all_scores)
         mask_params = dict(
@@ -62,6 +70,8 @@ if __name__ == "__main__":
         cb = fig.colorbar(im)
         mne.viz.tight_layout()
         plt.savefig(
-            SAVE_PATH + "figures/" + f"MAG_{classifier}_{classif}_{dtype}_{rtype}.png",
+            SAVE_PATH
+            + "figures/"
+            + f"MAG_{classifier}_{classif}_{dtype}_{ctype}_{rtype}.png",
             resolution=300,
         )
