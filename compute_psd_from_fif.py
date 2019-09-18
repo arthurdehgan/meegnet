@@ -23,7 +23,7 @@ DATA_PATH = "/home/arthur/data/camcan/data"
 # DATA_TYPES = ["rest", "passive", "smt"]
 # CLEAN_TYPES = ["mf", "transdef_mf", "raw"]
 DATA_TYPES = ["rest"]
-CLEAN_TYPES = ["mf"]
+CLEAN_TYPES = ["transdef_mf"]
 
 
 def load_subject(subject_file):

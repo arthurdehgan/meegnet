@@ -1,5 +1,6 @@
 import os
-import argparse
+import warnings
+from parser import args
 import scipy as sp
 import numpy as np
 from sklearn.model_selection import (
@@ -19,85 +20,24 @@ from mlneurotools.ml import StratifiedShuffleGroupSplit as SSGS
 from params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF, LABELS
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-c", "--cores", default=-1, type=int, help="The number of cores to use"
-)
-parser.add_argument("-v", "--verbose", action="store_true", help="display more info")
-parser.add_argument(
-    "--clf",
-    choices=["SVM", "LDA", "QDA", "RF", "perceptron"],
-    default="LDA",
-    help="The classifier that will be used for the classification",
-)
-parser.add_argument(
-    "-p", "--permutations", type=int, default=None, help="The number of permutations"
-)
-parser.add_argument(
-    "-d",
-    "--data_type",
-    choices=["task", "rest", "passive"],
-    default="rest",
-    help="The type of data to use for classification",
-)
-parser.add_argument(
-    "--clean_type",
-    choices=["mf", "transdef_mf", "raw"],
-    default="mf",
-    help="The type of data to use for classification",
-)
-parser.add_argument(
-    "-l",
-    "--label",
-    choices=["gender", "age", "subject"],
-    default="gender",
-    help="The type of classification to run",
-)
-parser.add_argument(
-    "-e",
-    "--elec",
-    choices=["MAG", "GRAD", "all"],
-    default="MAG",
-    help="The type of electrodes to keep",
-)
-parser.add_argument(
-    "-f",
-    "--feature",
-    choices=["bands", "bins"],
-    default="bands",
-    help="The type of features to use",
-)
-parser.add_argument(
-    "--n_crossval", type=int, default=1000, help="The number of cross-validations to do"
-)
-parser.add_argument(
-    "--test_size",
-    type=float,
-    default=0.5,
-    help="The percentage of the dataset to use as test set",
-)
-parser.add_argument(
-    "--iterations",
-    type=int,
-    default=100,
-    help="The number of iterations to do for random search hyperparameter optimization",
-)
-parser.add_argument(
-    "-t",
-    "--test",
-    action="store_true",
-    help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
-)
-parser.add_argument(
-    "-o",
-    "--out_path",
-    default=SAVE_PATH + "results/",
-    help="Where to save the result matrices",
-)
-parser.add_argument(
-    "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
-)
-args = parser.parse_args()
+def print_info_classif(args):
+    print("Classification on individual electrodes.")
+    print(f"Classifier: {args.clf}")
+    if args.label != "subject":
+        print("Cross-Validation: Stratified Leave Groups Out.")
+    else:
+        print("Cross-Validation: Stratified Shuffle Split.")
+    print(f"Number of cross-validation steps: {args.n_crossval}.")
+    print(f"Classifying {args.label} on {args.data_type}_{args.clean_type}.")
+    print(f"Features used: frequency {args.feature}.")
+    print(f"Sensor used: {args.elec}")
+    if args.clf in ["perceptron", "SVM", "RF"]:
+        print(f"Random search will be used to fine tune hyperparameters.")
+        print(f"n_iters={args.iterations}")
+        print(f"{(1-args.test_size) * 100}% of the data will be used for fine tuning.")
+    print(f"Results will be saved in: {args.out_path}")
+    if args.permutations is not None:
+        print(f"Permutation test will be done with {args.permutations} permutations.")
 
 
 def extract_bands(data):
@@ -154,7 +94,7 @@ def load_data(label, data_type, clean_type, feature, args):
     else:
         get_features = lambda x: x
 
-    if args.verbose:
+    if args.verbose > 0:
         print("Loading data...")
     data_df = SUB_DF[["participant_id", col]]
     train_index, test_index = train_test_split(
@@ -176,7 +116,7 @@ def load_data(label, data_type, clean_type, feature, args):
     test_set = load_freq_data(
         test_df, data_type, clean_type, get_features, test_labels, args, data_path
     )
-    if args.verbose:
+    if args.verbose > 0:
         print("Done")
         print(f"train_size: {train_set[0].shape} (Used for hyperparameter tuning)")
         print(f"test_size: {test_set[0].shape} (used to evaluate the model)")
@@ -200,15 +140,13 @@ def classif(
     if not os.path.isdir(savepath):
         os.makedirs(savepath)
     savename = savepath + f"test_scores_elec{elec_name}.npy"
-    # if args.verbose:
-    # print(CHAN_DF.iloc[elec])
 
     if not os.path.exists(savename) or args.test:
         with open(savename, "w") as f:
             f.write("")
 
-        if args.verbose:
-            print(savename)
+        if args.verbose > 1:
+            print(f"Save path: {savename}")
         X = X_og[:, elec].squeeze()
         X_test = X_test_og[:, elec].squeeze()
         pattern = [0, 1, 180, 181, 500, 501, 360, 361]
@@ -220,9 +158,6 @@ def classif(
             )
         # if args.clf in ["LDA"] and len(np.unique(y)) > 2:
         #     return
-
-        if args.verbose:
-            print(f"classification using {args.clf}")
 
         if args.clf == "RF":
             n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
@@ -241,8 +176,6 @@ def classif(
                 "min_samples_leaf": min_samples_leaf,
                 "bootstrap": bootstrap,
             }
-            if args.verbose:
-                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 estimator=RF(),
                 param_distributions=random_grid,
@@ -254,8 +187,6 @@ def classif(
             randsearch.fit(X, y, groups)
             param = randsearch.best_params_
             train = randsearch.best_score_
-            if args.verbose:
-                print("Done")
             clf = RF(**randsearch.best_params_)
 
         elif args.clf == "perceptron":
@@ -263,8 +194,6 @@ def classif(
                 "penality": ["l2", "l1", "elasticnet"],
                 "alpha": [0.0001, 0.001, 0.00001, 0.0005],
             }
-            if args.verbose:
-                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 estimator=Perceptron(),
                 param_distributions=random_grid,
@@ -276,8 +205,6 @@ def classif(
             randsearch.fit(X, y, groups)
             param = randsearch.best_params_
             train = randsearch.best_score_
-            if args.verbose:
-                print("Done")
             clf = Perceptron(**randsearch.best_params_)
 
         elif args.clf == "SVM":
@@ -285,8 +212,6 @@ def classif(
                 "C": sp.stats.expon(scale=10),
                 "gamma": sp.stats.expon(scale=0.1),
             }
-            if args.verbose:
-                print("Hyperparameters Optimization...")
             randsearch = RandomizedSearchCV(
                 SVC(),
                 param_distributions=param_distributions,
@@ -298,8 +223,6 @@ def classif(
             randsearch.fit(X, y, groups)
             param = randsearch.best_params_
             train = randsearch.best_score_
-            if args.verbose:
-                print("Done")
             clf = SVC(**randsearch.best_params_)
         elif args.clf == "LDA":
             clf = LDA()
@@ -307,21 +230,17 @@ def classif(
             clf = QDA()
 
         if label != "subject":
-            if args.verbose:
-                print("Evaluating using Stratified Leave Groups Out ...")
             cv = SSGS(len(np.unique(y_test)) * 1, args.n_crossval)
         else:
-            if args.verbose:
-                print("Evaluating using Stratified Shuffle Split...")
             cv = SSS(10)
 
-        test = np.mean(
-            cross_val_score(
-                clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            test = np.mean(
+                cross_val_score(
+                    clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
+                )
             )
-        )
-        if args.verbose:
-            print("Done")
 
         if not args.test:
             if args.clf in ["perceptron", "RF", "SVM"]:
@@ -372,6 +291,8 @@ if __name__ == "__main__":
                                 args,
                             )
     else:
+        if args.verbose > 0:
+            print_info_classif(args)
         train_set, test_set = load_data(
             args.label, args.data_type, args.clean_type, args.feature, args
         )

@@ -1,0 +1,82 @@
+import argparse
+from params import SAVE_PATH, DATA_PATH
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-c", "--cores", default=-1, type=int, help="The number of cores to use"
+)
+parser.add_argument("-v", "--verbose", type=int, default=1, help="display more info")
+parser.add_argument(
+    "--clf",
+    choices=["SVM", "LDA", "QDA", "RF", "perceptron"],
+    default="LDA",
+    help="The classifier that will be used for the classification",
+)
+parser.add_argument(
+    "-p", "--permutations", type=int, default=None, help="The number of permutations"
+)
+parser.add_argument(
+    "-d",
+    "--data_type",
+    choices=["task", "rest", "passive"],
+    default="rest",
+    help="The type of data to use for classification",
+)
+parser.add_argument(
+    "--clean_type",
+    choices=["mf", "transdef_mf", "raw"],
+    default="transdef_mf",
+    help="The type of data to use for classification",
+)
+parser.add_argument(
+    "-l",
+    "--label",
+    choices=["gender", "age", "subject"],
+    default="gender",
+    help="The type of classification to run",
+)
+parser.add_argument(
+    "-e",
+    "--elec",
+    choices=["MAG", "GRAD", "all"],
+    default="MAG",
+    help="The type of electrodes to keep",
+)
+parser.add_argument(
+    "-f",
+    "--feature",
+    choices=["bands", "bins"],
+    default="bands",
+    help="The type of features to use",
+)
+parser.add_argument(
+    "--n_crossval", type=int, default=1000, help="The number of cross-validations to do"
+)
+parser.add_argument(
+    "--test_size",
+    type=float,
+    default=0.5,
+    help="The percentage of the dataset to use as test set",
+)
+parser.add_argument(
+    "--iterations",
+    type=int,
+    default=100,
+    help="The number of iterations to do for random search hyperparameter optimization",
+)
+parser.add_argument(
+    "-t",
+    "--test",
+    action="store_true",
+    help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
+)
+parser.add_argument(
+    "-o",
+    "--out_path",
+    default=SAVE_PATH + "results/",
+    help="Where to save the result matrices",
+)
+parser.add_argument(
+    "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
+)
+args = parser.parse_args()
