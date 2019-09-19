@@ -1,34 +1,48 @@
 import os
-import warnings
 from parser import args
 import scipy as sp
 import numpy as np
 from sklearn.model_selection import (
     cross_val_score,
+    RandomizedSearchCV,
     StratifiedShuffleSplit as SSS,
     train_test_split,
 )
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.linear_model import Perceptron
 from sklearn.svm import SVC
-from sklearn.model_selection import RandomizedSearchCV, StratifiedShuffleSplit as SSS
 from sklearn.discriminant_analysis import (
     LinearDiscriminantAnalysis as LDA,
     QuadraticDiscriminantAnalysis as QDA,
 )
 from mlneurotools.ml import StratifiedShuffleGroupSplit as SSGS
-from params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF, LABELS
+from params import CHAN_DF, SUB_DF, LABELS
+
+
+def check_classif_done(elec_index, args):
+    elec_list = []
+    savepath = (
+        args.out_path
+        + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
+    )
+    for elec in elec_index:
+        elec_name = CHAN_DF.iloc[elec]["ch_name"]
+        savename = savepath + f"test_scores_elec{elec_name}.npy"
+        if not os.path.exists(savename):
+            elec_list.append(elec_name)
+    return elec_list
 
 
 def print_info_classif(args):
-    print("Classification on individual electrodes.")
+    print(
+        f"\nClassification of {args.label}s on individual electrodes using {args.data_type}_{args.clean_type}."
+    )
     print(f"Classifier: {args.clf}")
     if args.label != "subject":
         print("Cross-Validation: Stratified Leave Groups Out.")
     else:
         print("Cross-Validation: Stratified Shuffle Split.")
     print(f"Number of cross-validation steps: {args.n_crossval}.")
-    print(f"Classifying {args.label} on {args.data_type}_{args.clean_type}.")
     print(f"Features used: frequency {args.feature}.")
     print(f"Sensor used: {args.elec}")
     if args.clf in ["perceptron", "SVM", "RF"]:
@@ -54,15 +68,21 @@ def extract_bands(data):
     return data
 
 
-def load_freq_data(dataframe, data_type, clean_type, get_features, labels, args, path):
+def load_freq_data(dataframe, elec_index, get_features, labels, args, path):
     X = None
     y, groups = [], []
     for i, row in enumerate(dataframe[: int(len(dataframe))].iterrows()):
         sub = row[1]["participant_id"]
         try:
-            data = np.load(path + f"{sub}_{data_type}_{clean_type}_psd.npy")
+            data = np.load(path + f"{sub}_{args.data_type}_{args.clean_type}_psd.npy")
+            data = np.take(data, elec_index, args.elec_axis)
         except FileNotFoundError:
-            print(sub, "could not be loaded with datatype", data_type, clean_type)
+            print(
+                sub,
+                "could not be loaded with datatype",
+                f"{args.data_type}_{args.clean_type}",
+            )
+            print(f"In path: {path}")
         sub_data = get_features(data)
         if NORM:
             sub_data = sp.stats.zscore(sub_data)
@@ -77,19 +97,19 @@ def load_freq_data(dataframe, data_type, clean_type, get_features, labels, args,
     return np.array(X), np.array(y), np.array(groups)
 
 
-def load_data(label, data_type, clean_type, feature, args):
+def load_data(elec_index, args):
     data_path = args.in_path + f"{args.clean_type}/"
-    og_labels = np.array(LABELS[label])
+    og_labels = np.array(LABELS[args.label])
     stratify = og_labels
-    if label == "gender":
+    if args.label == "gender":
         col = args.label
     else:
         col = "age"
 
-    if label in ["subject"]:
+    if args.label in ["subject"]:
         stratify = None
 
-    if feature == "bands":
+    if args.feature == "bands":
         get_features = extract_bands
     else:
         get_features = lambda x: x
@@ -111,10 +131,10 @@ def load_data(label, data_type, clean_type, feature, args):
     test_labels = og_labels[train_index]
 
     train_set = load_freq_data(
-        train_df, data_type, clean_type, get_features, train_labels, args, data_path
+        train_df, elec_index, get_features, train_labels, args, data_path
     )
     test_set = load_freq_data(
-        test_df, data_type, clean_type, get_features, test_labels, args, data_path
+        test_df, elec_index, get_features, test_labels, args, data_path
     )
     if args.verbose > 0:
         print("Done")
@@ -123,130 +143,145 @@ def load_data(label, data_type, clean_type, feature, args):
     return train_set, test_set
 
 
-def classif(
-    train_set, test_set, clf, data_type, clean_type, elec, label, feature, args
-):
-    elec_name = CHAN_DF.iloc[elec]["ch_name"]
+def random_search(args, cv, X, y, groups=None):
+    if args.clf == "RF":
+        n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
+        max_features = ["auto", "sqrt"]
+        max_depth = [int(x) for x in np.linspace(3, 110, num=11)]
+        max_depth.append(None)
+        min_samples_split = [2, 5, 10]
+        min_samples_leaf = [1, 2, 4]
+        bootstrap = [True, False]
+
+        random_grid = {
+            "n_estimators": n_estimators,
+            "max_features": max_features,
+            "max_depth": max_depth,
+            "min_samples_split": min_samples_split,
+            "min_samples_leaf": min_samples_leaf,
+            "bootstrap": bootstrap,
+        }
+        randsearch = RandomizedSearchCV(
+            estimator=RF(),
+            param_distributions=random_grid,
+            n_iter=args.iterations,
+            cv=cv,
+            random_state=42,
+            n_jobs=args.cores,
+        )
+        randsearch.fit(X, y, groups)
+        param = randsearch.best_params_
+        train = randsearch.best_score_
+        clf = RF(**randsearch.best_params_)
+
+    elif args.clf == "perceptron":
+        random_grid = {
+            "penality": ["l2", "l1", "elasticnet"],
+            "alpha": [0.0001, 0.001, 0.00001, 0.0005],
+        }
+        randsearch = RandomizedSearchCV(
+            estimator=Perceptron(),
+            param_distributions=random_grid,
+            n_iter=args.iterations,
+            cv=cv,
+            random_state=42,
+            n_jobs=args.cores,
+        )
+        randsearch.fit(X, y, groups)
+        param = randsearch.best_params_
+        train = randsearch.best_score_
+        clf = Perceptron(**randsearch.best_params_)
+
+    elif args.clf == "SVM":
+        param_distributions = {
+            "C": sp.stats.expon(scale=10),
+            "gamma": sp.stats.expon(scale=0.1),
+        }
+        randsearch = RandomizedSearchCV(
+            SVC(),
+            param_distributions=param_distributions,
+            n_iter=args.iterations,
+            cv=cv,
+            random_state=42,
+            n_jobs=args.cores,
+        )
+        randsearch.fit(X, y, groups)
+        param = randsearch.best_params_
+        train = randsearch.best_score_
+        clf = SVC(**randsearch.best_params_)
+    elif args.clf == "LDA":
+        clf = LDA()
+        param = None
+        train = None
+    elif args.clf == "QDA":
+        clf = QDA()
+        param = None
+        train = None
+    return clf, param, train
+
+
+def create_crossval(label, y):
+    if label != "subject":
+        return SSGS(len(np.unique(y)) * 1, args.n_crossval)
+    return SSS(10)
+
+
+def classif(train_set, test_set, args):
+    X, y, groups = train_set
+    X_test, y_test, groups_test = test_set
+
+    cv = create_crossval(args.label, y)
+    clf, param, train = random_search(args, cv, X, y, groups)
+    cv = create_crossval(label, y_test)
+    test = np.mean(
+        cross_val_score(
+            clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
+        )
+    )
+    return param, train, test
+
+
+def classif_all_elecs(train_set, test_set, elec_list, args):
+    assert args.elec_axis < len(train_set[0].shape), "Error, elec axis out of bounds."
     X_og, y, groups = train_set
     X_test_og, y_test, groups_test = test_set
-    if label != "subject":
-        cv = SSGS(len(np.unique(y)) * 1, args.n_crossval)
-    else:
-        cv = SSS(10)
-    savepath = (
-        args.out_path
-        + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
-    )
-    if not os.path.isdir(savepath):
-        os.makedirs(savepath)
-    savename = savepath + f"test_scores_elec{elec_name}.npy"
 
-    if not os.path.exists(savename) or args.test:
-        with open(savename, "w") as f:
-            f.write("")
+    for elec, elec_name in enumerate(elec_list):
+        savepath = (
+            args.out_path
+            + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
+        )
+        if not os.path.isdir(savepath):
+            os.makedirs(savepath)
+        savename = savepath + f"test_scores_elec{elec_name}.npy"
 
-        if args.verbose > 1:
-            print(f"Save path: {savename}")
-        X = X_og[:, elec].squeeze()
-        X_test = X_test_og[:, elec].squeeze()
-        pattern = [0, 1, 180, 181, 500, 501, 360, 361]
-        if args.test:
-            print(f"data shapes train: {X.shape}, test: {X_test.shape}")
-            print(f"example labels train: {y[pattern]}, test: {y_test[pattern]}")
-            print(
-                f"example groups train: {groups[pattern]}, test: {groups_test[pattern]}"
-            )
-        # if args.clf in ["LDA"] and len(np.unique(y)) > 2:
-        #     return
+        if not os.path.exists(savename) or args.test:
+            if args.verbose > 1:
+                print(f"Save path: {savename}")
+            if not args.test:
+                with open(savename, "w") as f:
+                    f.write("")
 
-        if args.clf == "RF":
-            n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
-            max_features = ["auto", "sqrt"]
-            max_depth = [int(x) for x in np.linspace(3, 110, num=11)]
-            max_depth.append(None)
-            min_samples_split = [2, 5, 10]
-            min_samples_leaf = [1, 2, 4]
-            bootstrap = [True, False]
+            X = np.take(X_og, elec, args.elec_axis).squeeze()
+            X_test = np.take(X_test_og, elec, args.elec_axis).squeeze()
 
-            random_grid = {
-                "n_estimators": n_estimators,
-                "max_features": max_features,
-                "max_depth": max_depth,
-                "min_samples_split": min_samples_split,
-                "min_samples_leaf": min_samples_leaf,
-                "bootstrap": bootstrap,
-            }
-            randsearch = RandomizedSearchCV(
-                estimator=RF(),
-                param_distributions=random_grid,
-                n_iter=args.iterations,
-                cv=cv,
-                random_state=42,
-                n_jobs=args.cores,
-            )
-            randsearch.fit(X, y, groups)
-            param = randsearch.best_params_
-            train = randsearch.best_score_
-            clf = RF(**randsearch.best_params_)
-
-        elif args.clf == "perceptron":
-            random_grid = {
-                "penality": ["l2", "l1", "elasticnet"],
-                "alpha": [0.0001, 0.001, 0.00001, 0.0005],
-            }
-            randsearch = RandomizedSearchCV(
-                estimator=Perceptron(),
-                param_distributions=random_grid,
-                n_iter=args.iterations,
-                cv=cv,
-                random_state=42,
-                n_jobs=args.cores,
-            )
-            randsearch.fit(X, y, groups)
-            param = randsearch.best_params_
-            train = randsearch.best_score_
-            clf = Perceptron(**randsearch.best_params_)
-
-        elif args.clf == "SVM":
-            param_distributions = {
-                "C": sp.stats.expon(scale=10),
-                "gamma": sp.stats.expon(scale=0.1),
-            }
-            randsearch = RandomizedSearchCV(
-                SVC(),
-                param_distributions=param_distributions,
-                n_iter=args.iterations,
-                cv=cv,
-                random_state=42,
-                n_jobs=args.cores,
-            )
-            randsearch.fit(X, y, groups)
-            param = randsearch.best_params_
-            train = randsearch.best_score_
-            clf = SVC(**randsearch.best_params_)
-        elif args.clf == "LDA":
-            clf = LDA()
-        elif args.clf == "QDA":
-            clf = QDA()
-
-        if label != "subject":
-            cv = SSGS(len(np.unique(y_test)) * 1, args.n_crossval)
-        else:
-            cv = SSS(10)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            test = np.mean(
-                cross_val_score(
-                    clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
+            if args.test:
+                pattern = [0, 1, 180, 181, 500, 501, 360, 361]
+                print(f"data shapes train: {X.shape}, test: {X_test.shape}")
+                print(f"example labels train: {y[pattern]}, test: {y_test[pattern]}")
+                print(
+                    f"example groups train: {groups[pattern]}, test: {groups_test[pattern]}"
                 )
-            )
 
-        if not args.test:
-            if args.clf in ["perceptron", "RF", "SVM"]:
-                np.save(savepath + f"train_scores_elec{elec_name}", train)
-                np.save(savepath + f"params_elec{elec_name}", param)
-            np.save(savename, test)
+            train_set = X, y, groups
+            test_set = X_test, y_test, groups_test
+            param, train, test = classif(train_set, test_set, args)
+
+            if not args.test:
+                if args.clf in ["perceptron", "RF", "SVM"]:
+                    np.save(savepath + f"train_scores_elec{elec_name}", train)
+                    np.save(savepath + f"params_elec{elec_name}", param)
+                np.save(savename, test)
 
 
 if __name__ == "__main__":
@@ -268,43 +303,31 @@ if __name__ == "__main__":
         args.n_crossval = 2
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
+        elec_list = check_classif_done([elec], args)
         # for clean_type in ["mf", "transdef_mf", "raw"]:
         for clean_type in ["mf"]:
             # for data_type in ["rest", "task", "passive"]:
             for data_type in ["rest"]:
-                for clf in ["SVM", "LDA", "QDA", "RF", "perceptron"]:
+                for clf in ["SVM", "LDA", "QDA", "RF"]:
                     for label in ["subject", "age", "gender"]:
                         for feature in ["bins", "bands"]:
-                            print("\n", clf, label, feature, data_type, clean_type)
-                            train_set, test_set = load_data(
-                                label, data_type, clean_type, feature, args
-                            )
-                            classif(
-                                train_set,
-                                test_set,
-                                clf,
-                                data_type,
-                                clean_type,
-                                elec,
-                                label,
-                                feature,
-                                args,
+                            args.clf = clf
+                            args.label = label
+                            args.feature = feature
+                            args.clean_type = clean_type
+                            args.data_type = data_type
+                            if args.verbose > 0:
+                                print_info_classif(args)
+                            train_set, test_set = load_data(elec_index, args)
+                            classif_all_elecs(
+                                train_set, test_set, elec_list=[elec], args=args
                             )
     else:
         if args.verbose > 0:
             print_info_classif(args)
-        train_set, test_set = load_data(
-            args.label, args.data_type, args.clean_type, args.feature, args
-        )
-        for elec in elec_index:
-            classif(
-                train_set,
-                test_set,
-                args.clf,
-                args.data_type,
-                args.clean_type,
-                elec,
-                args.label,
-                args.feature,
-                args,
-            )
+        elec_list = check_classif_done(elec_index, args)
+        if elec_list != []:
+            train_set, test_set = load_data(elec_index, args)
+            classif_all_elecs(train_set, test_set, elec_list=elec_list, args=args)
+        else:
+            print("This classification has already been done")

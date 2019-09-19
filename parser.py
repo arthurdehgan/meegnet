@@ -26,7 +26,7 @@ parser.add_argument(
     "--clean_type",
     choices=["mf", "transdef_mf", "raw"],
     default="transdef_mf",
-    help="The type of data to use for classification",
+    help="The type of preprocessing step to use for classification",
 )
 parser.add_argument(
     "-l",
@@ -78,5 +78,11 @@ parser.add_argument(
 )
 parser.add_argument(
     "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
+)
+parser.add_argument(
+    "--elec_axis",
+    type=int,
+    default=1,
+    help="The axis of the data where the electrodes are",
 )
 args = parser.parse_args()
