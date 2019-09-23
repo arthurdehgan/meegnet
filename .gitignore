@@ -3,3 +3,5 @@ models
 params.py
 figures
 __pycache__
+
+data
