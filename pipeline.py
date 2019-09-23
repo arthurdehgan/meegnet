@@ -252,7 +252,10 @@ def classif_all_elecs(train_set, test_set, elec_list, args):
             + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
         )
         if not os.path.isdir(savepath):
-            os.makedirs(savepath)
+            try:
+                os.makedirs(savepath)
+            except:
+                print("couldnt create the directory for some reason")
         savename = savepath + f"test_scores_elec{elec_name}.npy"
 
         if not os.path.exists(savename) or args.test:
