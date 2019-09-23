@@ -71,8 +71,8 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
     i = 0
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
-        sub, lab = row[1]["Observations"], row[1]["gender"]
-        sub_data = np.load(dpath + f"{sub}_rest_{ch_type}.npy")
+        sub, lab = row[1]["participant_id"], row[1]["gender"]
+        sub_data = np.load(dpath + f"sub-{sub}_rest_{ch_type}.npy")
         sub_data = decimate(sub_data, DECIMATE)
         sub_data = [
             normalize(sub_data[:, i : i + TRIAL_LENGTH])
@@ -89,36 +89,36 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 
-def load_subject(sub, data_path=DATA_PATH, data=None, timepoints=500, ch_type="all"):
-    df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
-    df = df.set_index("Observations")
-    gender = (df["gender"])[sub]
-    # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
-    subject_file = "{}_rest.mat".format(data_path + sub)
-    # trial = read_raw_fif(subject_file,
-    #                      preload=True).pick_types(meg=True)[:][0]
-    trial = np.load(subject_file)
-    if ch_type == "all":
-        mask = [True for _ in range(len(trial))]
-        n_channels = 306
-    elif ch_type == "mag":
-        mask = CHAN_DF["mag_mask"]
-        n_channels = 102
-    elif ch_type == "grad":
-        mask = CHAN_DF["grad_mask"]
-        n_channels = 204
-    else:
-        raise ("Error : bad channel type selected")
-    trial = trial[mask]
-
-    n_trials = trial.shape[-1] // timepoints
-    for i in range(1, n_trials - 1):
-        curr = trial[:, i * timepoints : (i + 1) * timepoints]
-        curr = curr.reshape(1, n_channels, timepoints)
-        data = curr if data is None else np.concatenate((data, curr))
-    labels = [gender] * (n_trials - 2)
-    data = data.astype(np.float32, copy=False)
-    return data, labels
+# def load_subject(sub, data_path=DATA_PATH, data=None, timepoints=500, ch_type="all"):
+#     df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
+#     df = df.set_index("participant_id")
+#     gender = (df["gender"])[sub]
+#     # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
+#     subject_file = "{}_rest.mat".format(data_path + sub)
+#     # trial = read_raw_fif(subject_file,
+#     #                      preload=True).pick_types(meg=True)[:][0]
+#     trial = np.load(subject_file)
+#     if ch_type == "all":
+#         mask = [True for _ in range(len(trial))]
+#         n_channels = 306
+#     elif ch_type == "mag":
+#         mask = CHAN_DF["mag_mask"]
+#         n_channels = 102
+#     elif ch_type == "grad":
+#         mask = CHAN_DF["grad_mask"]
+#         n_channels = 204
+#     else:
+#         raise ("Error : bad channel type selected")
+#     trial = trial[mask]
+#
+#     n_trials = trial.shape[-1] // timepoints
+#     for i in range(1, n_trials - 1):
+#         curr = trial[:, i * timepoints : (i + 1) * timepoints]
+#         curr = curr.reshape(1, n_channels, timepoints)
+#         data = curr if data is None else np.concatenate((data, curr))
+#     labels = [gender] * (n_trials - 2)
+#     data = data.astype(np.float32, copy=False)
+#     return data, labels
 
 
 def load_checkpoint(filename):
@@ -147,7 +147,7 @@ def decorateur(func):
 
 
 def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
-    data_df = SUB_DF[["Observations", "gender"]]
+    data_df = SUB_DF[["participant_id", "gender"]]
     idx = np.random.permutation(range(len(data_df)))
     data_df = data_df.iloc[idx]
     data_df = data_df.iloc[:max_subj]

@@ -232,7 +232,7 @@ def classif(train_set, test_set, args):
 
     cv = create_crossval(args.label, y)
     clf, param, train = random_search(args, cv, X, y, groups)
-    cv = create_crossval(label, y_test)
+    cv = create_crossval(args.label, y_test)
     test = np.mean(
         cross_val_score(
             clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
