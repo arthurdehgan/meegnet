@@ -21,10 +21,7 @@ from params import CHAN_DF, SUB_DF, LABELS
 
 def check_classif_done(elec_index, args):
     elec_list = []
-    savepath = (
-        args.out_path
-        + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
-    )
+    savepath = args.out_path + f"{args.label}/{args.feature}/{args.clf}/"
     for elec in elec_index:
         elec_name = CHAN_DF.iloc[elec]["ch_name"]
         savename = savepath + f"test_scores_elec{elec_name}.npy"
@@ -34,9 +31,7 @@ def check_classif_done(elec_index, args):
 
 
 def print_info_classif(args):
-    print(
-        f"\nClassification of {args.label}s on individual electrodes using {args.data_type}_{args.clean_type}."
-    )
+    print(f"\nClassification of {args.label}s on individual electrodes.")
     print(f"Classifier: {args.clf}")
     if args.label != "subject":
         print("Cross-Validation: Stratified Leave Groups Out.")
@@ -74,14 +69,10 @@ def load_freq_data(dataframe, elec_index, get_features, labels, args, path):
     for i, row in enumerate(dataframe[: int(len(dataframe))].iterrows()):
         sub = row[1]["participant_id"]
         try:
-            data = np.load(path + f"{sub}_{args.data_type}_{args.clean_type}_psd.npy")
+            data = np.load(path + f"{sub}_psd.npy")
             data = np.take(data, elec_index, args.elec_axis)
         except FileNotFoundError:
-            print(
-                sub,
-                "could not be loaded with datatype",
-                f"{args.data_type}_{args.clean_type}",
-            )
+            print(sub, "could not be loaded")
             print(f"In path: {path}")
         sub_data = get_features(data)
         if NORM:
@@ -98,7 +89,7 @@ def load_freq_data(dataframe, elec_index, get_features, labels, args, path):
 
 
 def load_data(elec_index, args):
-    data_path = args.in_path + f"{args.clean_type}/"
+    data_path = args.in_path
     og_labels = np.array(LABELS[args.label])
     stratify = og_labels
     if args.label == "gender":
@@ -247,10 +238,7 @@ def classif_all_elecs(train_set, test_set, elec_list, args):
     X_test_og, y_test, groups_test = test_set
 
     for elec, elec_name in enumerate(elec_list):
-        savepath = (
-            args.out_path
-            + f"{args.label}/{args.data_type}_{args.clean_type}/{args.feature}/{args.clf}/"
-        )
+        savepath = args.out_path + f"{args.label}/{args.feature}/{args.clf}/"
         if not os.path.isdir(savepath):
             try:
                 os.makedirs(savepath)
@@ -307,24 +295,16 @@ if __name__ == "__main__":
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
         elec_list = check_classif_done([elec], args)
-        # for clean_type in ["mf", "transdef_mf", "raw"]:
-        for clean_type in ["mf"]:
-            # for data_type in ["rest", "task", "passive"]:
-            for data_type in ["rest"]:
-                for clf in ["SVM", "LDA", "QDA", "RF"]:
-                    for label in ["subject", "age", "gender"]:
-                        for feature in ["bins", "bands"]:
-                            args.clf = clf
-                            args.label = label
-                            args.feature = feature
-                            args.clean_type = clean_type
-                            args.data_type = data_type
-                            if args.verbose > 0:
-                                print_info_classif(args)
-                            train_set, test_set = load_data(elec_index, args)
-                            classif_all_elecs(
-                                train_set, test_set, elec_list=[elec], args=args
-                            )
+        for clf in ["SVM", "LDA", "QDA", "RF"]:
+            for label in ["subject", "age", "gender"]:
+                for feature in ["bins", "bands"]:
+                    args.clf = clf
+                    args.label = label
+                    args.feature = feature
+                    if args.verbose > 0:
+                        print_info_classif(args)
+                    train_set, test_set = load_data(elec_index, args)
+                    classif_all_elecs(train_set, test_set, elec_list=[elec], args=args)
     else:
         if args.verbose > 0:
             print_info_classif(args)

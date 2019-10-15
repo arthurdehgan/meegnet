@@ -3,66 +3,83 @@ from params import SAVE_PATH, DATA_PATH
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "-c", "--cores", default=-1, type=int, help="The number of cores to use"
+    "-c",
+    "--cores",
+    default=-1,
+    type=int,
+    help="The number of cores to use, default=-1 (all cores)",
 )
-parser.add_argument("-v", "--verbose", type=int, default=1, help="display more info")
+parser.add_argument(
+    "-v",
+    "--verbose",
+    type=int,
+    default=1,
+    help="display more info must be int from 0 to 3, default=1",
+)
 parser.add_argument(
     "--clf",
     choices=["SVM", "LDA", "QDA", "RF", "perceptron"],
     default="LDA",
-    help="The classifier that will be used for the classification",
+    help="The classifier that will be used for the classification, default=LDA",
 )
 parser.add_argument(
-    "-p", "--permutations", type=int, default=None, help="The number of permutations"
+    "-p",
+    "--permutations",
+    type=int,
+    default=None,
+    help="The number of permutations, default=None",
 )
-parser.add_argument(
-    "-d",
-    "--data_type",
-    choices=["task", "rest", "passive"],
-    default="rest",
-    help="The type of data to use for classification",
-)
-parser.add_argument(
-    "--clean_type",
-    choices=["mf", "transdef_mf", "raw"],
-    default="transdef_mf",
-    help="The type of preprocessing step to use for classification",
-)
+# parser.add_argument(
+#     "-d",
+#     "--data_type",
+#     choices=["task", "rest", "passive"],
+#     default="rest",
+#     help="The type of data to use for classification",
+# )
+# parser.add_argument(
+#     "--clean_type",
+#     choices=["mf", "transdef_mf", "raw"],
+#     default="transdef_mf",
+#     help="The type of preprocessing step to use for classification",
+# )
 parser.add_argument(
     "-l",
     "--label",
     choices=["gender", "age", "subject"],
     default="gender",
-    help="The type of classification to run",
+    help="The type of classification to run, default=gender",
 )
 parser.add_argument(
     "-e",
     "--elec",
     choices=["MAG", "GRAD", "all"],
     default="MAG",
-    help="The type of electrodes to keep",
+    help="The type of electrodes to keep, default=MAG",
 )
 parser.add_argument(
     "-f",
     "--feature",
     choices=["bands", "bins"],
     default="bands",
-    help="The type of features to use",
+    help="The type of features to use, default=bands",
 )
 parser.add_argument(
-    "--n_crossval", type=int, default=1000, help="The number of cross-validations to do"
+    "--n_crossval",
+    type=int,
+    default=1000,
+    help="The number of cross-validations to do, default=1000",
 )
 parser.add_argument(
     "--test_size",
     type=float,
     default=0.5,
-    help="The percentage of the dataset to use as test set",
+    help="The percentage of the dataset to use as test set, default=.5",
 )
 parser.add_argument(
     "--iterations",
     type=int,
     default=100,
-    help="The number of iterations to do for random search hyperparameter optimization",
+    help="The number of iterations to do for random search hyperparameter optimization, default=100",
 )
 parser.add_argument(
     "-t",
@@ -74,7 +91,7 @@ parser.add_argument(
     "-o",
     "--out_path",
     default=SAVE_PATH + "results/",
-    help="Where to save the result matrices",
+    help="Where to save the result matrices, data path in config.ini file + results/, by default",
 )
 parser.add_argument(
     "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
@@ -83,6 +100,6 @@ parser.add_argument(
     "--elec_axis",
     type=int,
     default=1,
-    help="The axis of the data where the electrodes are",
+    help="The axis of the data where the electrodes are, default=1",
 )
 args = parser.parse_args()
