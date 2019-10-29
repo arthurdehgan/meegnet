@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 from parser import args
 from params import RAW_PATH, DATA_PATH, SAVE_PATH, SUB_DF
 
-N_ELEC = 102
-
 
 if __name__ == "__main__":
 
@@ -33,7 +31,7 @@ if __name__ == "__main__":
         ch_pos = ch_pos[grads_index]
 
     if classif == "gender":
-        n_trials = 6000
+        n_trials = 6050
         chance_level = binom.isf(0.05, n_trials, 0.5) / n_trials
     if classif == "subject":
         n_subj = 628
