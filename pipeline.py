@@ -242,7 +242,11 @@ def classif_all_elecs(train_set, test_set, elec_list, args):
     X_test_og, y_test, groups_test = test_set
 
     for elec, elec_name in enumerate(elec_list):
-        savepath = args.out_path + f"{args.label}/{args.feature}/{args.clf}/"
+        if args.feature == "subject":
+            labelname = f"{args.label}_{len(set(test_set[1]))}"
+        else:
+            labelname = args.label
+        savepath = args.out_path + f"{labelname}/{args.feature}/{args.clf}/"
         if not os.path.isdir(savepath):
             try:
                 os.makedirs(savepath)
