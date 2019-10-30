@@ -284,6 +284,8 @@ if __name__ == "__main__":
         elec_index += list(range(1, 306, 3))
     elif args.elec == "all":
         elec_index = range(306)
+    else:
+        elec_index = list(CHAN_DF.index[CHAN_DF["ch_name"] == args.elec])
 
     NORM = False
     if args.clf == "SVM":
