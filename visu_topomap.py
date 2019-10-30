@@ -32,15 +32,22 @@ if __name__ == "__main__":
 
     if classif == "gender":
         n_trials = 6050
-        chance_level = binom.isf(0.05, n_trials, 0.5) / n_trials
+        chance_level = binom.isf(0.01, n_trials, 0.5) / n_trials
+        vmin = 0.45
+        vmax = 0.70
     if classif == "subject":
         n_subj = 628
         n_trials = 6000  # TODO CHANGE, it is wrong
-        chance_level = binom.isf(0.05, n_trials, 1 / n_subj) / n_trials
+        chance_level = binom.isf(0.01, n_trials, 1 / n_subj) / n_trials
+        vmin = 0.38
+        vmax = 0.62
     if classif == "age":
         n_trials = 6000  # TODO change, it is wrong
-        chance_level = binom.isf(0.05, n_trials, 1 / 7) / n_trials
+        chance_level = binom.isf(0.01, n_trials, 1 / 7) / n_trials
+        vmin = 0.10
+        vmax = 0.26
     all_scores = []
+    print(classif, chance_level)
     for i, elec in enumerate(ch_names):
         elec = elec.strip()
         RES_PATH = SAVE_PATH + f"results/{classif}/{ftype}/{classifier}/"
@@ -51,6 +58,7 @@ if __name__ == "__main__":
                 print(elec)
         except:
             print("could not load", file_path)
+            all_scores.append(chance_level)
 
     all_scores = np.asarray(all_scores)
     mask_params = dict(
@@ -66,14 +74,16 @@ if __name__ == "__main__":
         all_scores,
         ch_pos,
         res=128,
-        cmap="Spectral_r",
-        vmin=0.45,
+        cmap="viridis",
+        vmax=vmax,
+        vmin=vmin,
         show=False,
         names=ch_names,
         show_names=False,
         mask=tt_mask,
         mask_params=mask_params,
         contours=1,
+        extrapolate="skirt",
     )
 
     cb = fig.colorbar(im)

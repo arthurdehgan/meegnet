@@ -50,11 +50,7 @@ parser.add_argument(
     help="The type of classification to run, default=gender",
 )
 parser.add_argument(
-    "-e",
-    "--elec",
-    choices=["MAG", "GRAD", "all"],
-    default="MAG",
-    help="The type of electrodes to keep, default=MAG",
+    "-e", "--elec", default="MAG", help="The type of electrodes to keep, default=MAG"
 )
 parser.add_argument(
     "-f",

@@ -31,6 +31,10 @@ def check_classif_done(elec_index, args):
 
 
 def print_info_classif(args):
+    try:
+        elec = CHAN_DF.iloc[int(args.elec)]["ch_name"]
+    except:
+        elec = args.elec
     print(f"\nClassification of {args.label}s on individual electrodes.")
     print(f"Classifier: {args.clf}")
     if args.label != "subject":
@@ -39,7 +43,7 @@ def print_info_classif(args):
         print("Cross-Validation: Stratified Shuffle Split.")
     print(f"Number of cross-validation steps: {args.n_crossval}.")
     print(f"Features used: frequency {args.feature}.")
-    print(f"Sensor used: {args.elec}")
+    print(f"Sensor used: {elec}")
     if args.clf in ["perceptron", "SVM", "RF"]:
         print(f"Random search will be used to fine tune hyperparameters.")
         print(f"n_iters={args.iterations}")
@@ -284,8 +288,10 @@ if __name__ == "__main__":
         elec_index += list(range(1, 306, 3))
     elif args.elec == "all":
         elec_index = range(306)
-    else:
-        elec_index = list(CHAN_DF.index[CHAN_DF["ch_name"] == args.elec])
+    elif args.elec.startswith("MEG"):
+        elec_index = [CHAN_DF.index[CHAN_DF["ch_name"] == args.elec]]
+    elif int(args.elec) in list(range(306)):
+        elec_index = [int(args.elec)]
 
     NORM = False
     if args.clf == "SVM":
