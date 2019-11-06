@@ -1,4 +1,5 @@
 import os
+import time
 from parser import args
 import xgboost as xgb
 import scipy as sp
@@ -17,6 +18,7 @@ from sklearn.discriminant_analysis import (
     QuadraticDiscriminantAnalysis as QDA,
 )
 from mlneurotools.ml import StratifiedShuffleGroupSplit as SSGS
+from utils import elapsed_time
 from params import CHAN_DF, SUB_DF, LABELS
 
 
@@ -126,12 +128,16 @@ def load_data(elec_index, args):
     test_df = data_df.iloc[test_index]
     test_labels = og_labels[train_index]
 
+    if args.verbose > 0 and args.time:
+        start = time.time()
     train_set = load_freq_data(
         train_df, elec_index, get_features, train_labels, args, data_path
     )
     test_set = load_freq_data(
         test_df, elec_index, get_features, test_labels, args, data_path
     )
+    if args.verbose > 0 and args.time:
+        print("Time spent loading data:", elapsed_time(time.time(), start))
     if args.verbose > 0:
         print("Done")
         print(f"train_size: {train_set[0].shape} (Used for hyperparameter tuning)")
@@ -253,13 +259,21 @@ def classif(train_set, test_set, args):
     X_test, y_test, groups_test = test_set
 
     cv = create_crossval(args.label, y)
+    if args.verbose > 0 and args.time:
+        start = time.time()
     clf, param, train = random_search(args, cv, X, y, groups)
+    if args.verbose > 0 and args.time and args.clf not in ["LDA", "QDA"]:
+        print("Time spend in Random Search:", elapsed_time(time.time(), start))
     cv = create_crossval(args.label, y_test)
+    if args.verbose > 0 and args.time:
+        start = time.time()
     test = np.mean(
         cross_val_score(
             clf, X_test, y_test, groups=groups_test, cv=cv, n_jobs=args.cores
         )
     )
+    if args.verbose > 0 and args.time:
+        print("Time spent evaluating the model:", elapsed_time(time.time(), start))
     return param, train, test
 
 
@@ -332,6 +346,7 @@ if __name__ == "__main__":
         print("Testing")
         args.n_crossval = 2
         args.iterations = 2
+        args.time = True
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
         elec_list = check_classif_done([elec], args)
         for clf in ["XGBoost", "SVM", "LDA", "QDA", "RF"]:
@@ -347,9 +362,14 @@ if __name__ == "__main__":
     else:
         if args.verbose > 0:
             print_info_classif(args)
+        if args.time:
+            start = time.time()
         elec_list = check_classif_done(elec_index, args)
         if elec_list != []:
             train_set, test_set = load_data(elec_index, args)
             classif_all_elecs(train_set, test_set, elec_list=elec_list, args=args)
+            end = time.time()
         else:
             print("This classification has already been done")
+        if args.verbose > 0:
+            print("Total time:", elapsed_time(start, end))

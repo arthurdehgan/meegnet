@@ -78,10 +78,12 @@ parser.add_argument(
     help="The number of iterations to do for random search hyperparameter optimization, default=100",
 )
 parser.add_argument(
-    "-t",
     "--test",
     action="store_true",
     help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
+)
+parser.add_argument(
+    "-t", "--time", action="store_true", help="keeps time and prints it at the end"
 )
 parser.add_argument(
     "-o",
