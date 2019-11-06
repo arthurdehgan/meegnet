@@ -50,6 +50,8 @@ def elapsed_time(t0, t1):
                 Time = "%ih:%im:%is" % (nbh, nbm, nbs)
         else:
             Time = "%im:%is" % (nbm, nbs)
+    elif lapsed < 1:
+        Time = "<1s"
     else:
         Time = "%is" % nbs
     return Time
