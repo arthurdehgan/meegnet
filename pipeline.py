@@ -79,8 +79,8 @@ def load_freq_data(dataframe, elec_index, get_features, labels, args, path):
             data = np.load(path + f"{sub}_psd.npy")
             data = np.take(data, elec_index, args.elec_axis)
         except FileNotFoundError:
-            print(sub, "could not be loaded")
-            print(f"In path: {path}")
+            print(sub, "could not be loaded in path:")
+            print(f"{path}")
         sub_data = get_features(data)
         if NORM:
             sub_data = sp.stats.zscore(sub_data)
