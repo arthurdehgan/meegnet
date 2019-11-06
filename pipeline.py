@@ -372,4 +372,4 @@ if __name__ == "__main__":
         else:
             print("This classification has already been done")
         if args.verbose > 0:
-            print("Total time:", elapsed_time(start, end))
+            print("Total time:", elapsed_time(start, time.time()))
