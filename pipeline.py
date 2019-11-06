@@ -368,7 +368,6 @@ if __name__ == "__main__":
         if elec_list != []:
             train_set, test_set = load_data(elec_index, args)
             classif_all_elecs(train_set, test_set, elec_list=elec_list, args=args)
-            end = time.time()
         else:
             print("This classification has already been done")
         if args.verbose > 0:
