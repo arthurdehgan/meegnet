@@ -18,7 +18,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--clf",
-    choices=["SVM", "LDA", "QDA", "RF", "perceptron"],
+    choices=["XGBoost", "SVM", "LDA", "QDA", "RF", "perceptron"],
     default="LDA",
     help="The classifier that will be used for the classification, default=LDA",
 )

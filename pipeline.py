@@ -1,5 +1,6 @@
 import os
 from parser import args
+import xgboost as xgb
 import scipy as sp
 import numpy as np
 from sklearn.model_selection import (
@@ -44,7 +45,7 @@ def print_info_classif(args):
     print(f"Number of cross-validation steps: {args.n_crossval}.")
     print(f"Features used: frequency {args.feature}.")
     print(f"Sensor used: {elec}")
-    if args.clf in ["perceptron", "SVM", "RF"]:
+    if args.clf in ["perceptron", "SVM", "RF", "XGBoost"]:
         print(f"Random search will be used to fine tune hyperparameters.")
         print(f"n_iters={args.iterations}")
         print(f"{(1-args.test_size) * 100}% of the data will be used for fine tuning.")
@@ -139,6 +140,32 @@ def load_data(elec_index, args):
 
 
 def random_search(args, cv, X, y, groups=None):
+    if args.clf == "XGBoost":
+        param_grid = {
+            "silent": [False],
+            "max_depth": [6, 10, 15, 20],
+            "learning_rate": [0.001, 0.01, 0.1, 0.2, 0, 3],
+            "subsample": [0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+            "colsample_bytree": [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+            "colsample_bylevel": [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+            "min_child_weight": [0.5, 1.0, 3.0, 5.0, 7.0, 10.0],
+            "gamma": [0, 0.25, 0.5, 1.0],
+            "reg_lambda": [0.1, 1.0, 5.0, 10.0, 50.0, 100.0],
+            "n_estimators": [100],
+        }
+        randsearch = RandomizedSearchCV(
+            estimator=xgb.XGBClassifier(),
+            param_distributions=param_grid,
+            n_iter=args.iterations,
+            cv=cv,
+            random_state=42,
+            n_jobs=args.cores,
+        )
+        randsearch.fit(X, y, groups)
+        param = randsearch.best_params_
+        train = randsearch.best_score_
+        clf = xgb.XGBClassifier(**randsearch.best_params_)
+
     if args.clf == "RF":
         n_estimators = [int(x) for x in np.linspace(start=10, stop=1000, num=10)]
         max_features = ["auto", "sqrt"]
@@ -148,7 +175,7 @@ def random_search(args, cv, X, y, groups=None):
         min_samples_leaf = [1, 2, 4]
         bootstrap = [True, False]
 
-        random_grid = {
+        param_grid = {
             "n_estimators": n_estimators,
             "max_features": max_features,
             "max_depth": max_depth,
@@ -158,7 +185,7 @@ def random_search(args, cv, X, y, groups=None):
         }
         randsearch = RandomizedSearchCV(
             estimator=RF(),
-            param_distributions=random_grid,
+            param_distributions=param_grid,
             n_iter=args.iterations,
             cv=cv,
             random_state=42,
@@ -170,13 +197,13 @@ def random_search(args, cv, X, y, groups=None):
         clf = RF(**randsearch.best_params_)
 
     elif args.clf == "perceptron":
-        random_grid = {
+        param_grid = {
             "penality": ["l2", "l1", "elasticnet"],
             "alpha": [0.0001, 0.001, 0.00001, 0.0005],
         }
         randsearch = RandomizedSearchCV(
             estimator=Perceptron(),
-            param_distributions=random_grid,
+            param_distributions=param_grid,
             n_iter=args.iterations,
             cv=cv,
             random_state=42,
@@ -277,7 +304,7 @@ def classif_all_elecs(train_set, test_set, elec_list, args):
             param, train, test = classif(train_set, test_set, args)
 
             if not args.test:
-                if args.clf in ["perceptron", "RF", "SVM"]:
+                if args.clf in ["perceptron", "RF", "SVM", "XGBoost"]:
                     np.save(savepath + f"train_scores_elec{elec_name}", train)
                     np.save(savepath + f"params_elec{elec_name}", param)
                 np.save(savename, test)
@@ -307,7 +334,7 @@ if __name__ == "__main__":
         args.iterations = 2
         elec = np.random.choice(list(range(len(CHAN_DF["ch_name"]))), 1)
         elec_list = check_classif_done([elec], args)
-        for clf in ["SVM", "LDA", "QDA", "RF"]:
+        for clf in ["XGBoost", "SVM", "LDA", "QDA", "RF"]:
             for label in ["subject", "age", "gender"]:
                 for feature in ["bins", "bands"]:
                     args.clf = clf
