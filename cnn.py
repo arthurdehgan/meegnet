@@ -10,7 +10,6 @@ from torchsummary import summary
 import pandas as pd
 import numpy as np
 from scipy.io import savemat
-from scipy.signal import decimate
 from params import DATA_PATH, CHAN_DF, SUB_DF
 
 parser = argparse.ArgumentParser()
@@ -43,9 +42,9 @@ N_EPOCHS = 50
 N_CHANNELS = 102
 LEARNING_RATE = 0.0001
 TRAIN_SIZE = 0.75
-DECIMATE = 10
-TRIAL_LENGTH = 500
-OFFSET = 2500
+DECIMATE = 5
+TRIAL_LENGTH = 400
+OFFSET = 2000
 np.random.seed(42)
 SAVE_PATH = "./models/"
 
@@ -72,8 +71,7 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
         sub, lab = row[1]["participant_id"], row[1]["gender"]
-        sub_data = np.load(dpath + f"sub-{sub}_rest_{ch_type}.npy")
-        sub_data = decimate(sub_data, DECIMATE)
+        sub_data = np.load(dpath + f"{sub}_ICA_transdef_mf.npy")
         sub_data = [
             normalize(sub_data[:, i : i + TRIAL_LENGTH])
             for i in range(OFFSET, sub_data.shape[-1], TRIAL_LENGTH)
@@ -352,6 +350,46 @@ class FullNet(nn.Module):
             sys.stdout = orig_stdout
 
 
+class vanPutNet(nn.Module):
+    def __init__(self, model_name, lin_size=1):
+
+        super(vanPutNet, self).__init__()
+        self.feature_extraction = nn.Sequential(
+            nn.Conv2d(1, 100, 3),
+            nn.ReLU(),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(0.25),
+            nn.Conv2d(100, 100, 3),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(0.25),
+            nn.Conv2d(100, 300, (2, 3)),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(0.25),
+            nn.Conv2d(300, 300, (1, 7)),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(0.25),
+            nn.Conv2d(300, 100, (1, 3)),
+            nn.Conv2d(100, 100, (1, 3)),
+            Flatten(),
+        )
+        self.classif = nn.Sequential(nn.Linear(lin_size, 2), nn.Softmax(dim=-1))
+
+        self.name = model_name
+
+    def forward(self, x):
+        return self.classif(self.feature_extraction(x))
+
+    def save_model(self, filepath="."):
+        if not filepath.endswith("/"):
+            filepath += "/"
+
+        orig_stdout = sys.stdout
+        with open(filepath + self.name + ".txt", "a") as f:
+            sys.stdout = f
+            summary(self, (1, N_CHANNELS, TRIAL_LENGTH))
+            sys.stdout = orig_stdout
+
+
 if __name__ == "__main__":
 
     args = parser.parse_args()
@@ -361,18 +399,22 @@ if __name__ == "__main__":
     dropout_option = args.dropout_option
     linear = args.linear
 
-    net = FullNet("", filters, nchan)
-    lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+    # net = FullNet("", filters, nchan)
+    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
 
-    net = FullNet(
-        f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-        filters,
-        nchan,
-        linear,
-        dropout,
-        dropout_option,
-        lin_size,
-    )
+    # net = FullNet(
+    #     f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+    #     filters,
+    #     nchan,
+    #     linear,
+    #     dropout,
+    #     dropout_option,
+    #     lin_size,
+    # )
+    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+    net = vanPutNet(f"")
+    lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+    net = vanPutNet(f"van_Putten_network", lin_size)
     net = net.cuda()
     print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
 
