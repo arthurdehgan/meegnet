@@ -370,5 +370,5 @@ if __name__ == "__main__":
             classif_all_elecs(train_set, test_set, elec_list=elec_list, args=args)
         else:
             print("This classification has already been done")
-        if args.verbose > 0:
+        if args.verbose > 0 and args.time:
             print("Total time:", elapsed_time(start, time.time()))
