@@ -1,3 +1,4 @@
+#!python
 import warnings
 from itertools import product
 import mne
@@ -26,7 +27,7 @@ if __name__ == "__main__":
         ch_names = ch_names[mags_index]
         ch_pos = ch_pos[mags_index]
     elif channel_types == "GRAD":
-        grads_index = np.array(set(np.arange(306)) - set(mags_index))
+        grads_index = np.array(list(set(np.arange(306)) - set(mags_index)))
         ch_names = ch_names[grads_index]
         ch_pos = ch_pos[grads_index]
 
@@ -36,7 +37,7 @@ if __name__ == "__main__":
         vmin = 0.45
         vmax = 0.70
     if classif == "subject":
-        n_subj = 628
+        n_subj = 628 / 2
         n_trials = 6000  # TODO CHANGE, it is wrong
         chance_level = binom.isf(0.01, n_trials, 1 / n_subj) / n_trials
         vmin = 0.38
