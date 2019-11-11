@@ -71,14 +71,20 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
         sub, lab = row[1]["participant_id"], row[1]["gender"]
-        sub_data = np.load(dpath + f"{sub}_ICA_transdef_mf.npy")
+        filepath = dpath + f"{sub}_ICA_transdef_mfds200.npy"
+
+        try:
+            sub_data = np.load(filepath)
+        except:
+            print("There was a problem while loading", filepath)
+            continue
+
         sub_data = [
-            normalize(sub_data[:, i : i + TRIAL_LENGTH])
+            normalize(sub_data[:306, i : i + TRIAL_LENGTH])
             for i in range(OFFSET, sub_data.shape[-1], TRIAL_LENGTH)
         ]
-        for sub in sub_data:
-            if sub.shape[-1] != TRIAL_LENGTH:
-                sub_data.remove(sub)
+        if sub_data[-1].shape[-1] != TRIAL_LENGTH:
+            sub_data = sub_data[:-1]
         sub_data = np.array(sub_data)
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
         y += [lab] * len(sub_data)
@@ -155,11 +161,8 @@ def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
     valid_size = int(remaining_size / 2)
     test_size = remaining_size - valid_size
 
-    train_index, remaining_index = utils.random_split(
-        np.arange(N), [train_size, remaining_size]
-    )
-    test_index, valid_index = utils.random_split(
-        np.arange(remaining_size), [test_size, valid_size]
+    train_index, test_index, valid_index = utils.random_split(
+        np.arange(N), [train_size, test_size, valid_size]
     )
 
     X_test, y_test = load_data(data_df.iloc[test_index[:]])
