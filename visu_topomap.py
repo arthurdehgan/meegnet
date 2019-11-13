@@ -17,33 +17,33 @@ if __name__ == "__main__":
     ftype = args.feature
     classifier = args.clf
     classif = args.label
-    channel_types = args.elec
+    channel_type = args.elec
 
     file_path = RAW_PATH + "matdata/CC120264_ICA_transdef_mf.mat"
     tmp = loadmat(file_path)
     ch_names, ch_pos = tmp["ch_info"][:306, 0], tmp["ch_pos"]
     mags_index = np.arange(2, 306, 3)
-    if channel_types == "MAG":
+    if channel_type == "MAG":
         ch_names = ch_names[mags_index]
         ch_pos = ch_pos[mags_index]
-    elif channel_types == "GRAD":
+    elif channel_type == "GRAD":
         grads_index = np.array(list(set(np.arange(306)) - set(mags_index)))
         ch_names = ch_names[grads_index]
         ch_pos = ch_pos[grads_index]
 
     if classif == "gender":
-        n_trials = 6050
+        n_trials = 17809
         chance_level = binom.isf(0.01, n_trials, 0.5) / n_trials
         vmin = 0.45
         vmax = 0.70
     if classif == "subject":
-        n_subj = 628 / 2
-        n_trials = 6000  # TODO CHANGE, it is wrong
+        n_subj = 315 / 2
+        n_trials = 17980
         chance_level = binom.isf(0.01, n_trials, 1 / n_subj) / n_trials
         vmin = 0.38
         vmax = 0.62
     if classif == "age":
-        n_trials = 6000  # TODO change, it is wrong
+        n_trials = 17969
         chance_level = binom.isf(0.01, n_trials, 1 / 7) / n_trials
         vmin = 0.10
         vmax = 0.26
@@ -90,6 +90,6 @@ if __name__ == "__main__":
     cb = fig.colorbar(im)
     mne.viz.tight_layout()
     plt.savefig(
-        SAVE_PATH + "figures/" + f"MAG_{classifier}_{classif}_{ftype}.png",
+        SAVE_PATH + "figures/" + f"{channel_type}_{classifier}_{classif}_{ftype}.png",
         resolution=300,
     )

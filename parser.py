@@ -83,6 +83,11 @@ parser.add_argument(
     help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
 )
 parser.add_argument(
+    "--force-load",
+    action="store_true",
+    help="forces loading and printing of shapes even if classification has been done",
+)
+parser.add_argument(
     "-t", "--time", action="store_true", help="keeps time and prints it at the end"
 )
 parser.add_argument(

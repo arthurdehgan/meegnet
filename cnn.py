@@ -500,4 +500,4 @@ if __name__ == "__main__":
     model_filepath = SAVE_PATH + net.name + ".pt"
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
-    evaluate(net, testloader)
+    print(evaluate(net, testloader))
