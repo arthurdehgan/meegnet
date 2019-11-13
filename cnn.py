@@ -212,7 +212,7 @@ def train(
     dataloader,
     validloader,
     criterion=nn.CrossEntropyLoss(),
-    optimizer=optim.Adam
+    optimizer=optim.Adam,
     save_model=False,
     load_model=False,
 ):
