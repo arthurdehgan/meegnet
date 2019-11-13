@@ -1,3 +1,4 @@
+import os
 import sys
 import argparse
 from itertools import product
@@ -9,10 +10,15 @@ import torch.optim as optim
 from torchsummary import summary
 import pandas as pd
 import numpy as np
-from scipy.io import savemat
+from scipy.io import savemat, loadmat
+from utils import elapsed_time
 from params import DATA_PATH, CHAN_DF, SUB_DF
 
 parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-e", "--elec", default="MAG", help="The type of electrodes to keep, default=MAG"
+)
+parser.add_argument("--feature", default="freq", help="")
 parser.add_argument(
     "-d", "--dropout", type=float, help="The dropout rate of the linear layers"
 )
@@ -34,20 +40,6 @@ parser.add_argument(
     help="the number of channels for the first convolution, the other channel numbers scale with this one",
 )
 
-PATIENCE = 20
-MAX_SUBJ = 200
-BATCH_SIZE = 128
-# CH_TYPE = "mag"
-N_EPOCHS = 50
-N_CHANNELS = 102
-LEARNING_RATE = 0.0001
-TRAIN_SIZE = 0.75
-DECIMATE = 5
-TRIAL_LENGTH = 400
-OFFSET = 2000
-np.random.seed(42)
-SAVE_PATH = "./models/"
-
 
 def accuracy(y_pred, target):
     correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
@@ -64,14 +56,47 @@ def normalize(data):
     return data - data.mean(axis=0)[None, :]
 
 
-def load_data(dataframe, dpath=DATA_PATH, ch_type="mag"):
+def load_freq_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
+    if ch_type == "MAG":
+        elec_index = list(range(2, 306, 3))
+    elif ch_type == "GRAD":
+        elec_index = list(range(0, 306, 3))
+        elec_index += list(range(1, 306, 3))
+    elif ch_type == "all":
+        elec_index = list(range(306))
+
     X = None
     y = []
     i = 0
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
         sub, lab = row[1]["participant_id"], row[1]["gender"]
-        sub_data = np.load(dpath + f"{sub}_ICA_transdef_mf.npy")
+        try:
+            sub_data = np.array(np.load(dpath + f"{sub}_psd.npy"))[:, elec_index]
+        except:
+            print("There was a problem loading subject ", sub)
+
+        X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
+        y += [lab] * len(sub_data)
+        i += 1
+    return torch.Tensor(X).float(), torch.Tensor(y).long()
+
+
+def load_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
+    if ch_type == "MAG":
+        elec_index = list(range(2, 306, 3))
+    elif ch_type == "GRAD":
+        elec_index = list(range(0, 306, 3))
+        elec_index += list(range(1, 306, 3))
+    elif ch_type == "all":
+        elec_index = list(range(306))
+    X = None
+    y = []
+    i = 0
+    for row in dataframe.iterrows():
+        print(f"loading subject {i+1}...")
+        sub, lab = row[1]["participant_id"], row[1]["gender"]
+        sub_data = np.load(dpath + f"{sub}_ICA_transdef_mf.npy")[elec_index]
         sub_data = [
             normalize(sub_data[:, i : i + TRIAL_LENGTH])
             for i in range(OFFSET, sub_data.shape[-1], TRIAL_LENGTH)
@@ -144,7 +169,7 @@ def decorateur(func):
     return load_sub_wrapper
 
 
-def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
+def create_loaders(train_size, batch_size, max_subj=632):
     data_df = SUB_DF[["participant_id", "gender"]]
     idx = np.random.permutation(range(len(data_df)))
     data_df = data_df.iloc[idx]
@@ -155,16 +180,17 @@ def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
     valid_size = int(remaining_size / 2)
     test_size = remaining_size - valid_size
 
-    train_index, remaining_index = utils.random_split(
-        np.arange(N), [train_size, remaining_size]
-    )
-    test_index, valid_index = utils.random_split(
-        np.arange(remaining_size), [test_size, valid_size]
+    torch.manual_seed(torch.initial_seed())
+    train_index, test_index, valid_index = utils.random_split(
+        np.arange(N), [train_size, test_size, valid_size]
     )
 
-    X_test, y_test = load_data(data_df.iloc[test_index[:]])
-    X_valid, y_valid = load_data(data_df.iloc[valid_index[:]])
-    X_train, y_train = load_data(data_df.iloc[train_index[:]])
+    # X_test, y_test = load_data(data_df.iloc[test_index[:]], ch_type='MAG')
+    # X_valid, y_valid = load_data(data_df.iloc[valid_index[:]], ch_type='MAG')
+    # X_train, y_train = load_data(data_df.iloc[train_index[:]], ch_type='MAG')
+    X_test, y_test = load_freq_data(data_df.iloc[test_index[:]], ch_type="MAG")
+    X_valid, y_valid = load_freq_data(data_df.iloc[valid_index[:]], ch_type="MAG")
+    X_train, y_train = load_freq_data(data_df.iloc[train_index[:]], ch_type="MAG")
 
     train_dataset = utils.TensorDataset(X_train, y_train)
     valid_dataset = utils.TensorDataset(X_valid, y_valid)
@@ -181,19 +207,42 @@ def create_loaders(train_size, batch_size=BATCH_SIZE, max_subj=MAX_SUBJ):
     return dataloader, validloader, testloader
 
 
-def train(net, dataloader, validloader, save_model=False):
-    net.train()
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)
+def train(
+    net,
+    dataloader,
+    validloader,
+    criterion=nn.CrossEntropyLoss(),
+    optimizer=optim.Adam
+    save_model=False,
+    load_model=False,
+):
+    optimizer = optimizer(net.parameters(), lr=LEARNING_RATE)
+    model_filepath = SAVE_PATH + net.name + ".pt"
+
+    if load_model and os.path.exists(model_filepath):
+        epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
+        net.load_state_dict(net_state)
+        optimizer.load_state_dict(optimizer_state)
+        results = loadmat(model_filepath[:-2] + "mat")
+        best_vacc = results["acc_score"]
+        best_vloss = results["loss_score"]
+        valid_accs = results["acc"]
+        train_accs = results["train_acc"]
+        valid_losses = results["valid_loss"]
+        train_losses = results["train_loss"]
+        best_epoch = results["best_epoch"]
+        epoch = results["n_epochs"]
+    else:
+        epoch = 0
 
     p = PATIENCE
     j = 0
-    epoch = 0
     train_accs = []
     valid_accs = []
     train_losses = []
     valid_losses = []
     best_vloss = float("inf")
+    net.train()
     while j < p:
         epoch += 1
         for batch in dataloader:
@@ -228,7 +277,6 @@ def train(net, dataloader, validloader, save_model=False):
                     "state_dict": best_net.state_dict(),
                     "optimizer": optimizer.state_dict(),
                 }
-                model_filepath = SAVE_PATH + net.name + ".pt"
                 save_checkpoint(checkpoint, model_filepath)
                 net.save_model(SAVE_PATH)
         else:
@@ -253,7 +301,7 @@ def train(net, dataloader, validloader, save_model=False):
     return net
 
 
-def evaluate(net, dataloader, criterion):
+def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
     net.eval()
     with torch.no_grad():
         LOSSES = 0
@@ -393,6 +441,29 @@ class vanPutNet(nn.Module):
 if __name__ == "__main__":
 
     args = parser.parse_args()
+    if args.elec == "MAG":
+        N_CHANNELS = 102
+    elif args.elec == "GRAD":
+        N_CHANNELS = 204
+    elif args.elec == "all":
+        N_CHANNELS = 306
+
+    if args.feature == "freq":
+        TRIAL_LENGTH = 241
+    elif args.feature == "time":
+        TRIAL_LENGTH = 400
+
+    PATIENCE = 20
+    MAX_SUBJ = 632
+    BATCH_SIZE = 64
+    LEARNING_RATE = 0.00001
+    TRAIN_SIZE = 0.8
+    OFFSET = 2000
+    SEED = 420
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    SAVE_PATH = "./models/"
+
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -419,7 +490,14 @@ if __name__ == "__main__":
     print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
 
     a = time()
-    trainloader, validloader, testloader = create_loaders(TRAIN_SIZE)
-    print(time() - a)
+    trainloader, validloader, testloader = create_loaders(
+        TRAIN_SIZE, BATCH_SIZE, MAX_SUBJ
+    )
+    print(elapsed_time(time(), a))
 
-    train(net, trainloader, validloader, True)
+    # train(net, trainloader, validloader, True, True)
+
+    model_filepath = SAVE_PATH + net.name + ".pt"
+    _, net_state, _ = load_checkpoint(model_filepath)
+    net.load_state_dict(net_state)
+    evaluate(net, testloader)
