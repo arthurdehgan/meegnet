@@ -57,7 +57,7 @@ def print_info_classif(args):
 
 
 def extract_bands(data):
-    f = np.asarray([float(i / 3) for i in range(data.shape[-1])])
+    f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
     # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
     data = [
         data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],

@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-e", "--elec", default="MAG", help="The type of electrodes to keep, default=MAG"
 )
-parser.add_argument("--feature", default="freq", help="")
+parser.add_argument("--feature", default="bands", help="")
 parser.add_argument(
     "-d", "--dropout", type=float, help="The dropout rate of the linear layers"
 )
@@ -56,7 +56,21 @@ def normalize(data):
     return data - data.mean(axis=0)[None, :]
 
 
-def load_freq_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
+def extract_bands(data):
+    f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
+    # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
+    data = [
+        data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 30) * (f <= 120)].mean(axis=-1)[..., None],
+    ]
+    data = np.concatenate(data, axis=2)
+    return data
+
+
+def load_freq_data(dataframe, dpath=DATA_PATH, ch_type="MAG", bands=True):
     if ch_type == "MAG":
         elec_index = list(range(2, 306, 3))
     elif ch_type == "GRAD":
@@ -79,6 +93,8 @@ def load_freq_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
         y += [lab] * len(sub_data)
         i += 1
+    if bands:
+        X = extract_bands(X)
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 
@@ -448,8 +464,12 @@ if __name__ == "__main__":
     elif args.elec == "all":
         N_CHANNELS = 306
 
-    if args.feature == "freq":
+    if args.feature == "bins":
+        bands = False
         TRIAL_LENGTH = 241
+    if args.feature == "bands":
+        bands = False
+        TRIAL_LENGTH = 5
     elif args.feature == "time":
         TRIAL_LENGTH = 400
 

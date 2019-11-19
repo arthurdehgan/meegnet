@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from parser import args
 from params import RAW_PATH, DATA_PATH, SAVE_PATH, SUB_DF
 
+PVAL = 0.001
+
 
 if __name__ == "__main__":
 
@@ -33,18 +35,18 @@ if __name__ == "__main__":
 
     if classif == "gender":
         n_trials = 17809
-        chance_level = binom.isf(0.01, n_trials, 0.5) / n_trials
+        chance_level = binom.isf(PVAL, n_trials, 0.5) / n_trials
         vmin = 0.45
         vmax = 0.70
     if classif == "subject":
         n_subj = 315 / 2
         n_trials = 17980
-        chance_level = binom.isf(0.01, n_trials, 1 / n_subj) / n_trials
+        chance_level = binom.isf(PVAL, n_trials, 1 / n_subj) / n_trials
         vmin = 0.38
         vmax = 0.62
     if classif == "age":
         n_trials = 17969
-        chance_level = binom.isf(0.01, n_trials, 1 / 7) / n_trials
+        chance_level = binom.isf(PVAL, n_trials, 1 / 7) / n_trials
         vmin = 0.10
         vmax = 0.26
     all_scores = []
