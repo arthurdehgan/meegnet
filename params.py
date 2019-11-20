@@ -54,7 +54,7 @@ CHANNEL_NAMES = CHAN_DF["ch_name"].tolist()
 AGES = SUB_DF["age"].tolist()
 
 LABELS = {}
-LABELS["gender"] = SUB_DF["gender"].tolist()
+LABELS["sex"] = SUB_DF["sex"].tolist()
 LABELS["age"] = [group1(i) for i in AGES]
 LABELS["age_all"] = AGES
 LABELS["subject"] = list(range(len(SUBJECT_LIST)))

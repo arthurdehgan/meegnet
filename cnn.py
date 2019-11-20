@@ -84,7 +84,7 @@ def load_freq_data(dataframe, dpath=DATA_PATH, ch_type="MAG", bands=True):
     i = 0
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
-        sub, lab = row[1]["participant_id"], row[1]["gender"]
+        sub, lab = row[1]["participant_id"], row[1]["sex"]
         try:
             sub_data = np.array(np.load(dpath + f"{sub}_psd.npy"))[:, elec_index]
         except:
@@ -111,7 +111,7 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
     i = 0
     for row in dataframe.iterrows():
         print(f"loading subject {i+1}...")
-        sub, lab = row[1]["participant_id"], row[1]["gender"]
+        sub, lab = row[1]["participant_id"], row[1]["sex"]
         sub_data = np.load(dpath + f"{sub}_ICA_transdef_mf.npy")[elec_index]
         sub_data = [
             normalize(sub_data[:, i : i + TRIAL_LENGTH])
@@ -131,7 +131,7 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
 # def load_subject(sub, data_path=DATA_PATH, data=None, timepoints=500, ch_type="all"):
 #     df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
 #     df = df.set_index("participant_id")
-#     gender = (df["gender"])[sub]
+#     sex = (df["sex"])[sub]
 #     # subject_file = '{}/{}/rest/rest_raw.fif'.format(DATA_PATH, sub)
 #     subject_file = "{}_rest.mat".format(data_path + sub)
 #     # trial = read_raw_fif(subject_file,
@@ -155,7 +155,7 @@ def load_data(dataframe, dpath=DATA_PATH, ch_type="MAG"):
 #         curr = trial[:, i * timepoints : (i + 1) * timepoints]
 #         curr = curr.reshape(1, n_channels, timepoints)
 #         data = curr if data is None else np.concatenate((data, curr))
-#     labels = [gender] * (n_trials - 2)
+#     labels = [sex] * (n_trials - 2)
 #     data = data.astype(np.float32, copy=False)
 #     return data, labels
 
@@ -186,7 +186,7 @@ def decorateur(func):
 
 
 def create_loaders(train_size, batch_size, max_subj=632):
-    data_df = SUB_DF[["participant_id", "gender"]]
+    data_df = SUB_DF[["participant_id", "sex"]]
     idx = np.random.permutation(range(len(data_df)))
     data_df = data_df.iloc[idx]
     data_df = data_df.iloc[:max_subj]

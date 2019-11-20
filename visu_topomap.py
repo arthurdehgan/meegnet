@@ -33,7 +33,7 @@ if __name__ == "__main__":
         ch_names = ch_names[grads_index]
         ch_pos = ch_pos[grads_index]
 
-    if classif == "gender":
+    if classif == "sex":
         n_trials = 17809
         chance_level = binom.isf(PVAL, n_trials, 0.5) / n_trials
         vmin = 0.45

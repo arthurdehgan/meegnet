@@ -45,9 +45,9 @@ parser.add_argument(
 parser.add_argument(
     "-l",
     "--label",
-    choices=["gender", "age", "subject"],
-    default="gender",
-    help="The type of classification to run, default=gender",
+    choices=["sex", "age", "subject"],
+    default="sex",
+    help="The type of classification to run, default=sex",
 )
 parser.add_argument(
     "-e", "--elec", default="MAG", help="The type of electrodes to keep, default=MAG"
