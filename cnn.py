@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-s",
     "--max-subj",
-    default=2000,
+    default=1000,
     type=int,
     help="maximum number of subjects to use (1000 uses all subjects)",
 )
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     DATA_TYPE = args.feature
     BATCH_SIZE = args.batch_size
-    MAX_SUBJ = args.batch_size
+    MAX_SUBJ = args.max_subj
     CH_TYPE = args.elec
     if CH_TYPE == "MAG":
         N_CHANNELS = 102
