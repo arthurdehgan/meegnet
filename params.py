@@ -2,6 +2,11 @@
 import pandas as pd
 import configparser
 
+# mis apres examination des donnees, on ignore les 10 premieres secondes (donnees samplee a 200Hz)
+OFFSET = 2000
+# mis en fonction de Van puten qui utilise des trials de 2s samples a 200Hz (utilise les donnees ds200)
+TIME_TRIAL_LENGTH = 400
+
 config = configparser.ConfigParser()
 config.read("config.ini")
 paths = dict(config["DEFAULT"])
