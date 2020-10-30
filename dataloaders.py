@@ -53,12 +53,16 @@ def create_loaders(
     dtype,
     method="new",
     debug=False,
+    seed=0,
 ):
+    rng = np.random.RandomState(seed)
+    torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
-    #  it is created by reading the data. It is therefore better than SUB_DF previously used
-    samples_df = pd.read_csv("./trials_df.csv", index_col=0)
+    # it is created by reading the data. It is therefore better than SUB_DF previously used
+    # We now use trials_df_clean that contains one less subjects that contained nans
+    samples_df = pd.read_csv("./trials_df_clean.csv", index_col=0)
     subs = np.array(list(set(samples_df["subs"])))
-    idx = np.random.permutation(range(len(subs)))
+    idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
     N = len(subs)
@@ -66,7 +70,6 @@ def create_loaders(
     remaining_size = N - train_size
     valid_size = int(remaining_size / 2)
     test_size = remaining_size - valid_size
-    torch.manual_seed(torch.initial_seed())
     train_index, test_index, valid_index = random_split(
         np.arange(N), [train_size, test_size, valid_size]
     )
@@ -168,7 +171,9 @@ class megDataset(Dataset):
                 self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             )
             trial = np.load(data_path)[self.elec_index]
-            trial = zscore(trial)
+            trial = zscore(trial, axis=0)
+            if np.isnan(np.sum(trial)):
+                print(data_path, "becomes nan")
         else:
             data_path = os.path.join(self.root_dir, f"{sub}_psd.npy")
             trial = np.load(data_path)[:, self.elec_index]

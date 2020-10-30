@@ -385,11 +385,9 @@ if __name__ == "__main__":
         TRIAL_LENGTH = TIME_TRIAL_LENGTH
 
     PATIENCE = 20
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.00001
     TRAIN_SIZE = 0.8
     SEED = 420
-    np.random.seed(SEED)
-    torch.manual_seed(SEED)
     SAVE_PATH = "./models/"
 
     debug = args.debug
@@ -432,6 +430,7 @@ if __name__ == "__main__":
         MAX_SUBJ,
         CH_TYPE,
         DATA_TYPE,
+        seed=SEED,
     )
     print(elapsed_time(time(), a))
 
