@@ -2,14 +2,10 @@
 import pandas as pd
 import configparser
 
-config = configparser.ConfigParser()
-config.read("config.ini")
-paths = dict(config["DEFAULT"])
-SAVE_PATH = paths["save"]
-DATA_PATH = paths["data"]
-RAW_PATH = paths["raw"]
-subject_list = paths["subject_list"]
-channels_list = paths["channels_list"]
+# mis apres examination des donnees, on ignore les 10 premieres secondes (donnees samplee a 200Hz)
+OFFSET = 2000
+# mis en fonction de Van puten qui utilise des trials de 2s samples a 200Hz (utilise les donnees ds200)
+TIME_TRIAL_LENGTH = 400
 
 
 def group1(age):
@@ -45,16 +41,16 @@ N_ELEC = 306  # number electrodes
 WINDOW = 3000  # fenetre
 OVERLAP = 0.25  # overlap (entre 0 et 1)
 
-SUB_DF = pd.read_csv(subject_list, index_col=0)
+SUB_DF = pd.read_csv("./clean_participant_new.csv", index_col=0)
 SUBJECT_LIST = SUB_DF["participant_id"].tolist()
 
-CHAN_DF = pd.read_csv(channels_list, index_col=0)
+CHAN_DF = pd.read_csv("./channel_names.csv", index_col=0)
 CHANNEL_NAMES = CHAN_DF["ch_name"].tolist()
 
 AGES = SUB_DF["age"].tolist()
 
 LABELS = {}
-LABELS["gender"] = SUB_DF["gender"].tolist()
+LABELS["sex"] = SUB_DF["sex"].tolist()
 LABELS["age"] = [group1(i) for i in AGES]
 LABELS["age_all"] = AGES
 LABELS["subject"] = list(range(len(SUBJECT_LIST)))

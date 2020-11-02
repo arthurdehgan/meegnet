@@ -2,29 +2,8 @@
 from math import ceil
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
-import numpy as np
-from scipy.io import loadmat
-from params import FREQ_DICT, STATE_LIST, SAVE_PATH, WINDOW, OVERLAP
 
-
-FIG_PATH = SAVE_PATH + "figures/"
-SAVE_PATH = SAVE_PATH + "results/"
-NAME_COSP = "cosp"
-NAME_COV = "cov"
-PREFIX = "bootstrapped_subsamp_"
-MOY = "moy" in NAME_COSP
-SUBSAMP = "subsamp" in NAME_COSP.split("_")
-PERM = True
-PVAL = 0.001
-
-MINMAX = [40, 80]
-Y_LABEL = "Decoding accuracies (%)"
-COLORS = ["#C2C2C2"] + list(sns.color_palette("deep"))
-WIDTH = 0.90
-GRAPH_TITLE = "Gender classifications"
-
-RESOLUTION = 300
+COLORS = list()
 
 
 def autolabel(ax, rects, thresh):
@@ -50,93 +29,168 @@ def autolabel(ax, rects, thresh):
     return ax
 
 
-# barplot parameters
-def visualisation(pval):
-    scoring = "acc"
-    labels = list(FREQ_DICT.keys())
-    labels = ["Covariance"] + labels
-    groups = STATE_LIST
-
-    nb_labels = len(labels)
-    dat, stds = [], []
-    thresholds = []
-    for state in groups:
-        temp_std, temp, temp_thresh = [], [], []
-        for lab in labels:
-                file_name =  SAVE_PATH + f"{algo}_results.mat" # TODO
-            try:
-                data = loadmat(file_name)
-                n_rep = int(data["n_rep"])
-                data = np.asarray(data[scoring][0]) * 100
-                n_cv = int(len(data) / n_rep)
-            except IOError:
-                print(file_name, "not found.")
-            except KeyError:
-                print(file_name, "key error")
-
-            temp.append(np.mean(data))
-            std_value = np.std(data)
-            temp_std.append(std_value)
-        dat.append(temp)
-        stds.append(temp_std)
-
-    fig = plt.figure(figsize=(10, 5))  # size of the figure
-
-    # Generating the barplot (do not change)
-    ax = plt.axes()
-    temp = 0
-    offset = 0.4
-    for group in range(len(groups)):
-        bars = []
-        t = thresholds[group]
-        data = dat[group]
-        std_val = stds[group]
-        for i, val in enumerate(data):
-            pos = i + 1
-            if i == 1:
-                temp += offset  # offset for the first bar
-            color = COLORS[i]
-            bars.append(ax.bar(temp + pos, val, WIDTH, color=color, yerr=std_val[i]))
-            start = (
-                (temp + pos * WIDTH) / 2 + 1 - WIDTH
-                if pos == 1 and temp == 0
-                else temp + pos - len(data) / (2 * len(data) + 1)
+def _simple_barplot(ax, bars, vals, stds, thresholds, pval, width, colors, offset):
+    for j, val in enumerate(vals):
+        pos = j + 1
+        bars.append(
+            ax.bar(
+                offset + pos,
+                val,
+                width,
+                color=colors[j],
+                yerr=stds[j] if stds is not None else stds,
             )
-            end = start + WIDTH
-            ax.plot([start, end], [t, t], "k--", label="p < {}".format(PVAL))
-            # ax = autolabel(ax, bars[i], t)
+        )
 
-        temp += pos + 1
+        if thresholds is not None:
+            start = (
+                (offset + pos * width) / 2 + 1 - width
+                if pos == 1 and offset == 0
+                else offset + pos - len(vals) / (2 * len(vals) + 1)
+            )
+            end = start + width
+            ax.plot(
+                [start, end],
+                [thresholds[j], thresholds[j]],
+                "k--",
+                label="p < {}".format(pval) if pval != 0 and j == 0 else "",
+            )
 
-    ax.set_ylabel(Y_LABEL)
-    ax.set_ylim(bottom=MINMAX[0], top=MINMAX[1])
-    ax.set_title(GRAPH_TITLE)
-    ax.set_xticklabels(groups)
-    ax.set_xticks(
-        [
-            ceil(nb_labels / 2) + offset + i * (1 + offset + nb_labels)
-            for i in range(len(groups))
-        ]
-    )
-    # labels[-1] = labels[-1][:-1]
-    labels = ["CNN"] + algos
-    # ax.legend(bars, labels, frameon=False)
-    ax.legend(
-        bars,
-        labels,
-        # loc="upper center",
-        # bbox_to_anchor=(0.5, -0.05),
-        fancybox=False,
-        shadow=False,
-        # ncol=len(labels),
-    )
+    return ax, bars
 
-    file_name = f"barplot.png" # TODO
-    save_path = FIG_PATH + file_name
-    print(save_path)
-    fig.savefig(save_path, dpi=RESOLUTION)
-    plt.close()
+
+def generate_barplot(
+    ylabel,
+    labels,
+    values,
+    thresholds=None,
+    stds=None,
+    title="",
+    groups=None,
+    mini=0.5,
+    maxi=1,
+    pval=0.01,
+    width=0.9,
+    autolabel=False,
+    colors=list(sns.color_palette("deep")),
+):
+    """Generates a barplot for groups of data.
+
+    Parameters
+    ----------
+    ylabel:
+        The label for the y axis
+    labels:
+        The labels of individual bars in each group, will be the x axis labels
+        if no groups
+    values:
+        The values, list of list of values if groups. A list of values otherwise.
+    thresholds:
+        The thresholds for each bar. If groups, a list of lists of thresholds
+    pval:
+        The value of p that corresponds to the thresholds (for the legend)
+    stds:
+        The standard deviation, list of list of values if groups. A list of
+        stds otherwise.
+    title:
+        The title for the graph
+    groups:
+        The labels on the x axis for each group
+    mini:
+        The minimum value for the scale on the y axis
+    maxi:
+        The maximum value for the scale on the y axis
+    width:
+        The width of the bars. 1 means bars will touch each others
+    autolabel:
+        if True, will display value of the bar on top of the bar
+
+    Returns
+    -------
+
+    """
+    ax = plt.axes()
+    n_labels = len(labels)
+    if groups is not None:
+        n_groups = len(groups)
+        bars = []
+        for i in range(n_groups):
+            ax, bars = _simple_barplot(
+                ax,
+                bars,
+                values[i],
+                stds[i],
+                thresholds[i],
+                pval,
+                width,
+                colors,
+                len(bars) + i,
+            )
+
+        ax.set_xticklabels(groups)
+        ax.set_xticks(
+            [ceil(n_labels / 2) + i * (1 + n_labels) for i in range(len(groups))]
+        )
+    else:
+        ax, bars = _simple_barplot(
+            ax, [], values, stds, thresholds, pval, width, colors, offset=0
+        )
+        ax.set_xticklabels([0] + labels)
+
+    if autolabel:
+        ax = autolabel(ax, bars, thresholds)
+
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(bottom=mini, top=maxi)
+    ax.legend(bars, labels, fancybox=False, shadow=False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    return ax
 
 
 if __name__ == "__main__":
-    visualisation(PVAL)
+    RESOLUTION = 300
+
+    # Data creation
+    ylabel = "Random"
+    values = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    thresholds = [[0.5, 1, 1.5], [1.5, 2, 2.5], [2.5, 3, 3.5]]
+    labels = ["A", "B", "C"]
+    groups = ["Group1", "Group2", "Group3"]
+    stds = [[0.1, 0.3, 0.5], [0.3, 0.3, 0.1], [0.4, 0.3, 0.2]]
+    pval = 0.0001
+
+    # Create the barplot
+    generate_barplot(
+        ylabel,
+        labels,
+        values,
+        thresholds,
+        stds=stds,
+        groups=groups,
+        pval=pval,
+        mini=0,
+        maxi=10,
+    )
+
+    # Saving the barplot
+    file_name = f"test1.png"
+    plt.savefig(file_name, dpi=RESOLUTION)
+    plt.close()
+
+    # Data creation
+    ylabel = "Random"
+    values = [1, 2, 3, 4, 5, 6]
+    labels = ["A", "B", "C", "a", "b", "c"]
+    thresholds = [0.5, 1, 1.5, 1.5, 2, 2.5]
+    pval = 0.0001
+
+    # Create the barplot
+    generate_barplot(ylabel, labels, values, thresholds, pval=pval, mini=0, maxi=7)
+
+    # Saving the barplot
+    file_name = f"test2.png"
+    plt.savefig(file_name, dpi=RESOLUTION)
+    plt.close()

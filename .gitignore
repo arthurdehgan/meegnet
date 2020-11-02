@@ -4,3 +4,6 @@ figures
 __pycache__
 
 data
+*.png
+*.out
+*.sh

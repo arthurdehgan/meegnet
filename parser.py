@@ -45,9 +45,9 @@ parser.add_argument(
 parser.add_argument(
     "-l",
     "--label",
-    choices=["gender", "age", "subject"],
-    default="gender",
-    help="The type of classification to run, default=gender",
+    choices=["sex", "age", "subject"],
+    default="sex",
+    help="The type of classification to run, default=sex",
 )
 parser.add_argument(
     "-e", "--elec", default="MAG", help="The type of electrodes to keep, default=MAG"
@@ -81,6 +81,11 @@ parser.add_argument(
     "--test",
     action="store_true",
     help="Launch the pipeline in test mode : will not save and will only do 2 iteration for each loop",
+)
+parser.add_argument(
+    "--force-load",
+    action="store_true",
+    help="forces loading and printing of shapes even if classification has been done",
 )
 parser.add_argument(
     "-t", "--time", action="store_true", help="keeps time and prints it at the end"

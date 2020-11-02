@@ -57,7 +57,7 @@ def print_info_classif(args):
 
 
 def extract_bands(data):
-    f = np.asarray([float(i / 3) for i in range(data.shape[-1])])
+    f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
     # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
     data = [
         data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
@@ -140,6 +140,9 @@ def load_data(elec_index, args):
         print("Time spent loading data:", elapsed_time(time.time(), start))
     if args.verbose > 0:
         print("Done")
+        print(
+            f"number of subjects for training: {len(train_df)}, testing: {len(test_df)}"
+        )
         print(f"train_size: {train_set[0].shape} (Used for hyperparameter tuning)")
         print(f"test_size: {test_set[0].shape} (used to evaluate the model)")
     return train_set, test_set
@@ -368,6 +371,8 @@ if __name__ == "__main__":
         if elec_list != []:
             train_set, test_set = load_data(elec_index, args)
             classif_all_elecs(train_set, test_set, elec_list=elec_list, args=args)
+        elif args.force_load:
+            train_set, test_set = load_data(elec_index, args)
         else:
             print("This classification has already been done")
         if args.verbose > 0 and args.time:
