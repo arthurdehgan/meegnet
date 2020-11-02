@@ -11,10 +11,21 @@ from torchsummary import summary
 import numpy as np
 from scipy.io import savemat, loadmat
 from utils import elapsed_time
-from params import TIME_TRIAL_LENGTH, DATA_PATH
+from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
 
 parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--save",
+    type=str,
+    help="The path where the model will be saved.",
+)
+parser.add_argument(
+    "-p",
+    "--path",
+    type=str,
+    help="The path where the data samples can be found.",
+)
 parser.add_argument(
     "-s",
     "--max-subj",
@@ -185,7 +196,7 @@ def train(
                     "optimizer": optimizer.state_dict(),
                 }
                 save_checkpoint(checkpoint, model_filepath)
-                net.save_model(SAVE_PATH)
+                net.save_model(save_path)
         else:
             j += 1
 
@@ -203,7 +214,7 @@ def train(
                 "best_epoch": best_epoch,
                 "n_epochs": epoch,
             }
-            savemat(SAVE_PATH + net.name + ".mat", results)
+            savemat(save_path + net.name + ".mat", results)
 
     return net
 
@@ -364,9 +375,15 @@ if __name__ == "__main__":
         device = "cpu"
 
     args = parser.parse_args()
+    data_path = args.path
+    save_path = args.save
+    if not save_path.endswith("/"):
+        save_path += "/"
+
     DATA_TYPE = args.feature
     BATCH_SIZE = args.batch_size
     MAX_SUBJ = args.max_subj
+
     CH_TYPE = args.elec
     if CH_TYPE == "MAG":
         N_CHANNELS = 102
@@ -388,7 +405,6 @@ if __name__ == "__main__":
     LEARNING_RATE = 0.00001
     TRAIN_SIZE = 0.8
     SEED = 420
-    SAVE_PATH = "./models/"
 
     debug = args.debug
     filters = args.filters
@@ -424,7 +440,7 @@ if __name__ == "__main__":
 
     a = time()
     trainloader, validloader, testloader = create_loaders(
-        DATA_PATH,
+        data_path,
         TRAIN_SIZE,
         BATCH_SIZE,
         MAX_SUBJ,
@@ -444,7 +460,7 @@ if __name__ == "__main__":
         save = False
         loaf = False
 
-    model_filepath = SAVE_PATH + net.name + ".pt"
+    model_filepath = save_path + net.name + ".pt"
     train(
         net,
         trainloader,

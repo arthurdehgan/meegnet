@@ -77,7 +77,6 @@ def create_loaders(
     bands = False
     load_fn = load_freq_data
     if dtype == "temporal":
-        data_folder += "datasamples/"
         load_fn = load_data
     elif dtype == "bands":
         bands = True
