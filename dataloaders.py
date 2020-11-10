@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 from scipy.stats import zscore
 from torch.utils.data import Dataset, DataLoader, random_split, TensorDataset
-from params import CHAN_DF
 
 
 def extract_bands(data):
@@ -60,7 +59,7 @@ def create_loaders(
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    samples_df = pd.read_csv("./trials_df_clean.csv", index_col=0)
+    samples_df = pd.read_csv(f"{data_folder}trials_df_clean.csv", index_col=0)
     subs = np.array(list(set(samples_df["subs"])))
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
@@ -134,15 +133,14 @@ def create_loaders(
 
 
 class megDataset(Dataset):
-    """Face Landmarks dataset."""
+    """MEG dataset, from examples of the pytorch website: FaceLandmarks"""
 
     def __init__(self, data_df, root_dir, elec_index, dtype="temporal", debug=False):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
+            root_dir (string): Directory with all the cut samples of MEG trials.
+            elec_index (list): The index of electrodes to keep.
         """
         self.data_df = data_df
         self.root_dir = root_dir
@@ -185,6 +183,10 @@ class megDataset(Dataset):
 
 
 def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
+    """Loading psd values, subject by subject. Still viable, takes some time
+    but data is small, so not too much. Might need repairing as code has changed
+    a lot since last time this function was used.
+    """
     if ch_type == "MAG":
         elec_index = list(range(2, 306, 3))
     elif ch_type == "GRAD":
@@ -222,7 +224,8 @@ def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
 def load_data(
     dataframe, dpath, trial_length, offset, ch_type="MAG", bands=True, debug=False
 ):
-    """Loading data.
+    """Loading data, deprecated, takes too much time. normaliza has been replaced
+    by zscore in newer version.
 
     bands is here only for compatibility with load_freq_data"""
     if ch_type == "MAG":
@@ -265,6 +268,9 @@ def load_data(
 
 
 def load_subject(sub, data_path, data=None, timepoints=500, ch_type="all"):
+    """Loads a single subject from info found in the csv file. Deprecated, takes too much time.
+    path needs to be updated as CHAN_DF is no longer defined and paths have changed.
+    """
     df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
     df = df.set_index("participant_id")
     sex = (df["sex"])[sub]

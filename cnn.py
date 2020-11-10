@@ -7,12 +7,18 @@ from time import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchsummary import summary
 import numpy as np
 from scipy.io import savemat, loadmat
 from utils import elapsed_time
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
+
+torchsum = True
+try:
+    from torchsummary import summary
+except:
+    print("Error loading torchsummary")
+    torchsum = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -25,6 +31,12 @@ parser.add_argument(
     "--path",
     type=str,
     help="The path where the data samples can be found.",
+)
+parser.add_argument(
+    "--seed",
+    default=420,
+    type=int,
+    help="Seed to use for random splits.",
 )
 parser.add_argument(
     "-s",
@@ -94,17 +106,20 @@ parser.add_argument(
 
 
 def accuracy(y_pred, target):
+    # Compute accuracy from 2 vectors of labels.
     correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
     return correct / len(target)
 
 
 class Flatten(nn.Module):
+    # Flatten layer used to connect between feature extraction and classif parts of a net.
     def forward(self, x):
         x = x.view(x.size(0), -1)
         return x
 
 
 def load_checkpoint(filename):
+    # Function to load a network state from a filename.
     print("=> loading checkpoint '{}'".format(filename))
     checkpoint = torch.load(filename)
     start_epoch = checkpoint["epoch"]
@@ -114,6 +129,7 @@ def load_checkpoint(filename):
 
 
 def save_checkpoint(state, filename="checkpoint.pth.tar"):
+    # Saves a checkpoint of the network
     torch.save(state, filename)
 
 
@@ -127,12 +143,19 @@ def train(
     save_model=False,
     load_model=False,
     debug=False,
+    p=20,
+    lr=0.0001,
 ):
+    # The train function trains and evaluates the network multiple times and prints the
+    # loss and accuracy for each batch and each epoch. Everything is saved in a dictionnary
+    # with the best checkpoint of the network.
+
     if debug:
         optimizer = optimizer(net.parameters())
     else:
-        optimizer = optimizer(net.parameters(), lr=LEARNING_RATE)
+        optimizer = optimizer(net.parameters(), lr=lr)
 
+    # Load if asked and if the checkpoint exists in the specified path
     if load_model and os.path.exists(model_filepath):
         epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
         net.load_state_dict(net_state)
@@ -146,10 +169,11 @@ def train(
         train_losses = results["train_loss"]
         best_epoch = results["best_epoch"]
         epoch = results["n_epochs"]
+    elif load_model:
+        print(f"Couldn't find any checkpoint named {net.name} in {save_path}")
     else:
         epoch = 0
 
-    p = PATIENCE
     j = 0
     train_accs = []
     valid_accs = []
@@ -157,6 +181,8 @@ def train(
     valid_losses = []
     best_vloss = float("inf")
     net.train()
+
+    # The training and evaluation loop with patience early stop. j tracks the patience state.
     while j < p:
         epoch += 1
         N_BATCHES = len(trainloader)
@@ -165,7 +191,7 @@ def train(
             X, y = batch
 
             y = y.view(-1).to(device)
-            X = X.view(-1, 1, N_CHANNELS, TRIAL_LENGTH).float().to(device)
+            X = X.view(-1, *net.input_size).float().to(device)
 
             net.train()
             out = net.forward(X)
@@ -220,6 +246,7 @@ def train(
 
 
 def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
+    # function to evaluate a network on a dataloader. will return loss and accuracy
     net.eval()
     with torch.no_grad():
         LOSSES = 0
@@ -228,7 +255,7 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
         for batch in dataloader:
             X, y = batch
             y = y.view(-1).to(device)
-            X = X.view(-1, 1, N_CHANNELS, TRIAL_LENGTH).float().to(device)
+            X = X.view(-1, input_size[1:]).float().to(device)
 
             out = net.forward(X)
             loss = criterion(out, y)
@@ -242,7 +269,31 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
     return floss, faccuracy
 
 
-class FullNet(nn.Module):
+class customNet(nn.Module):
+    def __init__(self, model_name, input_size):
+        super(customNet, self).__init__()
+        self.input_size = input_size
+        self.name = model_name
+        print(model_name)
+
+    def _get_lin_size(self, layers):
+        return nn.Sequential(*layers)(torch.zeros((1, *input_size))).shape[-1]
+
+    def forward(self, x):
+        return self.model(x)
+
+    def save_model(self, filepath="."):
+        if not filepath.endswith("/"):
+            filepath += "/"
+
+        orig_stdout = sys.stdout
+        with open(filepath + self.name + ".txt", "a") as f:
+            sys.stdout = f
+            summary(self, (input_size))
+            sys.stdout = orig_stdout
+
+
+class FullNet(customNet):
     def __init__(
         self,
         model_name,
@@ -253,6 +304,7 @@ class FullNet(nn.Module):
         dropout=0.3,
         dropout_option="same",
     ):
+        super(FullNet, self).__init__(model_name, input_size)
         if dropout_option == "same":
             dropout1 = dropout
             dropout2 = dropout
@@ -269,13 +321,12 @@ class FullNet(nn.Module):
             else:
                 print(f"{dropout_option} is not a valid option")
 
-        super(FullNet, self).__init__()
         layers = nn.ModuleList(
             [
                 nn.Conv2d(1, 5 * n_channels, (1, filter_size)),
                 nn.BatchNorm2d(5 * n_channels),
                 nn.ReLU(),
-                nn.Conv2d(5 * n_channels, 5 * n_channels, (N_CHANNELS, 1)),
+                nn.Conv2d(5 * n_channels, 5 * n_channels, (input_size[1], 1)),
                 nn.BatchNorm2d(5 * n_channels),
                 nn.ReLU(),
                 nn.MaxPool2d((1, 5)),
@@ -290,8 +341,7 @@ class FullNet(nn.Module):
             ]
         )
 
-        lin_size = nn.Sequential(*layers)(torch.zeros(input_size)).shape[-1]
-
+        lin_size = self._get_lin_size(layers)
         layers.extend(
             (
                 nn.Dropout(dropout1),
@@ -302,26 +352,12 @@ class FullNet(nn.Module):
         )
 
         self.model = nn.Sequential(*layers)
-        self.name = model_name
-
-    def forward(self, x):
-        return self.model(x)
-
-    def save_model(self, filepath="."):
-        if not filepath.endswith("/"):
-            filepath += "/"
-
-        orig_stdout = sys.stdout
-        with open(filepath + self.name + ".txt", "a") as f:
-            sys.stdout = f
-            summary(self, (1, N_CHANNELS, TRIAL_LENGTH))
-            sys.stdout = orig_stdout
 
 
-class vanPutNet(nn.Module):
+class vanPutNet(customNet):
     def __init__(self, model_name, input_size, dropout=0.25):
 
-        super(vanPutNet, self).__init__()
+        super(vanPutNet, self).__init__(model_name, input_size)
         layers = nn.ModuleList(
             [
                 nn.Conv2d(1, 100, 3),
@@ -343,81 +379,77 @@ class vanPutNet(nn.Module):
             ]
         )
 
-        lin_size = nn.Sequential(*layers)(torch.zeros(input_size)).shape[-1]
-
+        lin_size = self._get_lin_size(layers)
         layers.append(nn.Linear(lin_size, 2))
-
         self.model = nn.Sequential(*layers)
-
-        self.name = model_name
-
-    def forward(self, x):
-        return self.model(x)
-
-    def save_model(self, filepath="."):
-        if not filepath.endswith("/"):
-            filepath += "/"
-
-        orig_stdout = sys.stdout
-        with open(filepath + self.name + ".txt", "a") as f:
-            sys.stdout = f
-            summary(self, (1, N_CHANNELS, TRIAL_LENGTH))
-            sys.stdout = orig_stdout
 
 
 if __name__ == "__main__":
-
-    gc.enable()
 
     if torch.cuda.is_available():
         device = "cuda"
     else:
         device = "cpu"
 
+    ###############
+    ### PARSING ###
+    ###############
+
     args = parser.parse_args()
     data_path = args.path
     save_path = args.save
     if not save_path.endswith("/"):
         save_path += "/"
-
-    DATA_TYPE = args.feature
-    BATCH_SIZE = args.batch_size
-    MAX_SUBJ = args.max_subj
-
-    CH_TYPE = args.elec
-    if CH_TYPE == "MAG":
-        N_CHANNELS = 102
-    elif CH_TYPE == "GRAD":
-        N_CHANNELS = 204
-    elif CH_TYPE == "all":
-        N_CHANNELS = 306
-
-    if args.feature == "bins":
-        bands = False
-        TRIAL_LENGTH = 241
-    if args.feature == "bands":
-        bands = False
-        TRIAL_LENGTH = 5
-    elif args.feature == "temporal":
-        TRIAL_LENGTH = TIME_TRIAL_LENGTH
-
-    PATIENCE = 20
-    LEARNING_RATE = 0.00001
-    TRAIN_SIZE = 0.8
-    SEED = 420
-
+    data_type = args.feature
+    batch_size = args.batch_size
+    max_subj = args.max_subj
+    ch_type = args.elec
+    features = args.feature
     debug = args.debug
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
     dropout_option = args.dropout_option
     linear = args.linear
+    seed = args.seed
+    mode = args.mode
 
+    ##################
+    ### data types ###
+    ##################
+
+    if ch_type == "MAG":
+        n_channels = 102
+    elif ch_type == "GRAD":
+        n_channels = 204
+    elif ch_type == "all":
+        n_channels = 306
+
+    if features == "bins":
+        bands = False
+        trial_length = 241
+    if features == "bands":
+        bands = False
+        trial_length = 5
+    elif features == "temporal":
+        trial_length = TIME_TRIAL_LENGTH
+
+    ###########################
+    ### learning parameters ###
+    ###########################
+
+    patience = 20
+    learning_rate = 0.00001
+    train_size = 0.8
     if debug:
         print("ENTERING DEBUG MODE")
         nchan = 102
         dropout = 0
         dropout_option = "same"
+
+    #########################
+    ### preparing network ###
+    #########################
 
     # net = FullNet("", filters, nchan)
     # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
@@ -433,34 +465,39 @@ if __name__ == "__main__":
     # )
     # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
 
-    input_size = (BATCH_SIZE, 1, N_CHANNELS, TRIAL_LENGTH)
-    net = vanPutNet("van_Putten_network", input_size, dropout=dropout).to(device)
-    print(net)
-    print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
+    input_size = (1, n_channels, trial_length)
+    net = vanPutNet(
+        model_name="van_Putten_network", input_size=input_size, dropout=dropout
+    ).to(device)
 
-    a = time()
+    if torchsum:
+        print(summary(net, input_size))
+    else:
+        print(net)
+
+    # We create loaders and datasets (see dataloaders.py)
     trainloader, validloader, testloader = create_loaders(
         data_path,
-        TRAIN_SIZE,
-        BATCH_SIZE,
-        MAX_SUBJ,
-        CH_TYPE,
-        DATA_TYPE,
-        seed=SEED,
+        train_size,
+        batch_size,
+        max_subj,
+        ch_type,
+        data_type,
+        seed=seed,
     )
-    print(elapsed_time(time(), a))
 
-    if args.mode == "overwrite":
+    if mode == "overwrite":
         save = True
         load = False
-    elif args.mode == "continue":
+    elif mode == "continue":
         save = True
         load = True
     else:
         save = False
-        loaf = False
+        load = False
 
     model_filepath = save_path + net.name + ".pt"
+    # Actual training (loading nework if existing and load option is True)
     train(
         net,
         trainloader,
@@ -469,8 +506,14 @@ if __name__ == "__main__":
         save_model=save,
         load_model=load,
         debug=debug,
+        p=patience,
+        lr=learning_rate,
     )
+
+    # Loading best saved model
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
 
+    # Final testing
+    print("Evaluating on test set:")
     print(evaluate(net, testloader))

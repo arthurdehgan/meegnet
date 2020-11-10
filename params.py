@@ -41,16 +41,19 @@ N_ELEC = 306  # number electrodes
 WINDOW = 3000  # fenetre
 OVERLAP = 0.25  # overlap (entre 0 et 1)
 
-SUB_DF = pd.read_csv("./clean_participant_new.csv", index_col=0)
-SUBJECT_LIST = SUB_DF["participant_id"].tolist()
+# Commenting this whole part as it is no longer necessary to have those here.
+# keeping it in case we want to go back.
 
-CHAN_DF = pd.read_csv("./channel_names.csv", index_col=0)
-CHANNEL_NAMES = CHAN_DF["ch_name"].tolist()
-
-AGES = SUB_DF["age"].tolist()
-
-LABELS = {}
-LABELS["sex"] = SUB_DF["sex"].tolist()
-LABELS["age"] = [group1(i) for i in AGES]
-LABELS["age_all"] = AGES
-LABELS["subject"] = list(range(len(SUBJECT_LIST)))
+# SUB_DF = pd.read_csv("./clean_participant_new.csv", index_col=0)
+# SUBJECT_LIST = SUB_DF["participant_id"].tolist()
+#
+# CHAN_DF = pd.read_csv("./channel_names.csv", index_col=0)
+# CHANNEL_NAMES = CHAN_DF["ch_name"].tolist()
+#
+# AGES = SUB_DF["age"].tolist()
+#
+# LABELS = {}
+# LABELS["sex"] = SUB_DF["sex"].tolist()
+# LABELS["age"] = [group1(i) for i in AGES]
+# LABELS["age_all"] = AGES
+# LABELS["subject"] = list(range(len(SUBJECT_LIST)))
