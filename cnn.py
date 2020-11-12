@@ -289,7 +289,10 @@ class customNet(nn.Module):
         orig_stdout = sys.stdout
         with open(filepath + self.name + ".txt", "a") as f:
             sys.stdout = f
-            summary(self, (input_size))
+            if torchsum:
+                summary(self, (input_size))
+            else:
+                print(self)
             sys.stdout = orig_stdout
 
 
