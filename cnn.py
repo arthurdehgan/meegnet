@@ -255,7 +255,7 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
         for batch in dataloader:
             X, y = batch
             y = y.view(-1).to(device)
-            X = X.view(-1, input_size[1:]).float().to(device)
+            X = X.view(-1, *net.input_size).float().to(device)
 
             out = net.forward(X)
             loss = criterion(out, y)
