@@ -53,6 +53,7 @@ def create_loaders(
     method="new",
     debug=False,
     seed=0,
+    num_workers=0,
 ):
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
@@ -117,16 +118,27 @@ def create_loaders(
         test_df = samples_df.loc[samples_df["subs"].isin(subs[test_index])]
         test_set = create_dataset(test_df, data_folder, ch_type, debug=debug)
 
-    # loading data with num_workers=0 seems faster that using more.
-    # Maybe because of IO read speeds.
+    # loading data with num_workers=0 is faster that using more because of IO read speeds on my machine.
     train_loader = DataLoader(
-        train_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
     valid_loader = DataLoader(
-        valid_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True
+        valid_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
     test_loader = DataLoader(
-        test_set, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True
+        test_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
     )
 
     return train_loader, valid_loader, test_loader

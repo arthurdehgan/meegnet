@@ -20,6 +20,28 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
     return np.array(psd), np.array(labels)
 
 
+def nice_time(time):
+    """Returns time in a humanly readable format."""
+    m, h, j = 60, 3600, 24 * 3600
+    nbj = time // j
+    nbh = (time - j * nbj) // h
+    nbm = (time - j * nbj - h * nbh) // m
+    nbs = time - j * nbj - h * nbh - m * nbm
+    if time > m:
+        if time > h:
+            if time > j:
+                nt = "%ij, %ih:%im:%is" % (nbj, nbh, nbm, nbs)
+            else:
+                nt = "%ih:%im:%is" % (nbh, nbm, nbs)
+        else:
+            nt = "%im:%is" % (nbm, nbs)
+    elif time < 1:
+        nt = "<1s"
+    else:
+        nt = "%is" % nbs
+    return nt
+
+
 def elapsed_time(t0, t1):
     """Time lapsed between t0 and t1.
 
@@ -37,21 +59,4 @@ def elapsed_time(t0, t1):
 
     """
     lapsed = abs(t1 - t0)
-    m, h, j = 60, 3600, 24 * 3600
-    nbj = lapsed // j
-    nbh = (lapsed - j * nbj) // h
-    nbm = (lapsed - j * nbj - h * nbh) // m
-    nbs = lapsed - j * nbj - h * nbh - m * nbm
-    if lapsed > m:
-        if lapsed > h:
-            if lapsed > j:
-                Time = "%ij, %ih:%im:%is" % (nbj, nbh, nbm, nbs)
-            else:
-                Time = "%ih:%im:%is" % (nbh, nbm, nbs)
-        else:
-            Time = "%im:%is" % (nbm, nbs)
-    elif lapsed < 1:
-        Time = "<1s"
-    else:
-        Time = "%is" % nbs
-    return Time
+    return nice_time(lapsed)

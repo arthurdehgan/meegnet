@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from scipy.io import savemat, loadmat
-from utils import elapsed_time
+from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
 
@@ -21,6 +21,18 @@ except:
     torchsum = False
 
 parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--num-workers",
+    type=int,
+    default=4,
+    help="number of workers to load data while gpu is processing",
+)
+parser.add_argument(
+    "--train_size",
+    type=float,
+    default=0.8,
+    help="The proportion of data to use in the train set",
+)
 parser.add_argument(
     "--save",
     type=str,
@@ -71,6 +83,11 @@ parser.add_argument(
     default=0.25,
     type=float,
     help="The dropout rate of the linear layers",
+)
+parser.add_argument(
+    "--times",
+    action="store_true",
+    help="Instead of running the training etc, run a series of test in order to choose best set of workers and batch sizes to get faster epochs.",
 )
 parser.add_argument(
     "--debug",
@@ -143,7 +160,8 @@ def train(
     save_model=False,
     load_model=False,
     debug=False,
-    p=20,
+    timing=False,
+    p=1,
     lr=0.0001,
 ):
     # The train function trains and evaluates the network multiple times and prints the
@@ -156,6 +174,7 @@ def train(
         optimizer = optimizer(net.parameters(), lr=lr)
 
     # Load if asked and if the checkpoint exists in the specified path
+    epoch = 0
     if load_model and os.path.exists(model_filepath):
         epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
         net.load_state_dict(net_state)
@@ -171,8 +190,6 @@ def train(
         epoch = results["n_epochs"]
     elif load_model:
         print(f"Couldn't find any checkpoint named {net.name} in {save_path}")
-    else:
-        epoch = 0
 
     j = 0
     train_accs = []
@@ -185,7 +202,9 @@ def train(
     # The training and evaluation loop with patience early stop. j tracks the patience state.
     while j < p:
         epoch += 1
-        N_BATCHES = len(trainloader)
+        n_batches = len(trainloader)
+        if timing:
+            t1 = time()
         for i, batch in enumerate(trainloader):
             optimizer.zero_grad()
             X, y = batch
@@ -198,9 +217,19 @@ def train(
             loss = criterion(out, y)
             loss.backward()
             optimizer.step()
-            print(
-                f"Epoch: {epoch} // Batch {i+1}/{N_BATCHES} // loss = {loss}", end="\r"
-            )
+
+            progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
+
+            if timing:
+                tpb = (time() - t1) / (i + 1)
+                et = tpb * n_batches
+                progress += f"// time per batch = {tpb:.5f} // epoch time = {nt(et)}"
+
+            print(progress, end="\r")
+
+            condition = i >= 999 or i == n_batches - 1
+            if timing and condition:
+                return tpb, et
 
         train_loss, train_acc = evaluate(net, trainloader, criterion)
         valid_loss, valid_acc = evaluate(net, validloader, criterion)
@@ -326,19 +355,22 @@ class FullNet(customNet):
 
         layers = nn.ModuleList(
             [
-                nn.Conv2d(1, 5 * n_channels, (1, filter_size)),
-                nn.BatchNorm2d(5 * n_channels),
+                nn.Conv2d(1, n_channels, (input_size[1], 1)),
+                nn.BatchNorm2d(n_channels),
                 nn.ReLU(),
-                nn.Conv2d(5 * n_channels, 5 * n_channels, (input_size[1], 1)),
-                nn.BatchNorm2d(5 * n_channels),
+                nn.Conv2d(n_channels, 2 * n_channels, (1, filter_size)),
+                nn.BatchNorm2d(2 * n_channels),
                 nn.ReLU(),
-                nn.MaxPool2d((1, 5)),
-                nn.Conv2d(5 * n_channels, 8 * n_channels, (1, int(filter_size / 10))),
-                nn.BatchNorm2d(8 * n_channels),
+                nn.MaxPool2d((1, 4)),
+                nn.Conv2d(2 * n_channels, 4 * n_channels, (1, int(filter_size / 2))),
+                nn.BatchNorm2d(4 * n_channels),
                 nn.ReLU(),
-                nn.MaxPool2d((1, 5)),
-                nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
-                nn.BatchNorm2d(16 * n_channels),
+                nn.MaxPool2d((1, 4)),
+                nn.Conv2d(4 * n_channels, 8 * n_channels, (1, int(filter_size / 4))),
+                # nn.ReLU(),
+                # nn.MaxPool2d((1, 5)),
+                # nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
+                # nn.BatchNorm2d(16 * n_channels),
                 nn.ReLU(),
                 Flatten(),
             ]
@@ -392,6 +424,7 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         device = "cuda"
     else:
+        print("Warning: gpu device not available")
         device = "cpu"
 
     ###############
@@ -416,6 +449,9 @@ if __name__ == "__main__":
     linear = args.linear
     seed = args.seed
     mode = args.mode
+    train_size = args.train_size
+    num_workers = args.num_workers
+    times = args.times
 
     ##################
     ### data types ###
@@ -443,7 +479,6 @@ if __name__ == "__main__":
 
     patience = 20
     learning_rate = 0.00001
-    train_size = 0.8
     if debug:
         print("ENTERING DEBUG MODE")
         nchan = 102
@@ -454,69 +489,87 @@ if __name__ == "__main__":
     ### preparing network ###
     #########################
 
-    # net = FullNet("", filters, nchan)
-    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
-
-    # net = FullNet(
-    #     f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-    #     filters,
-    #     nchan,
-    #     linear,
-    #     dropout,
-    #     dropout_option,
-    #     lin_size,
-    # )
-    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
-
     input_size = (1, n_channels, trial_length)
-    net = vanPutNet(
-        model_name="van_Putten_network", input_size=input_size, dropout=dropout
+
+    net = FullNet(
+        f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        input_size,
+        filters,
+        nchan,
+        linear,
+        dropout,
+        dropout_option,
     ).to(device)
 
-    if torchsum:
-        print(summary(net, input_size))
+    if times:
+        # overrides default mode !
+        # tests different values of workers and batch sizes to check which is the fastest
+        num_workers = [1, 2, 4, 8, 16]
+        batch_sizes = [16, 32, 64, 128, 256, 512]
+        perfs = []
+        for nw, bs in product(num_workers, batch_sizes):
+            tl, vl, _ = create_loaders(
+                data_path,
+                train_size,
+                bs,
+                max_subj,
+                ch_type,
+                data_type,
+                num_workers=nw,
+            )
+            tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
+            perfs.append((nw, bs, tpb, et))
+        print(
+            lambda x: (x[0], x[1], nt(x[2]), nt(x[3]))
+            for a in sorted(perfs, key=lambda x: x[-1])[-3:]
+        )
+
     else:
-        print(net)
+        if torchsum:
+            print(summary(net, input_size))
+        else:
+            print(net)
 
-    # We create loaders and datasets (see dataloaders.py)
-    trainloader, validloader, testloader = create_loaders(
-        data_path,
-        train_size,
-        batch_size,
-        max_subj,
-        ch_type,
-        data_type,
-        seed=seed,
-    )
+        # We create loaders and datasets (see dataloaders.py)
+        trainloader, validloader, testloader = create_loaders(
+            data_path,
+            train_size,
+            batch_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            num_workers=num_workers,
+        )
 
-    if mode == "overwrite":
-        save = True
-        load = False
-    elif mode == "continue":
-        save = True
-        load = True
-    else:
-        save = False
-        load = False
+        if mode == "overwrite":
+            save = True
+            load = False
+        elif mode == "continue":
+            save = True
+            load = True
+        else:
+            save = False
+            load = False
 
-    model_filepath = save_path + net.name + ".pt"
-    # Actual training (loading nework if existing and load option is True)
-    train(
-        net,
-        trainloader,
-        validloader,
-        model_filepath,
-        save_model=save,
-        load_model=load,
-        debug=debug,
-        p=patience,
-        lr=learning_rate,
-    )
+        model_filepath = save_path + net.name + ".pt"
+        # Actual training (loading nework if existing and load option is True)
+        train(
+            net,
+            trainloader,
+            validloader,
+            model_filepath,
+            save_model=save,
+            load_model=load,
+            debug=debug,
+            p=patience,
+            lr=learning_rate,
+        )
 
-    # Loading best saved model
-    _, net_state, _ = load_checkpoint(model_filepath)
-    net.load_state_dict(net_state)
+        # Loading best saved model
+        _, net_state, _ = load_checkpoint(model_filepath)
+        net.load_state_dict(net_state)
 
-    # Final testing
-    print("Evaluating on test set:")
-    print(evaluate(net, testloader))
+        # Final testing
+        print("Evaluating on test set:")
+        print(evaluate(net, testloader))
