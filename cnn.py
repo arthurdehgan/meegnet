@@ -355,7 +355,7 @@ class FullNet(customNet):
 
         layers = nn.ModuleList(
             [
-                nn.Conv2d(1, n_channels, (input_size[1], 1)),
+                nn.Conv2d(input_size[0], n_channels, (input_size[1], 1)),
                 nn.BatchNorm2d(n_channels),
                 nn.ReLU(),
                 nn.Conv2d(n_channels, 2 * n_channels, (1, filter_size)),
@@ -364,6 +364,7 @@ class FullNet(customNet):
                 nn.MaxPool2d((1, 4)),
                 nn.Conv2d(2 * n_channels, 4 * n_channels, (1, int(filter_size / 2))),
                 nn.BatchNorm2d(4 * n_channels),
+                # nn.Dropout(dropout1),
                 nn.ReLU(),
                 nn.MaxPool2d((1, 4)),
                 nn.Conv2d(4 * n_channels, 8 * n_channels, (1, int(filter_size / 4))),
@@ -371,6 +372,7 @@ class FullNet(customNet):
                 # nn.MaxPool2d((1, 5)),
                 # nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
                 # nn.BatchNorm2d(16 * n_channels),
+                nn.BatchNorm2d(8 * n_channels),
                 nn.ReLU(),
                 Flatten(),
             ]
@@ -380,9 +382,10 @@ class FullNet(customNet):
         layers.extend(
             (
                 nn.Dropout(dropout1),
-                nn.Linear(lin_size, n_linear),
-                nn.Dropout(dropout2),
-                nn.Linear(n_linear, 2),
+                # nn.Linear(lin_size, n_linear),
+                nn.Linear(lin_size, 2),
+                # nn.Dropout(dropout2),
+                # nn.Linear(n_linear, 2),
             )
         )
 
@@ -415,7 +418,7 @@ class vanPutNet(customNet):
         )
 
         lin_size = self._get_lin_size(layers)
-        layers.append(nn.Linear(lin_size, 2))
+        layers.append(nn.Linear(lin_size, 512))
         self.model = nn.Sequential(*layers)
 
 
@@ -491,21 +494,22 @@ if __name__ == "__main__":
 
     input_size = (1, n_channels, trial_length)
 
-    net = FullNet(
-        f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-        input_size,
-        filters,
-        nchan,
-        linear,
-        dropout,
-        dropout_option,
-    ).to(device)
+    net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
+    # net = FullNet(
+    #     f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+    #     input_size,
+    #     filters,
+    #     nchan,
+    #     linear,
+    #     dropout,
+    #     dropout_option,
+    # ).to(device)
 
     if times:
         # overrides default mode !
         # tests different values of workers and batch sizes to check which is the fastest
-        num_workers = [1, 2, 4, 8, 16]
-        batch_sizes = [16, 32, 64, 128, 256, 512]
+        num_workers = [16, 32, 64, 128]
+        batch_sizes = [16, 32]
         perfs = []
         for nw, bs in product(num_workers, batch_sizes):
             tl, vl, _ = create_loaders(
@@ -519,10 +523,9 @@ if __name__ == "__main__":
             )
             tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
             perfs.append((nw, bs, tpb, et))
-        print(
-            lambda x: (x[0], x[1], nt(x[2]), nt(x[3]))
-            for a in sorted(perfs, key=lambda x: x[-1])[-3:]
-        )
+
+        for x in sorted(perfs, key=lambda x: x[-1]):
+            print("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
 
     else:
         if torchsum:

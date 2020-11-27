@@ -29,15 +29,14 @@ def extract_bands(data):
 
 def create_dataset(data_df, data_path, ch_type, debug=False):
     if ch_type == "MAG":
-        elec_index = list(range(2, 306, 3))
+        chan_index = [2]
     elif ch_type == "GRAD":
-        elec_index = list(range(0, 306, 3))
-        elec_index += list(range(1, 306, 3))
+        chan_index = [0, 1]
     elif ch_type == "all":
-        elec_index = list(range(306))
+        chan_index = [0, 1, 2]
 
     meg_dataset = megDataset(
-        data_df=data_df, root_dir=data_path, elec_index=elec_index, debug=debug
+        data_df=data_df, root_dir=data_path, chan_index=chan_index, debug=debug
     )
 
     return meg_dataset
@@ -147,16 +146,16 @@ def create_loaders(
 class megDataset(Dataset):
     """MEG dataset, from examples of the pytorch website: FaceLandmarks"""
 
-    def __init__(self, data_df, root_dir, elec_index, dtype="temporal", debug=False):
+    def __init__(self, data_df, root_dir, chan_index, dtype="temporal", debug=False):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
             root_dir (string): Directory with all the cut samples of MEG trials.
-            elec_index (list): The index of electrodes to keep.
+            chan_index (list): The index of electrodes to keep.
         """
         self.data_df = data_df
         self.root_dir = root_dir
-        self.elec_index = elec_index
+        self.chan_index = chan_index
         self.dtype = dtype
         self.debug = debug
 
@@ -179,13 +178,13 @@ class megDataset(Dataset):
             data_path = os.path.join(
                 self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             )
-            trial = np.load(data_path)[self.elec_index]
+            trial = np.load(data_path)[self.chan_index]
             trial = zscore(trial, axis=0)
             if np.isnan(np.sum(trial)):
                 print(data_path, "becomes nan")
         else:
             data_path = os.path.join(self.root_dir, f"{sub}_psd.npy")
-            trial = np.load(data_path)[:, self.elec_index]
+            trial = np.load(data_path)[:, self.chan_index]
             if self.dtype == "bands":
                 trial = extract_bands(trial)
 
