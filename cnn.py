@@ -22,6 +22,18 @@ except:
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--patience",
+    type=int,
+    default=20,
+    help="patience for early stopping",
+)
+parser.add_argument(
+    "--model-name",
+    type=str,
+    default="net",
+    help="Name of the network for file_save",
+)
+parser.add_argument(
     "--num-workers",
     type=int,
     default=4,
@@ -355,33 +367,49 @@ class FullNet(customNet):
 
         layers = nn.ModuleList(
             [
-                nn.Conv2d(input_size[0], n_channels, (input_size[1], 1)),
-                nn.BatchNorm2d(n_channels),
+                nn.Conv2d(input_size[0], 100, 3),
                 nn.ReLU(),
-                nn.Conv2d(n_channels, 2 * n_channels, (1, filter_size)),
-                nn.BatchNorm2d(2 * n_channels),
-                nn.ReLU(),
-                nn.MaxPool2d((1, 4)),
-                nn.Conv2d(2 * n_channels, 4 * n_channels, (1, int(filter_size / 2))),
-                nn.BatchNorm2d(4 * n_channels),
-                # nn.Dropout(dropout1),
-                nn.ReLU(),
-                nn.MaxPool2d((1, 4)),
-                nn.Conv2d(4 * n_channels, 8 * n_channels, (1, int(filter_size / 4))),
-                # nn.ReLU(),
-                # nn.MaxPool2d((1, 5)),
-                # nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
-                # nn.BatchNorm2d(16 * n_channels),
-                nn.BatchNorm2d(8 * n_channels),
-                nn.ReLU(),
+                nn.MaxPool2d((2, 2)),
+                nn.Dropout(dropout),
+                nn.Conv2d(100, 100, 3),
+                nn.MaxPool2d((2, 2)),
+                nn.Dropout(dropout),
+                nn.Conv2d(100, 300, (2, 3)),
+                nn.MaxPool2d((2, 2)),
+                nn.Dropout(dropout),
+                nn.Conv2d(300, 300, (1, 7)),
+                nn.MaxPool2d((2, 2)),
+                nn.Dropout(dropout),
+                nn.Conv2d(300, 100, (1, 3)),
+                nn.Conv2d(100, 100, (1, 3)),
                 Flatten(),
             ]
         )
+        # nn.Conv2d(input_size[0], n_channels, (input_size[1], 1)),
+        # nn.BatchNorm2d(n_channels),
+        # nn.ReLU(),
+        # nn.Conv2d(n_channels, 2 * n_channels, (1, filter_size)),
+        # nn.BatchNorm2d(2 * n_channels),
+        # nn.ReLU(),
+        # nn.MaxPool2d((1, 4)),
+        # nn.Conv2d(2 * n_channels, 4 * n_channels, (1, int(filter_size / 2))),
+        # nn.BatchNorm2d(4 * n_channels),
+        # # nn.Dropout(dropout1),
+        # nn.ReLU(),
+        # nn.MaxPool2d((1, 4)),
+        # nn.Conv2d(4 * n_channels, 8 * n_channels, (1, int(filter_size / 4))),
+        # # nn.ReLU(),
+        # # nn.MaxPool2d((1, 5)),
+        # # nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
+        # # nn.BatchNorm2d(16 * n_channels),
+        # nn.BatchNorm2d(8 * n_channels),
+        # nn.ReLU(),
+        # Flatten(),
 
         lin_size = self._get_lin_size(layers)
         layers.extend(
             (
-                nn.Dropout(dropout1),
+                # nn.Dropout(dropout1),
                 # nn.Linear(lin_size, n_linear),
                 nn.Linear(lin_size, 2),
                 # nn.Dropout(dropout2),
@@ -418,7 +446,7 @@ class vanPutNet(customNet):
         )
 
         lin_size = self._get_lin_size(layers)
-        layers.append(nn.Linear(lin_size, 512))
+        layers.append(nn.Linear(lin_size, 2))
         self.model = nn.Sequential(*layers)
 
 
@@ -454,7 +482,9 @@ if __name__ == "__main__":
     mode = args.mode
     train_size = args.train_size
     num_workers = args.num_workers
+    model_name = args.model_name
     times = args.times
+    patience = args.patience
 
     ##################
     ### data types ###
@@ -464,8 +494,10 @@ if __name__ == "__main__":
         n_channels = 102
     elif ch_type == "GRAD":
         n_channels = 204
-    elif ch_type == "all":
+    elif ch_type == "ALL":
         n_channels = 306
+    else:
+        raise (f"Error: invalid channel type: {ch_type}")
 
     if features == "bins":
         bands = False
@@ -480,11 +512,10 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    patience = 20
-    learning_rate = 0.00001
+    learning_rate = 0.000001
+    nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
-        nchan = 102
         dropout = 0
         dropout_option = "same"
 
@@ -492,18 +523,20 @@ if __name__ == "__main__":
     ### preparing network ###
     #########################
 
-    input_size = (1, n_channels, trial_length)
+    input_size = (n_channels // 102, nchan, trial_length)
+    print(input_size)
 
-    net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
-    # net = FullNet(
-    #     f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-    #     input_size,
-    #     filters,
-    #     nchan,
-    #     linear,
-    #     dropout,
-    #     dropout_option,
-    # ).to(device)
+    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
+    net = FullNet(
+        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}",
+        input_size,
+        filters,
+        nchan,
+        linear,
+        dropout,
+        dropout_option,
+    ).to(device)
 
     if times:
         # overrides default mode !

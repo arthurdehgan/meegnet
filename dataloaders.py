@@ -32,7 +32,7 @@ def create_dataset(data_df, data_path, ch_type, debug=False):
         chan_index = [2]
     elif ch_type == "GRAD":
         chan_index = [0, 1]
-    elif ch_type == "all":
+    elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
     meg_dataset = megDataset(
@@ -167,7 +167,7 @@ class megDataset(Dataset):
             idx = idx.tolist()
 
         if self.debug:
-            return {"subject": "test", "sex": 0, "trial": np.zeros((102, 400))}
+            return {"subject": "test", "sex": 0, "trial": np.zeros((1, 102, 400))}
 
         sub = self.data_df["subs"].iloc[idx]
         sex = self.data_df["sex"].iloc[idx]
@@ -179,7 +179,7 @@ class megDataset(Dataset):
                 self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             )
             trial = np.load(data_path)[self.chan_index]
-            trial = zscore(trial, axis=0)
+            trial = zscore(trial, axis=1)
             if np.isnan(np.sum(trial)):
                 print(data_path, "becomes nan")
         else:
