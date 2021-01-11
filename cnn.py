@@ -119,9 +119,9 @@ parser.add_argument(
     "-m",
     "--mode",
     type=str,
-    choices=["overwrite", "continue", "empty_run"],
+    choices=["overwrite", "continue", "empty_run", "evaluate"],
     default="continue",
-    help="CHANGE THIS TODO",
+    help="Changes the mode the script is run for: overwrite will restart from scratch and overwrite any files with the same name; continue will load previous state and continue from last checkpoint; empty_run will run the training and testing without saving anything; evaluate will load the model to evaluate it on the test set.",
 )
 parser.add_argument(
     "-f", "--filters", type=int, help="The size of the first convolution"
@@ -200,10 +200,30 @@ def train(
         train_losses = results["train_loss"]
         best_epoch = results["best_epoch"]
         epoch = results["n_epochs"]
+        try:  # For backward compatibility purposes
+            j = results["current_patience"]
+            lpatience = results["patience"]
+        except:
+            j = 0
+            lpatience = patience
+
+        if lpatience != patience:
+            print(
+                f"Warning: current patience ({patience}) is different from loaded patience ({lpatience})."
+            )
+            answer = input("Would you like to continue anyway ? (y/n)")
+            while answer not in ["y", "n"]:
+                answer = input("Would you like to continue anyway ? (y/n)")
+            if answer == "n":
+                exit()
+
     elif load_model:
         print(f"Couldn't find any checkpoint named {net.name} in {save_path}")
+        j = 0
 
-    j = 0
+    else:
+        j = 0
+
     train_accs = []
     valid_accs = []
     train_losses = []
@@ -280,6 +300,8 @@ def train(
                 "train_loss": train_losses,
                 "best_epoch": best_epoch,
                 "n_epochs": epoch,
+                "patience": patience,
+                "current_patience": j,
             }
             savemat(save_path + net.name + ".mat", results)
 
@@ -512,7 +534,7 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    learning_rate = 0.000001
+    learning_rate = 0.00005
     nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
@@ -581,7 +603,7 @@ if __name__ == "__main__":
         if mode == "overwrite":
             save = True
             load = False
-        elif mode == "continue":
+        elif mode in ("continue", "evaluate"):
             save = True
             load = True
         else:
@@ -590,22 +612,34 @@ if __name__ == "__main__":
 
         model_filepath = save_path + net.name + ".pt"
         # Actual training (loading nework if existing and load option is True)
-        train(
-            net,
-            trainloader,
-            validloader,
-            model_filepath,
-            save_model=save,
-            load_model=load,
-            debug=debug,
-            p=patience,
-            lr=learning_rate,
-        )
+        if mode != "evaluate":
+            train(
+                net,
+                trainloader,
+                validloader,
+                model_filepath,
+                save_model=save,
+                load_model=load,
+                debug=debug,
+                p=patience,
+                lr=learning_rate,
+            )
 
         # Loading best saved model
-        _, net_state, _ = load_checkpoint(model_filepath)
-        net.load_state_dict(net_state)
+        if mode == "evaluate" and os.path.exists(model_filepath):
+            _, net_state, _ = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+        else:
+            print(f"Error: Can't evaluate model {model_filepath}, file not found.")
+            exit()
 
         # Final testing
         print("Evaluating on test set:")
-        print(evaluate(net, testloader))
+        tloss, tacc = evaluate(net, testloader)
+        print("loss: ", tloss, " // accuracy: ", tacc)
+        if save:
+            results = loadmat(model_filepath[:-2] + "mat")
+            print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+            results["test_acc"] = tacc
+            results["test_loss"] = tloss
+            savemat(save_path + net.name + ".mat", results)
