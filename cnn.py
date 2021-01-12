@@ -534,7 +534,7 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    learning_rate = 0.00005
+    learning_rate = 0.000001
     nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
@@ -611,6 +611,7 @@ if __name__ == "__main__":
             load = False
 
         model_filepath = save_path + net.name + ".pt"
+        print(net.name)
         # Actual training (loading nework if existing and load option is True)
         if mode != "evaluate":
             train(
@@ -626,7 +627,7 @@ if __name__ == "__main__":
             )
 
         # Loading best saved model
-        if mode == "evaluate" and os.path.exists(model_filepath):
+        if os.path.exists(model_filepath):
             _, net_state, _ = load_checkpoint(model_filepath)
             net.load_state_dict(net_state)
         else:
