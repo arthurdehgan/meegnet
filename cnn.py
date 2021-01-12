@@ -534,7 +534,7 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    learning_rate = 0.000001
+    learning_rate = 0.00001
     nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
