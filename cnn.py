@@ -22,6 +22,12 @@ except:
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--lr",
+    type=float,
+    default=0.00001,
+    help="the starting learning rate of the optimizer",
+)
+parser.add_argument(
     "--patience",
     type=int,
     default=20,
@@ -173,8 +179,9 @@ def train(
     load_model=False,
     debug=False,
     timing=False,
-    p=1,
-    lr=0.0001,
+    mode="overwrite",
+    p=20,
+    lr=0.00001,
 ):
     # The train function trains and evaluates the network multiple times and prints the
     # loss and accuracy for each batch and each epoch. Everything is saved in a dictionnary
@@ -201,8 +208,12 @@ def train(
         best_epoch = results["best_epoch"]
         epoch = results["n_epochs"]
         try:  # For backward compatibility purposes
-            j = results["current_patience"]
-            lpatience = results["patience"]
+            if mode == "continue":
+                j = 0
+                lpatience = patience
+            else:
+                j = results["current_patience"]
+                lpatience = results["patience"]
         except:
             j = 0
             lpatience = patience
@@ -507,6 +518,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     times = args.times
     patience = args.patience
+    learning_rate = args.lr
 
     ##################
     ### data types ###
@@ -534,7 +546,6 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    learning_rate = 0.00001
     nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
@@ -550,8 +561,8 @@ if __name__ == "__main__":
 
     # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
     net = FullNet(
-        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}",
+        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
+        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}",
         input_size,
         filters,
         nchan,
@@ -624,6 +635,7 @@ if __name__ == "__main__":
                 debug=debug,
                 p=patience,
                 lr=learning_rate,
+                mode=mode,
             )
 
         # Loading best saved model

@@ -27,7 +27,7 @@ def extract_bands(data):
     return data
 
 
-def create_dataset(data_df, data_path, ch_type, debug=False):
+def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -35,9 +35,28 @@ def create_dataset(data_df, data_path, ch_type, debug=False):
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
-    meg_dataset = megDataset(
-        data_df=data_df, root_dir=data_path, chan_index=chan_index, debug=debug
-    )
+    if chunkload:
+        meg_dataset = chunkedMegDataset(
+            data_df=data_df, root_dir=data_path, chan_index=chan_index, debug=debug
+        )
+    else:
+        sexlist = []
+        data = None
+        for f in os.listdir(data_path):
+            file_path = os.path.join(data_path, f)
+            trial = zscore(np.load(file_path)[chan_index], axis=1)
+            data = (
+                trial[np.newaxis, ...]
+                if data is None
+                else np.concatenate((trial[np.newaxis, ...], data))
+            )
+            sex = int(f.split("_")[1])
+            sexlist.append(sex)
+
+        if np.isnan(np.sum(trial)):
+            print(file_path, "becomes nan")
+
+        meg_dataset = TensorDataset(torch.Tensor(data), torch.Tensor(sexlist))
 
     return meg_dataset
 
@@ -53,6 +72,7 @@ def create_loaders(
     debug=False,
     seed=0,
     num_workers=0,
+    chunkload=True,
 ):
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
@@ -109,13 +129,19 @@ def create_loaders(
         test_set = TensorDataset(X_test, y_test)
     else:
         train_df = samples_df.loc[samples_df["subs"].isin(subs[train_index])]
-        train_set = create_dataset(train_df, data_folder, ch_type, debug=debug)
+        train_set = create_dataset(
+            train_df, data_folder, ch_type, debug=debug, chunkload=chunkload
+        )
 
         valid_df = samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
-        valid_set = create_dataset(valid_df, data_folder, ch_type, debug=debug)
+        valid_set = create_dataset(
+            valid_df, data_folder, ch_type, debug=debug, chunkload=chunkload
+        )
 
         test_df = samples_df.loc[samples_df["subs"].isin(subs[test_index])]
-        test_set = create_dataset(test_df, data_folder, ch_type, debug=debug)
+        test_set = create_dataset(
+            test_df, data_folder, ch_type, debug=debug, chunkload=chunkload
+        )
 
     # loading data with num_workers=0 is faster that using more because of IO read speeds on my machine.
     train_loader = DataLoader(
@@ -143,7 +169,7 @@ def create_loaders(
     return train_loader, valid_loader, test_loader
 
 
-class megDataset(Dataset):
+class chunkedMegDataset(Dataset):
     """MEG dataset, from examples of the pytorch website: FaceLandmarks"""
 
     def __init__(self, data_df, root_dir, chan_index, dtype="temporal", debug=False):
