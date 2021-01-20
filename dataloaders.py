@@ -35,14 +35,20 @@ def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
+    if debug:
+        chan_index = [0]
+        data_df = data_df[:200]
+
     if chunkload:
         meg_dataset = chunkedMegDataset(
-            data_df=data_df, root_dir=data_path, chan_index=chan_index, debug=debug
+            data_df=data_df, root_dir=data_path, chan_index=chan_index
         )
     else:
         sexlist = []
         data = None
-        for f in os.listdir(data_path):
+        for row in data_df.iterrows():
+            sub, sex, begin, end = row[1]
+            f = f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             file_path = os.path.join(data_path, f)
             trial = zscore(np.load(file_path)[chan_index], axis=1)
             data = (
@@ -128,17 +134,29 @@ def create_loaders(
         valid_set = TensorDataset(X_valid, y_valid)
         test_set = TensorDataset(X_test, y_test)
     else:
-        train_df = samples_df.loc[samples_df["subs"].isin(subs[train_index])]
+        train_df = (
+            samples_df.loc[samples_df["subs"].isin(subs[train_index])]
+            .sample(frac=1, random_state=seed)
+            .reset_index(drop=True)
+        )
         train_set = create_dataset(
             train_df, data_folder, ch_type, debug=debug, chunkload=chunkload
         )
 
-        valid_df = samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
+        valid_df = (
+            samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
+            .sample(frac=1, random_state=seed)
+            .reset_index(drop=True)
+        )
         valid_set = create_dataset(
             valid_df, data_folder, ch_type, debug=debug, chunkload=chunkload
         )
 
-        test_df = samples_df.loc[samples_df["subs"].isin(subs[test_index])]
+        test_df = (
+            samples_df.loc[samples_df["subs"].isin(subs[test_index])]
+            .sample(frac=1, random_state=seed)
+            .reset_index(drop=True)
+        )
         test_set = create_dataset(
             test_df, data_folder, ch_type, debug=debug, chunkload=chunkload
         )
@@ -147,21 +165,18 @@ def create_loaders(
     train_loader = DataLoader(
         train_set,
         batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
     valid_loader = DataLoader(
         valid_set,
         batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
     test_loader = DataLoader(
         test_set,
         batch_size=batch_size,
-        shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
@@ -172,7 +187,7 @@ def create_loaders(
 class chunkedMegDataset(Dataset):
     """MEG dataset, from examples of the pytorch website: FaceLandmarks"""
 
-    def __init__(self, data_df, root_dir, chan_index, dtype="temporal", debug=False):
+    def __init__(self, data_df, root_dir, chan_index, dtype="temporal"):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -183,7 +198,6 @@ class chunkedMegDataset(Dataset):
         self.root_dir = root_dir
         self.chan_index = chan_index
         self.dtype = dtype
-        self.debug = debug
 
     def __len__(self):
         return len(self.data_df)
@@ -191,9 +205,6 @@ class chunkedMegDataset(Dataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-
-        if self.debug:
-            return {"subject": "test", "sex": 0, "trial": np.zeros((1, 102, 400))}
 
         sub = self.data_df["subs"].iloc[idx]
         sex = self.data_df["sex"].iloc[idx]

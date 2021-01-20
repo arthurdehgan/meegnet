@@ -108,6 +108,11 @@ parser.add_argument(
     help="Instead of running the training etc, run a series of test in order to choose best set of workers and batch sizes to get faster epochs.",
 )
 parser.add_argument(
+    "--chunkload",
+    action="store_true",
+    help="Chunks the data and loads data batch per batch. Will be slower but is necessary when RAM size is too low to handle whole dataset.",
+)
+parser.add_argument(
     "--debug",
     action="store_true",
     help="loads dummy data in the net to ensure everything is working fine",
@@ -252,7 +257,7 @@ def train(
             optimizer.zero_grad()
             X, y = batch
 
-            y = y.view(-1).to(device)
+            y = y.view(-1).long().to(device)
             X = X.view(-1, *net.input_size).float().to(device)
 
             net.train()
@@ -328,7 +333,7 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
         COUNTER = 0
         for batch in dataloader:
             X, y = batch
-            y = y.view(-1).to(device)
+            y = y.view(-1).long().to(device)
             X = X.view(-1, *net.input_size).float().to(device)
 
             out = net.forward(X)
@@ -506,6 +511,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     features = args.feature
     debug = args.debug
+    chunkload = args.chunkload
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -586,6 +592,8 @@ if __name__ == "__main__":
                 ch_type,
                 data_type,
                 num_workers=nw,
+                debug=debug,
+                chunkload=chunkload,
             )
             tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
             perfs.append((nw, bs, tpb, et))
@@ -609,9 +617,14 @@ if __name__ == "__main__":
             data_type,
             seed=seed,
             num_workers=num_workers,
+            chunkload=chunkload,
+            debug=debug,
         )
 
-        if mode == "overwrite":
+        if debug:
+            save = False
+            load = False
+        elif mode == "overwrite":
             save = True
             load = False
         elif mode in ("continue", "evaluate"):
