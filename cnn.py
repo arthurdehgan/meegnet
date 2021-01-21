@@ -383,7 +383,7 @@ class FullNet(customNet):
         filter_size=50,
         n_channels=5,
         n_linear=150,
-        dropout=0.3,
+        dropout=0.25,
         dropout_option="same",
     ):
         super(FullNet, self).__init__(model_name, input_size)
@@ -555,8 +555,9 @@ if __name__ == "__main__":
     nchan = 102
     if debug:
         print("ENTERING DEBUG MODE")
-        dropout = 0
+        dropout = 0.5
         dropout_option = "same"
+        patience = 2
 
     #########################
     ### preparing network ###
