@@ -36,7 +36,6 @@ def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
         chan_index = [0, 1, 2]
 
     if debug:
-        chan_index = [0]
         data_df = data_df[:200]
 
     if chunkload:

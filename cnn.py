@@ -563,7 +563,6 @@ if __name__ == "__main__":
     #########################
 
     input_size = (n_channels // 102, nchan, trial_length)
-    print(input_size)
 
     # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
     net = FullNet(
