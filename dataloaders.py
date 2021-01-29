@@ -45,6 +45,7 @@ def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
     else:
         sexlist = []
         data = None
+        print("Loading data...")
         for row in data_df.iterrows():
             sub, sex, begin, end = row[1]
             f = f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
@@ -60,6 +61,7 @@ def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
 
         if np.isnan(np.sum(trial)):
             print(file_path, "becomes nan")
+        print("Data sucessfully loaded")
 
         meg_dataset = TensorDataset(torch.Tensor(data), torch.Tensor(sexlist))
 
