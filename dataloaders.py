@@ -27,7 +27,7 @@ def extract_bands(data):
     return data
 
 
-def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
+def create_dataset(data_df, data_path, ch_type, debug=False):
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -38,32 +38,31 @@ def create_dataset(data_df, data_path, ch_type, debug=False, chunkload=True):
     if debug:
         data_df = data_df[:200]
 
-    if chunkload:
-        meg_dataset = chunkedMegDataset(
-            data_df=data_df, root_dir=data_path, chan_index=chan_index
-        )
-    else:
-        sexlist = []
-        data = None
-        print("Loading data...")
-        for row in data_df.iterrows():
-            sub, sex, begin, end = row[1]
-            f = f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
-            file_path = os.path.join(data_path, f)
-            trial = zscore(np.load(file_path)[chan_index], axis=1)
-            data = (
-                trial[np.newaxis, ...]
-                if data is None
-                else np.concatenate((trial[np.newaxis, ...], data))
-            )
-            sex = int(f.split("_")[1])
-            sexlist.append(sex)
+    meg_dataset = chunkedMegDataset(
+        data_df=data_df, root_dir=data_path, chan_index=chan_index
+    )
+    # else:
+    #     sexlist = []
+    #     data = None
+    #     print("Loading data...")
+    #     for row in data_df.iterrows():
+    #         sub, sex, begin, end = row[1]
+    #         f = f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
+    #         file_path = os.path.join(data_path, f)
+    #         trial = zscore(np.load(file_path)[chan_index], axis=1)
+    #         data = (
+    #             trial[np.newaxis, ...]
+    #             if data is None
+    #             else np.concatenate((trial[np.newaxis, ...], data))
+    #         )
+    #         sex = int(f.split("_")[1])
+    #         sexlist.append(sex)
 
-        if np.isnan(np.sum(trial)):
-            print(file_path, "becomes nan")
-        print("Data sucessfully loaded")
+    #     if np.isnan(np.sum(trial)):
+    #         print(file_path, "becomes nan")
+    #     print("Data sucessfully loaded")
 
-        meg_dataset = TensorDataset(torch.Tensor(data), torch.Tensor(sexlist))
+    #     meg_dataset = TensorDataset(torch.Tensor(data), torch.Tensor(sexlist))
 
     return meg_dataset
 
@@ -75,7 +74,6 @@ def create_loaders(
     max_subj,
     ch_type,
     dtype,
-    method="new",
     debug=False,
     seed=0,
     num_workers=0,
@@ -107,34 +105,7 @@ def create_loaders(
     elif dtype == "bands":
         bands = True
 
-    if method == "old":
-
-        X_test, y_test = load_fn(
-            subs[test_index[:]],
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            debug=debug,
-        )
-        X_valid, y_valid = load_fn(
-            subs[valid_index[:]],
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            debug=debug,
-        )
-        X_train, y_train = load_fn(
-            subs[train_index[:]],
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            debug=debug,
-        )
-
-        train_set = TensorDataset(X_train, y_train)
-        valid_set = TensorDataset(X_valid, y_valid)
-        test_set = TensorDataset(X_test, y_test)
-    else:
+    if chunkload:
         train_df = (
             samples_df.loc[samples_df["subs"].isin(subs[train_index])]
             .sample(frac=1, random_state=seed)
@@ -161,6 +132,32 @@ def create_loaders(
         test_set = create_dataset(
             test_df, data_folder, ch_type, debug=debug, chunkload=chunkload
         )
+
+    else:
+        X_test, y_test = load_fn(
+            samples_df.iloc[test_index[:]],
+            dpath=data_folder,
+            ch_type=ch_type,
+            bands=bands,
+            debug=debug,
+        )
+        X_valid, y_valid = load_fn(
+            samples_df.iloc[valid_index[:]],
+            dpath=data_folder,
+            ch_type=ch_type,
+            bands=bands,
+            debug=debug,
+        )
+        X_train, y_train = load_fn(
+            samples_df.iloc[train_index[:]],
+            dpath=data_folder,
+            ch_type=ch_type,
+            bands=bands,
+            debug=debug,
+        )
+        train_set = TensorDataset(X_train, y_train)
+        valid_set = TensorDataset(X_valid, y_valid)
+        test_set = TensorDataset(X_test, y_test)
 
     # loading data with num_workers=0 is faster that using more because of IO read speeds on my machine.
     train_loader = DataLoader(
@@ -237,12 +234,11 @@ def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
     a lot since last time this function was used.
     """
     if ch_type == "MAG":
-        elec_index = list(range(2, 306, 3))
+        chan_index = [2]
     elif ch_type == "GRAD":
-        elec_index = list(range(0, 306, 3))
-        elec_index += list(range(1, 306, 3))
-    elif ch_type == "all":
-        elec_index = list(range(306))
+        chan_index = [0, 1]
+    elif ch_type == "ALL":
+        chan_index = [0, 1, 2]
 
     if debug:
         # Not currently working
@@ -271,48 +267,56 @@ def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
 
 
 def load_data(
-    dataframe, dpath, trial_length, offset, ch_type="MAG", bands=True, debug=False
+    dataframe,
+    dpath,
+    offset=2000,
+    ch_type="MAG",
+    bands=True,
+    debug=False,
 ):
-    """Loading data, deprecated, takes too much time. normaliza has been replaced
-    by zscore in newer version.
+    """Loading data subject per subject.
 
     bands is here only for compatibility with load_freq_data"""
     if ch_type == "MAG":
-        elec_index = list(range(2, 306, 3))
+        chan_index = [2]
     elif ch_type == "GRAD":
-        elec_index = list(range(0, 306, 3))
-        elec_index += list(range(1, 306, 3))
-    elif ch_type == "all":
-        elec_index = list(range(306))
+        chan_index = [0, 1]
+    elif ch_type == "ALL":
+        chan_index = [0, 1, 2]
 
     if debug:
-        # Not currently working
-        nb = trial_length
-        dummy = np.zeros((17439, len(elec_index), nb))
-        return torch.Tensor(dummy).float(), torch.tensor(dummy).float()
+        dataframe = dataframe[:20]
+
+    subs_df = (
+        dataframe.drop(["begin", "end"], axis=1)
+        .drop_duplicates(subset=["subs"])
+        .reset_index(drop=True)
+    )
 
     X = None
     y = []
-    i = 0
+    # i = 0
+    print("Loading the whole dataset...")
     for row in dataframe.iterrows():
-        print(f"loading subject {i+1}/{len(dataframe)}", end="\r")
-        sub, lab = row[1]["participant_id"], row[1]["sex"]
+        sub, lab = row[1]["subs"], row[1]["sex"]
         try:
-            sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[elec_index]
+            sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
         except:
             print("There was a problem loading subject ", sub)
             continue
+
+        sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         sub_data = [
-            normalize(sub_data[:, i : i + trial_length])
-            for i in range(offset, sub_data.shape[-1], trial_length)
-            if i + trial_length < sub_data.shape[-1]
+            zscore(sub_data[:, :, begin:end], axis=1)
+            for begin, end in zip(sub_segments["begin"], sub_segments["end"])
         ]
+
         sub_data = np.array(sub_data)
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
         y += [lab] * len(sub_data)
         # y += [i] * len(sub_data)
-        i += 1
-    print(X.shape, len(y))
+        # i += 1
+    print("Loading successfull")
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 
