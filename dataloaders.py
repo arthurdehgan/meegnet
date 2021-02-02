@@ -105,29 +105,28 @@ def create_loaders(
     elif dtype == "bands":
         bands = True
 
+    train_df = (
+        samples_df.loc[samples_df["subs"].isin(subs[train_index])]
+        .sample(frac=1, random_state=seed)
+        .reset_index(drop=True)
+    )
+    valid_df = (
+        samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
+        .sample(frac=1, random_state=seed)
+        .reset_index(drop=True)
+    )
+    test_df = (
+        samples_df.loc[samples_df["subs"].isin(subs[test_index])]
+        .sample(frac=1, random_state=seed)
+        .reset_index(drop=True)
+    )
+
     if chunkload:
-        train_df = (
-            samples_df.loc[samples_df["subs"].isin(subs[train_index])]
-            .sample(frac=1, random_state=seed)
-            .reset_index(drop=True)
-        )
         train_set = create_dataset(
             train_df, data_folder, ch_type, debug=debug, chunkload=chunkload
         )
-
-        valid_df = (
-            samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
-            .sample(frac=1, random_state=seed)
-            .reset_index(drop=True)
-        )
         valid_set = create_dataset(
             valid_df, data_folder, ch_type, debug=debug, chunkload=chunkload
-        )
-
-        test_df = (
-            samples_df.loc[samples_df["subs"].isin(subs[test_index])]
-            .sample(frac=1, random_state=seed)
-            .reset_index(drop=True)
         )
         test_set = create_dataset(
             test_df, data_folder, ch_type, debug=debug, chunkload=chunkload
@@ -135,21 +134,21 @@ def create_loaders(
 
     else:
         X_test, y_test = load_fn(
-            samples_df.iloc[test_index[:]],
+            test_df,
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
             debug=debug,
         )
         X_valid, y_valid = load_fn(
-            samples_df.iloc[valid_index[:]],
+            valid_df,
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
             debug=debug,
         )
         X_train, y_train = load_fn(
-            samples_df.iloc[train_index[:]],
+            train_df,
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
