@@ -122,15 +122,9 @@ def create_loaders(
     )
 
     if chunkload:
-        train_set = create_dataset(
-            train_df, data_folder, ch_type, debug=debug, chunkload=chunkload
-        )
-        valid_set = create_dataset(
-            valid_df, data_folder, ch_type, debug=debug, chunkload=chunkload
-        )
-        test_set = create_dataset(
-            test_df, data_folder, ch_type, debug=debug, chunkload=chunkload
-        )
+        train_set = create_dataset(train_df, data_folder, ch_type, debug=debug)
+        valid_set = create_dataset(valid_df, data_folder, ch_type, debug=debug)
+        test_set = create_dataset(test_df, data_folder, ch_type, debug=debug)
 
     else:
         X_test, y_test = load_fn(
