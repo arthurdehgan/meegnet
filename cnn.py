@@ -380,7 +380,7 @@ class FullNet(customNet):
         self,
         model_name,
         input_size,
-        filter_size=50,
+        filter_size=7,
         n_channels=5,
         n_linear=150,
         dropout=0.25,
@@ -405,24 +405,36 @@ class FullNet(customNet):
 
         layers = nn.ModuleList(
             [
-                nn.Conv2d(input_size[0], 100, 3),
+                nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
                 nn.ReLU(),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 100, 3),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 300, (2, 3)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 300, (1, 7)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 100, (1, 3)),
-                nn.Conv2d(100, 100, (1, 3)),
+                # Explore different stride and maybe dilation parameters:
+                nn.Conv2d(nchan, nchan, (1, filter_size)),
                 Flatten(),
+                nn.Dropout(dropout),
             ]
         )
+
+        # layers = nn.ModuleList(
+        #     [
+        #         nn.Conv2d(input_size[0], 100, 3),
+        #         nn.ReLU(),
+        #         nn.MaxPool2d((2, 2)),
+        #         nn.Dropout(dropout),
+        #         nn.Conv2d(100, 100, 3),
+        #         nn.MaxPool2d((2, 2)),
+        #         nn.Dropout(dropout),
+        #         nn.Conv2d(100, 300, (2, 3)),
+        #         nn.MaxPool2d((2, 2)),
+        #         nn.Dropout(dropout),
+        #         nn.Conv2d(300, 300, (1, 7)),
+        #         nn.MaxPool2d((2, 2)),
+        #         nn.Dropout(dropout),
+        #         nn.Conv2d(300, 100, (1, 3)),
+        #         nn.Conv2d(100, 100, (1, 3)),
+        #         Flatten(),
+        #     ]
+        # )
+
         # nn.Conv2d(input_size[0], n_channels, (input_size[1], 1)),
         # nn.BatchNorm2d(n_channels),
         # nn.ReLU(),
@@ -449,7 +461,8 @@ class FullNet(customNet):
             (
                 # nn.Dropout(dropout1),
                 # nn.Linear(lin_size, n_linear),
-                nn.Linear(lin_size, 2),
+                nn.Linear(lin_size, n_linear),
+                nn.Linear(n_linear, 2),
                 # nn.Dropout(dropout2),
                 # nn.Linear(n_linear, 2),
             )
@@ -525,6 +538,14 @@ if __name__ == "__main__":
     times = args.times
     patience = args.patience
     learning_rate = args.lr
+
+    ####################
+    ### Starting log ###
+    ####################
+
+    old_stdout = sys.stdout
+    log = open(save_path + model_name + ".log", "a")
+    sys.stdout = log
 
     ##################
     ### data types ###
@@ -659,13 +680,21 @@ if __name__ == "__main__":
             print(f"Error: Can't evaluate model {model_filepath}, file not found.")
             exit()
 
-        # Final testing
-        print("Evaluating on test set:")
-        tloss, tacc = evaluate(net, testloader)
-        print("loss: ", tloss, " // accuracy: ", tacc)
-        if save:
-            results = loadmat(model_filepath[:-2] + "mat")
-            print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
-            results["test_acc"] = tacc
-            results["test_loss"] = tloss
-            savemat(save_path + net.name + ".mat", results)
+        # testing
+        print("Evaluating on valid set:")
+        results = loadmat(model_filepath[:-2] + "mat")
+        print("loss: ", results["loss_score"], " // accuracy: ", results["acc_score"])
+        print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+
+        # # Final testing
+        # print("Evaluating on test set:")
+        # tloss, tacc = evaluate(net, testloader)
+        # print("loss: ", tloss, " // accuracy: ", tacc)
+        # if save:
+        #     results = loadmat(model_filepath[:-2] + "mat")
+        #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        #     results["test_acc"] = tacc
+        #     results["test_loss"] = tloss
+        #     savemat(save_path + net.name + ".mat", results)
+
+        log.close()
