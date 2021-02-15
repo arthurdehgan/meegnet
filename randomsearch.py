@@ -28,6 +28,11 @@ parser.add_argument(
     type=str,
     help="The path where the data samples can be found.",
 )
+parser.add_argument(
+    "--chunkload",
+    action="store_true",
+    help="Chunks the data and loads data batch per batch. Will be slower but is necessary when RAM size is too low to handle whole dataset.",
+)
 
 args = parser.parse_args()
 data_path = args.path
@@ -35,6 +40,12 @@ save_path = args.save
 if not save_path.endswith("/"):
     save_path += "/"
 script_path = args.script
+chunkload = args.chunkload
+
+if chunkload:
+    chunkload = "--chunkload"
+else:
+    chunkload = ""
 
 params_set = set()
 n_test = 0
@@ -47,7 +58,8 @@ while n_test < N_TESTS:
     }
     if tuple(params.values()) not in params_set:
         call(
-            f"python {script_path} --feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=\"ALL\" -b=32 --chunkload -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']}",
+            f"python {script_path} --feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=\"ALL\" -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']}"
+            + chunkload,
             shell=True,
         )
         params_set.add(tuple(params.values()))
