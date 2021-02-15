@@ -1,3 +1,5 @@
+#!/home/arthur/.pyenv/shims/python
+
 import os
 import gc
 import sys
