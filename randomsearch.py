@@ -47,7 +47,7 @@ while n_test < N_TESTS:
     }
     if tuple(params.values()) not in params_set:
         call(
-            f"{script_path} --feature=temporal --path=/home/arthur/github/camcan/data/datasamples/ --save=/home/arthur/github/camcan/models/ --model-name=randomsearchANN_{n_test} -e=\"ALL\" -b=32 --chunkload -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']}",
+            f"python {script_path} --feature=temporal --path=/home/arthur/github/camcan/data/datasamples/ --save=/home/arthur/github/camcan/models/ --model-name=randomsearchANN_{n_test} -e=\"ALL\" -b=32 --chunkload -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']}",
             shell=True,
         )
         params_set.add(tuple(params.values()))
