@@ -5,7 +5,9 @@ import torch
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
+from scipy.signal import welch
 from torch.utils.data import Dataset, DataLoader, random_split, TensorDataset
+from params import NBINS
 
 
 def extract_bands(data):
@@ -27,7 +29,7 @@ def extract_bands(data):
     return data
 
 
-def create_dataset(data_df, data_path, ch_type, debug=False):
+def create_dataset(data_df, data_path, ch_type, dtype="temporal", debug=False):
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -39,7 +41,10 @@ def create_dataset(data_df, data_path, ch_type, debug=False):
         data_df = data_df[:200]
 
     meg_dataset = chunkedMegDataset(
-        data_df=data_df, root_dir=data_path, chan_index=chan_index
+        data_df=data_df,
+        root_dir=data_path,
+        chan_index=chan_index,
+        dtype=dtype,
     )
     # else:
     #     sexlist = []
@@ -104,6 +109,8 @@ def create_loaders(
         load_fn = load_data
     elif dtype == "bands":
         bands = True
+    elif dtype == "both":
+        load_fn = load_data
 
     train_df = (
         samples_df.loc[samples_df["subs"].isin(subs[train_index])]
@@ -122,9 +129,15 @@ def create_loaders(
     )
 
     if chunkload:
-        train_set = create_dataset(train_df, data_folder, ch_type, debug=debug)
-        valid_set = create_dataset(valid_df, data_folder, ch_type, debug=debug)
-        test_set = create_dataset(test_df, data_folder, ch_type, debug=debug)
+        train_set = create_dataset(
+            train_df, data_folder, ch_type, dtype=dtype, debug=debug
+        )
+        valid_set = create_dataset(
+            valid_df, data_folder, ch_type, dtype=dtype, debug=debug
+        )
+        test_set = create_dataset(
+            test_df, data_folder, ch_type, dtype=dtype, debug=debug
+        )
 
     else:
         X_test, y_test = load_fn(
@@ -132,6 +145,7 @@ def create_loaders(
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
+            dtype=dtype,
             debug=debug,
         )
         X_valid, y_valid = load_fn(
@@ -139,6 +153,7 @@ def create_loaders(
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
+            dtype=dtype,
             debug=debug,
         )
         X_train, y_train = load_fn(
@@ -146,6 +161,7 @@ def create_loaders(
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
+            dtype=dtype,
             debug=debug,
         )
         train_set = TensorDataset(X_train, y_train)
@@ -210,11 +226,22 @@ class chunkedMegDataset(Dataset):
             trial = zscore(trial, axis=1)
             if np.isnan(np.sum(trial)):
                 print(data_path, "becomes nan")
-        else:
+        elif self.dtype.startswith("freq"):
             data_path = os.path.join(self.root_dir, f"{sub}_psd.npy")
             trial = np.load(data_path)[:, self.chan_index]
-            if self.dtype == "bands":
+            if self.dtype == "freqbands":
                 trial = extract_bands(trial)
+        elif self.dtype == "both":
+            data_path = os.path.join(
+                self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
+            )
+            signal = np.load(data_path)[self.chan_index]
+            time = zscore(signal, axis=1)
+            freq = np.zeros(list(signal.shape[:-1]) + [NBINS])
+            for i, mat in enumerate(signal):
+                for j, seg in enumerate(mat):
+                    freq[i, j] = welch(seg, fs=200)[1]
+            trial = np.concatenate((time, freq), axis=-1)
 
         sample = (trial, sex)
 
@@ -265,6 +292,7 @@ def load_data(
     offset=2000,
     ch_type="MAG",
     bands=True,
+    dtype="temporal",
     debug=False,
 ):
     """Loading data subject per subject.
@@ -299,10 +327,19 @@ def load_data(
             continue
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
-        sub_data = [
-            zscore(sub_data[:, :, begin:end], axis=1)
-            for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-        ]
+        if dtype == "both":
+            sub_data = [
+                np.append(
+                    zscore(sub_data[:, :, begin:end], axis=1),
+                    welch(sub_data, fs=200)[1],
+                )
+                for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+            ]
+        elif dtype == "temporal":
+            sub_data = [
+                zscore(sub_data[:, :, begin:end], axis=1)
+                for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+            ]
 
         sub_data = np.array(sub_data)
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)

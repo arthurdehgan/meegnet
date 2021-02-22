@@ -6,6 +6,7 @@ import configparser
 OFFSET = 2000
 # mis en fonction de Van puten qui utilise des trials de 2s samples a 200Hz (utilise les donnees ds200)
 TIME_TRIAL_LENGTH = 400
+NBINS = 129
 
 
 def group1(age):
