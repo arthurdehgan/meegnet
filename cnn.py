@@ -405,6 +405,7 @@ class FullNet(customNet):
 
         layers = nn.ModuleList(
             [
+                # equivalent to doing nn.Linear(input_size[0], nchan)
                 nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
                 nn.ReLU(),
                 # Explore different stride and maybe dilation parameters:
