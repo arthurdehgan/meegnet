@@ -22,6 +22,11 @@ except:
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--log",
+    action="store_true",
+    help="stores all prints in a logfile instead of printing them",
+)
+parser.add_argument(
     "--lr",
     type=float,
     default=0.00001,
@@ -544,9 +549,10 @@ if __name__ == "__main__":
     ### Starting log ###
     ####################
 
-    old_stdout = sys.stdout
-    log = open(save_path + model_name + ".log", "a")
-    sys.stdout = log
+    if log:
+        old_stdout = sys.stdout
+        log = open(save_path + model_name + ".log", "a")
+        sys.stdout = log
 
     ##################
     ### data types ###
@@ -698,4 +704,5 @@ if __name__ == "__main__":
         #     results["test_loss"] = tloss
         #     savemat(save_path + net.name + ".mat", results)
 
-        log.close()
+        if log:
+            log.close()
