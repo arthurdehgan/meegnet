@@ -544,6 +544,7 @@ if __name__ == "__main__":
     times = args.times
     patience = args.patience
     learning_rate = args.lr
+    log = args.log
 
     ####################
     ### Starting log ###
