@@ -129,7 +129,7 @@ parser.add_argument(
     help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
 )
 parser.add_argument(
-    "-l", "--linear", type=int, help="The size of the second linear layer"
+    "-l", "--linear", default=100, type=int, help="The size of the second linear layer"
 )
 parser.add_argument(
     "-m",
@@ -140,7 +140,7 @@ parser.add_argument(
     help="Changes the mode the script is run for: overwrite will restart from scratch and overwrite any files with the same name; continue will load previous state and continue from last checkpoint; empty_run will run the training and testing without saving anything; evaluate will load the model to evaluate it on the test set.",
 )
 parser.add_argument(
-    "-f", "--filters", type=int, help="The size of the first convolution"
+    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
 )
 parser.add_argument(
     "-n",
@@ -463,6 +463,7 @@ class FullNet(customNet):
         # Flatten(),
 
         lin_size = self._get_lin_size(layers)
+        print(lin_size, n_linear)
         layers.extend(
             (
                 # nn.Dropout(dropout1),
