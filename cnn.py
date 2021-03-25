@@ -22,6 +22,11 @@ except:
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--printmem",
+    action="store_true",
+    help="Shows RAM information before and during the data loading process.",
+)
+parser.add_argument(
     "--log",
     action="store_true",
     help="stores all prints in a logfile instead of printing them",
@@ -522,6 +527,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     data_path = args.path
+    if not data_path.endswith("/"):
+        data_path += "/"
     save_path = args.save
     if not save_path.endswith("/"):
         save_path += "/"
@@ -546,6 +553,12 @@ if __name__ == "__main__":
     patience = args.patience
     learning_rate = args.lr
     log = args.log
+    printmem = args.printmem
+
+    if printmem and chunkload:
+        print(
+            "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
+        )
 
     ####################
     ### Starting log ###
@@ -649,6 +662,7 @@ if __name__ == "__main__":
             num_workers=num_workers,
             chunkload=chunkload,
             debug=debug,
+            printmem=printmem,
         )
 
         if debug:

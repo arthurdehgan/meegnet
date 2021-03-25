@@ -2,6 +2,7 @@ from __future__ import print_function, division
 from time import time
 import os
 import torch
+import psutil
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
@@ -83,6 +84,7 @@ def create_loaders(
     seed=0,
     num_workers=0,
     chunkload=True,
+    printmem=False,
 ):
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
@@ -96,6 +98,7 @@ def create_loaders(
     subs = subs[:max_subj]
     N = len(subs)
     train_size = int(N * train_size)
+
     remaining_size = N - train_size
     valid_size = int(remaining_size / 2)
     test_size = remaining_size - valid_size
@@ -130,13 +133,25 @@ def create_loaders(
 
     if chunkload:
         train_set = create_dataset(
-            train_df, data_folder, ch_type, dtype=dtype, debug=debug
+            train_df,
+            data_folder,
+            ch_type,
+            dtype=dtype,
+            debug=debug,
         )
         valid_set = create_dataset(
-            valid_df, data_folder, ch_type, dtype=dtype, debug=debug
+            valid_df,
+            data_folder,
+            ch_type,
+            dtype=dtype,
+            debug=debug,
         )
         test_set = create_dataset(
-            test_df, data_folder, ch_type, dtype=dtype, debug=debug
+            test_df,
+            data_folder,
+            ch_type,
+            dtype=dtype,
+            debug=debug,
         )
 
     else:
@@ -147,6 +162,7 @@ def create_loaders(
             bands=bands,
             dtype=dtype,
             debug=debug,
+            printmem=printmem,
         )
         X_valid, y_valid = load_fn(
             valid_df,
@@ -155,6 +171,7 @@ def create_loaders(
             bands=bands,
             dtype=dtype,
             debug=debug,
+            printmem=printmem,
         )
         X_train, y_train = load_fn(
             train_df,
@@ -163,6 +180,7 @@ def create_loaders(
             bands=bands,
             dtype=dtype,
             debug=debug,
+            printmem=printmem,
         )
         train_set = TensorDataset(X_train, y_train)
         valid_set = TensorDataset(X_valid, y_valid)
@@ -294,6 +312,7 @@ def load_data(
     bands=True,
     dtype="temporal",
     debug=False,
+    printmem=False,
 ):
     """Loading data subject per subject.
 
@@ -317,8 +336,18 @@ def load_data(
     X = None
     y = []
     # i = 0
-    print("Loading the whole dataset...")
+    print(f"Loading {len(subs_df)} subjects data")
+    if printmem:
+        subj_sizes = []
+        totmem = psutil.virtual_memory().total / 10 ** 9
+        print(f"Total Available memory: {totmem:.3f} Go")
     for row in dataframe.iterrows():
+        if printmem:
+            usedmem = psutil.virtual_memory().used / 10 ** 9
+            print(
+                f"Used memory: {usedmem:.3f} / {totmem:.3f} Go.",
+                end="\r",
+            )
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
             sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
@@ -346,7 +375,7 @@ def load_data(
         y += [lab] * len(sub_data)
         # y += [i] * len(sub_data)
         # i += 1
-    print("Loading successfull")
+    print("\nLoading successfull")
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 
