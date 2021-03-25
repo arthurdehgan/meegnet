@@ -11,7 +11,7 @@ from scipy.io import savemat, loadmat
 from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
-import parser
+from parser import parser
 
 torchsum = True
 try:
