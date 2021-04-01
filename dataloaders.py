@@ -3,6 +3,7 @@ from time import time
 import os
 import torch
 import psutil
+import logging
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
@@ -243,7 +244,7 @@ class chunkedMegDataset(Dataset):
             trial = np.load(data_path)[self.chan_index]
             trial = zscore(trial, axis=1)
             if np.isnan(np.sum(trial)):
-                print(data_path, "becomes nan")
+                logging.warning(f"Warning: {data_path} becomes nan")
         elif self.dtype.startswith("freq"):
             data_path = os.path.join(self.root_dir, f"{sub}_psd.npy")
             trial = np.load(data_path)[:, self.chan_index]
@@ -336,23 +337,23 @@ def load_data(
     X = None
     y = []
     # i = 0
-    print(f"Loading {len(subs_df)} subjects data")
+    logging.debug(f"Loading {len(subs_df)} subjects data")
     if printmem:
         subj_sizes = []
         totmem = psutil.virtual_memory().total / 10 ** 9
-        print(f"Total Available memory: {totmem:.3f} Go")
-    for row in dataframe.iterrows():
+        logging.info(f"Total Available memory: {totmem:.3f} Go")
+    for i, row in enumerate(dataframe.iterrows()):
         if printmem:
             usedmem = psutil.virtual_memory().used / 10 ** 9
-            print(
-                f"Used memory: {usedmem:.3f} / {totmem:.3f} Go.",
-                end="\r",
-            )
+            if i % (len(dataframe) // 10) == 0:
+                logging.debug(
+                    f"Used memory: {usedmem:.3f} / {totmem:.3f} Go.",
+                )
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
             sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
         except:
-            print("There was a problem loading subject ", sub)
+            logging.warning("Warning: There was a problem loading subject ", sub)
             continue
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
@@ -375,7 +376,7 @@ def load_data(
         y += [lab] * len(sub_data)
         # y += [i] * len(sub_data)
         # i += 1
-    print("\nLoading successfull")
+    logging.info("Loading successfull\n")
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
 

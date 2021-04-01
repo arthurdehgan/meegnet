@@ -1,6 +1,7 @@
 import os
 import gc
 import sys
+import logging
 from itertools import product
 from time import time
 import torch
@@ -12,13 +13,6 @@ from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
 from parser import parser
-
-torchsum = True
-try:
-    from torchsummary import summary
-except:
-    print("Error loading torchsummary")
-    torchsum = False
 
 parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
@@ -40,7 +34,7 @@ class Flatten(nn.Module):
 
 def load_checkpoint(filename):
     # Function to load a network state from a filename.
-    print("=> loading checkpoint '{}'".format(filename))
+    logging.info("=> loading checkpoint '{}'".format(filename))
     checkpoint = torch.load(filename)
     start_epoch = checkpoint["epoch"]
     model_state = checkpoint["state_dict"]
@@ -104,7 +98,7 @@ def train(
             lpatience = patience
 
         if lpatience != patience:
-            print(
+            logging.warning(
                 f"Warning: current patience ({patience}) is different from loaded patience ({lpatience})."
             )
             answer = input("Would you like to continue anyway ? (y/n)")
@@ -114,7 +108,9 @@ def train(
                 exit()
 
     elif load_model:
-        print(f"Couldn't find any checkpoint named {net.name} in {save_path}")
+        logging.warning(
+            f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
+        )
         j = 0
 
     else:
@@ -153,7 +149,11 @@ def train(
                 et = tpb * n_batches
                 progress += f"// time per batch = {tpb:.5f} // epoch time = {nt(et)}"
 
-            print(progress, end="\r")
+            if n_batches > 10:
+                if i % (n_batches // 10) == 0:
+                    logging.info(progress)
+            else:
+                logging.info(progress)
 
             condition = i >= 999 or i == n_batches - 1
             if timing and condition:
@@ -183,9 +183,9 @@ def train(
         else:
             j += 1
 
-        print("Epoch: {}".format(epoch))
-        print(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-        print(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+        logging.info("Epoch: {}".format(epoch))
+        logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
+        logging.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
         if save_model:
             results = {
                 "acc_score": [best_vacc],
@@ -233,7 +233,7 @@ class customNet(nn.Module):
         super(customNet, self).__init__()
         self.input_size = input_size
         self.name = model_name
-        print(model_name)
+        logging.info(model_name)
 
     def _get_lin_size(self, layers):
         return nn.Sequential(*layers)(torch.zeros((1, *input_size))).shape[-1]
@@ -251,7 +251,7 @@ class customNet(nn.Module):
             if torchsum:
                 summary(self, (input_size))
             else:
-                print(self)
+                logging.info(self)
             sys.stdout = orig_stdout
 
 
@@ -281,7 +281,7 @@ class FullNet(customNet):
                 dropout1 = dropout * 2
                 dropout2 = dropout
             else:
-                print(f"{dropout_option} is not a valid option")
+                logging.warning(f"{dropout_option} is not a valid option")
 
         layers = nn.ModuleList(
             [
@@ -338,7 +338,6 @@ class FullNet(customNet):
         # Flatten(),
 
         lin_size = self._get_lin_size(layers)
-        print(lin_size, n_linear)
         layers.extend(
             (
                 # nn.Dropout(dropout1),
@@ -385,12 +384,6 @@ class vanPutNet(customNet):
 
 if __name__ == "__main__":
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        print("Warning: gpu device not available")
-        device = "cpu"
-
     ###############
     ### PARSING ###
     ###############
@@ -425,19 +418,55 @@ if __name__ == "__main__":
     log = args.log
     printmem = args.printmem
 
-    if printmem and chunkload:
-        print(
-            "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
-        )
-
     ####################
     ### Starting log ###
     ####################
 
     if log:
-        old_stdout = sys.stdout
-        log = open(save_path + model_name + ".log", "a")
-        sys.stdout = log
+        logging.basicConfig(
+            filename=save_path + model_name + ".log",
+            filemode="a",
+            encoding="utf-8",
+            level=logging.DEBUG,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
+
+    ###########################
+    ### Torchsummary checks ###
+    ###########################
+
+    torchsum = True
+    try:
+        from torchsummary import summary
+    except:
+        logging.warning("Warning: Error loading torchsummary")
+        torchsum = False
+
+    #####################
+    ### Parser checks ###
+    #####################
+
+    if printmem and chunkload:
+        logging.info(
+            "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
+        )
+
+    #########################
+    ### CUDA verification ###
+    #########################
+
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        logging.warning("Warning: gpu device not available")
+        device = "cpu"
 
     ##################
     ### data types ###
@@ -467,7 +496,7 @@ if __name__ == "__main__":
 
     nchan = 102
     if debug:
-        print("ENTERING DEBUG MODE")
+        logging.debug("ENTERING DEBUG MODE")
         dropout = 0.5
         dropout_option = "same"
         patience = 2
@@ -512,13 +541,13 @@ if __name__ == "__main__":
             perfs.append((nw, bs, tpb, et))
 
         for x in sorted(perfs, key=lambda x: x[-1]):
-            print("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
+            logging.info("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
 
     else:
         if torchsum:
-            print(summary(net, input_size))
+            logging.info(summary(net, input_size))
         else:
-            print(net)
+            logging.info(net)
 
         # We create loaders and datasets (see dataloaders.py)
         trainloader, validloader, testloader = create_loaders(
@@ -549,7 +578,7 @@ if __name__ == "__main__":
             load = False
 
         model_filepath = save_path + net.name + ".pt"
-        print(net.name)
+        logging.info(net.name)
         # Actual training (loading nework if existing and load option is True)
         if mode != "evaluate":
             train(
@@ -570,14 +599,18 @@ if __name__ == "__main__":
             _, net_state, _ = load_checkpoint(model_filepath)
             net.load_state_dict(net_state)
         else:
-            print(f"Error: Can't evaluate model {model_filepath}, file not found.")
+            logging.warning(
+                f"Error: Can't evaluate model {model_filepath}, file not found."
+            )
             exit()
 
         # testing
-        print("Evaluating on valid set:")
+        logging.info("Evaluating on valid set:")
         results = loadmat(model_filepath[:-2] + "mat")
-        print("loss: ", results["loss_score"], " // accuracy: ", results["acc_score"])
-        print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        logging.info(
+            "loss: ", results["loss_score"], " // accuracy: ", results["acc_score"]
+        )
+        logging.info("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
 
         # # Final testing
         # print("Evaluating on test set:")
@@ -590,5 +623,157 @@ if __name__ == "__main__":
         #     results["test_loss"] = tloss
         #     savemat(save_path + net.name + ".mat", results)
 
-        if log:
-            log.close()
+    ##################
+    ### data types ###
+    ##################
+
+    if ch_type == "MAG":
+        n_channels = 102
+    elif ch_type == "GRAD":
+        n_channels = 204
+    elif ch_type == "ALL":
+        n_channels = 306
+    else:
+        raise (f"Error: invalid channel type: {ch_type}")
+
+    if features == "bins":
+        bands = False
+        trial_length = 241
+    if features == "bands":
+        bands = False
+        trial_length = 5
+    elif features == "temporal":
+        trial_length = TIME_TRIAL_LENGTH
+
+    ###########################
+    ### learning parameters ###
+    ###########################
+
+    nchan = 102
+    if debug:
+        logging.debug("ENTERING DEBUG MODE")
+        dropout = 0.5
+        dropout_option = "same"
+        patience = 2
+
+    #########################
+    ### preparing network ###
+    #########################
+
+    input_size = (n_channels // 102, nchan, trial_length)
+
+    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
+    net = FullNet(
+        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
+        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}",
+        input_size,
+        filters,
+        nchan,
+        linear,
+        dropout,
+        dropout_option,
+    ).to(device)
+
+    if times:
+        # overrides default mode !
+        # tests different values of workers and batch sizes to check which is the fastest
+        num_workers = [16, 32, 64, 128]
+        batch_sizes = [16, 32]
+        perfs = []
+        for nw, bs in product(num_workers, batch_sizes):
+            tl, vl, _ = create_loaders(
+                data_path,
+                train_size,
+                bs,
+                max_subj,
+                ch_type,
+                data_type,
+                num_workers=nw,
+                debug=debug,
+                chunkload=chunkload,
+            )
+            tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
+            perfs.append((nw, bs, tpb, et))
+
+        for x in sorted(perfs, key=lambda x: x[-1]):
+            logging.info("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
+
+    else:
+        if torchsum:
+            logging.info(summary(net, input_size))
+        else:
+            logging.info(net)
+
+        # We create loaders and datasets (see dataloaders.py)
+        trainloader, validloader, testloader = create_loaders(
+            data_path,
+            train_size,
+            batch_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            num_workers=num_workers,
+            chunkload=chunkload,
+            debug=debug,
+            printmem=printmem,
+        )
+
+        if debug:
+            save = False
+            load = False
+        elif mode == "overwrite":
+            save = True
+            load = False
+        elif mode in ("continue", "evaluate"):
+            save = True
+            load = True
+        else:
+            save = False
+            load = False
+
+        model_filepath = save_path + net.name + ".pt"
+        logging.info(net.name)
+        # Actual training (loading nework if existing and load option is True)
+        if mode != "evaluate":
+            train(
+                net,
+                trainloader,
+                validloader,
+                model_filepath,
+                save_model=save,
+                load_model=load,
+                debug=debug,
+                p=patience,
+                lr=learning_rate,
+                mode=mode,
+            )
+
+        # Loading best saved model
+        if os.path.exists(model_filepath):
+            _, net_state, _ = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+        else:
+            logging.warning(
+                f"Error: Can't evaluate model {model_filepath}, file not found."
+            )
+            exit()
+
+        # testing
+        logging.info("Evaluating on valid set:")
+        results = loadmat(model_filepath[:-2] + "mat")
+        logging.info(
+            "loss: ", results["loss_score"], " // accuracy: ", results["acc_score"]
+        )
+        logging.info("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+
+        # # Final testing
+        # print("Evaluating on test set:")
+        # tloss, tacc = evaluate(net, testloader)
+        # print("loss: ", tloss, " // accuracy: ", tacc)
+        # if save:
+        #     results = loadmat(model_filepath[:-2] + "mat")
+        #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        #     results["test_acc"] = tacc
+        #     results["test_loss"] = tloss
+        #     savemat(save_path + net.name + ".mat", results)
