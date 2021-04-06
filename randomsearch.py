@@ -38,6 +38,11 @@ parser.add_argument(
     action="store_true",
     help="Chunks the data and loads data batch per batch. Will be slower but is necessary when RAM size is too low to handle whole dataset.",
 )
+parser.add_argument(
+    "--options",
+    type=str,
+    help="add more options from parser.py in this tag, they will be transfered to the final script",
+)
 
 args = parser.parse_args()
 data_path = args.path
@@ -47,12 +52,8 @@ if not save_path.endswith("/"):
 script_path = args.script
 chunkload = args.chunkload
 debug = args.debug
-
-options = ""
-if chunkload:
-    options += " --chunkload"
-if debug:
-    options += " --debug"
+options = args.options
+print(options)
 
 params_set = set()
 n_test = 0
@@ -64,10 +65,6 @@ while n_test < N_TESTS:
         "nchan": random.choice(tests["nchan"]),
     }
     if tuple(params.values()) not in params_set:
-        call(
-            f"python {script_path} --feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=\"ALL\" -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']}"
-            + options,
-            shell=True,
-        )
+        call(f"sbatch -J randomsearch_{n_test} -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh '--feature=temporal --path={data_path} --save={save_path} --model-name=testoom_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}'", shell=True)
         params_set.add(tuple(params.values()))
         n_test += 1
