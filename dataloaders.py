@@ -100,7 +100,6 @@ def create_loaders(
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
-    logging.info(f"selected subjects: {subs}")
     N = len(subs)
     train_size = int(N * train_size)
 

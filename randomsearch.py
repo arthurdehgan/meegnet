@@ -65,6 +65,6 @@ while n_test < N_TESTS:
         "nchan": random.choice(tests["nchan"]),
     }
     if tuple(params.values()) not in params_set:
-        call(f"sbatch -J randomsearch_{n_test} -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh '--feature=temporal --path={data_path} --save={save_path} --model-name=testoom_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}'", shell=True)
+        call(f"sbatch -J randomsearch_{n_test} -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh '--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}'", shell=True)
         params_set.add(tuple(params.values()))
         n_test += 1
