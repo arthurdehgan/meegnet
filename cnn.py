@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from torch.autograd import Variable
 from scipy.io import savemat, loadmat
 from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
@@ -133,12 +134,12 @@ def train(
             optimizer.zero_grad()
             X, y = batch
 
-            y = y.view(-1).long().to(device)
-            X = X.view(-1, *net.input_size).float().to(device)
+            y = y.view(-1).to(device)
+            X = X.view(-1, *net.input_size).to(device)
 
             net.train()
             out = net.forward(X)
-            loss = criterion(out, y)
+            loss = criterion(out, Variable(y.long()))
             loss.backward()
             optimizer.step()
 
@@ -213,11 +214,11 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
         COUNTER = 0
         for batch in dataloader:
             X, y = batch
-            y = y.view(-1).long().to(device)
-            X = X.view(-1, *net.input_size).float().to(device)
+            y = y.view(-1).to(device)
+            X = X.view(-1, *net.input_size).to(device)
 
             out = net.forward(X)
-            loss = criterion(out, y)
+            loss = criterion(out, Variable(y.long()))
             acc = accuracy(out, y)
             n = y.size(0)
             LOSSES += loss.sum().data.cpu().numpy() * n
@@ -495,6 +496,7 @@ if __name__ == "__main__":
 
     nchan = 102
     if debug:
+        max_subj = 20
         logging.debug("ENTERING DEBUG MODE")
         dropout = 0.5
         dropout_option = "same"

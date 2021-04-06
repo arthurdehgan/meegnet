@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 from time import time
+import gc
 import os
 import torch
 import psutil
@@ -38,9 +39,6 @@ def create_dataset(data_df, data_path, ch_type, dtype="temporal", debug=False):
         chan_index = [0, 1]
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
-
-    if debug:
-        data_df = data_df[:200]
 
     meg_dataset = chunkedMegDataset(
         data_df=data_df,
@@ -93,10 +91,16 @@ def create_loaders(
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
     samples_df = pd.read_csv(f"{data_folder}trials_df_clean.csv", index_col=0)
-    subs = np.array(list(set(samples_df["subs"])))
+    subs = np.array(
+        samples_df.drop(["begin", "end", "sex"], axis=1)
+        .drop_duplicates(subset=["subs"])
+        .reset_index(drop=True)
+        .values.tolist()
+    ).flatten()
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
+    logging.info(f"selected subjects: {subs}")
     N = len(subs)
     train_size = int(N * train_size)
 
@@ -105,6 +109,9 @@ def create_loaders(
     test_size = remaining_size - valid_size
     train_index, test_index, valid_index = random_split(
         np.arange(N), [train_size, test_size, valid_size]
+    )
+    logging.info(
+        f"Using {N} subjects: {train_size} for train, {valid_size} for validation, and {test_size} for test"
     )
 
     bands = False
@@ -132,7 +139,10 @@ def create_loaders(
         .reset_index(drop=True)
     )
 
+    pin_memory = False
     if chunkload:
+        pin_memory = True
+        logging.info("Preparing Train Set")
         train_set = create_dataset(
             train_df,
             data_folder,
@@ -140,6 +150,7 @@ def create_loaders(
             dtype=dtype,
             debug=debug,
         )
+        logging.info("Preparing Validation Set")
         valid_set = create_dataset(
             valid_df,
             data_folder,
@@ -147,6 +158,7 @@ def create_loaders(
             dtype=dtype,
             debug=debug,
         )
+        logging.info("Preparing Test Set")
         test_set = create_dataset(
             test_df,
             data_folder,
@@ -156,8 +168,9 @@ def create_loaders(
         )
 
     else:
-        X_test, y_test = load_fn(
-            test_df,
+        logging.info("Loading Train Set")
+        X_train, y_train = load_fn(
+            train_df,
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
@@ -165,6 +178,7 @@ def create_loaders(
             debug=debug,
             printmem=printmem,
         )
+        logging.info("Loading Validation Set")
         X_valid, y_valid = load_fn(
             valid_df,
             dpath=data_folder,
@@ -174,8 +188,9 @@ def create_loaders(
             debug=debug,
             printmem=printmem,
         )
-        X_train, y_train = load_fn(
-            train_df,
+        logging.info("Loading Test Set")
+        X_test, y_test = load_fn(
+            test_df,
             dpath=data_folder,
             ch_type=ch_type,
             bands=bands,
@@ -192,19 +207,19 @@ def create_loaders(
         train_set,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     valid_loader = DataLoader(
         valid_set,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     test_loader = DataLoader(
         test_set,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
 
     return train_loader, valid_loader, test_loader
@@ -325,30 +340,30 @@ def load_data(
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
-    if debug:
-        dataframe = dataframe[:20]
-
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
         .drop_duplicates(subset=["subs"])
         .reset_index(drop=True)
     )
 
-    X = None
+    n_subj = len(subs_df)
+    X = np.empty(n_subj, dtype=object)
     y = []
-    # i = 0
-    logging.debug(f"Loading {len(subs_df)} subjects data")
+    logging.debug(f"Loading {n_subj} subjects data")
     if printmem:
         subj_sizes = []
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
-    for i, row in enumerate(dataframe.iterrows()):
+    for i, row in enumerate(subs_df.iterrows()):
         if printmem:
             usedmem = psutil.virtual_memory().used / 10 ** 9
-            if i % (len(dataframe) // 10) == 0:
-                logging.debug(
-                    f"Used memory: {usedmem:.3f} / {totmem:.3f} Go.",
-                )
+            memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
+            if n_subj > 10:
+                if i % (n_subj // 10) == 0:
+                    logging.debug(memstate)
+            else:
+                logging.debug(memstate)
+
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
             sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
@@ -372,12 +387,10 @@ def load_data(
             ]
 
         sub_data = np.array(sub_data)
-        X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
+        X[i] = sub_data
         y += [lab] * len(sub_data)
-        # y += [i] * len(sub_data)
-        # i += 1
     logging.info("Loading successfull\n")
-    return torch.Tensor(X).float(), torch.Tensor(y).long()
+    return torch.Tensor(np.concatenate(X, axis=0)), torch.Tensor(y)
 
 
 def load_subject(sub, data_path, data=None, timepoints=500, ch_type="all"):
