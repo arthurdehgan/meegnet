@@ -367,7 +367,7 @@ def load_data(
         try:
             sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
         except:
-            logging.warning("Warning: There was a problem loading subject ", sub)
+            logging.warning(f"Warning: There was a problem loading subject {sub}")
             continue
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)

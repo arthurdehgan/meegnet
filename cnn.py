@@ -282,7 +282,7 @@ class FullNet(customNet):
                 dropout1 = dropout * 2
                 dropout2 = dropout
             else:
-                logging.warning(f"{dropout_option} is not a valid option")
+                logging.warning("{} is not a valid option".format(dropout_option))
 
         layers = nn.ModuleList(
             [
@@ -697,7 +697,7 @@ if __name__ == "__main__":
             perfs.append((nw, bs, tpb, et))
 
         for x in sorted(perfs, key=lambda x: x[-1]):
-            logging.info(f"\n {x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
+            logging.info("\n{} {} {} {}".format(*x[:4])
 
     else:
         if torchsum:
