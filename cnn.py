@@ -542,7 +542,7 @@ if __name__ == "__main__":
             perfs.append((nw, bs, tpb, et))
 
         for x in sorted(perfs, key=lambda x: x[-1]):
-            logging.info("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
+            logging.info(f"\n{x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
 
     else:
         if torchsum:
@@ -609,9 +609,9 @@ if __name__ == "__main__":
         logging.info("Evaluating on valid set:")
         results = loadmat(model_filepath[:-2] + "mat")
         logging.info(
-            "loss: ", results["loss_score"], " // accuracy: ", results["acc_score"]
+            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
         )
-        logging.info("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
 
         # # Final testing
         # print("Evaluating on test set:")
@@ -697,7 +697,7 @@ if __name__ == "__main__":
             perfs.append((nw, bs, tpb, et))
 
         for x in sorted(perfs, key=lambda x: x[-1]):
-            logging.info("\n", (x[0], x[1], nt(x[2]), nt(x[3])))
+            logging.info(f"\n {x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
 
     else:
         if torchsum:
@@ -764,9 +764,9 @@ if __name__ == "__main__":
         logging.info("Evaluating on valid set:")
         results = loadmat(model_filepath[:-2] + "mat")
         logging.info(
-            "loss: ", results["loss_score"], " // accuracy: ", results["acc_score"]
+            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
         )
-        logging.info("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        logging.info("best epoch: {results['best_epoch']}/{results['n_epochs']}")
 
         # # Final testing
         # print("Evaluating on test set:")
