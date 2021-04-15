@@ -2,7 +2,7 @@ from subprocess import call
 import argparse
 import random
 
-N_TESTS = 100
+N_TESTS = 127
 
 tests = {
     "f": (3, 5, 7, 9, 12),
@@ -66,12 +66,10 @@ if not save_path.endswith("/"):
 script_path = args.script
 chunkload = args.chunkload
 options = args.options
-print(debug, local)
 
 params_set = set()
-n_test = 0
+n_test = 27
 while n_test < N_TESTS:
-    print(n_test, "RUNNING TEST")
     params = {
         "f": random.choice(tests["f"]),
         "linear": random.choice(tests["linear"]),
@@ -89,5 +87,4 @@ while n_test < N_TESTS:
             to_run += s_args + f"'{arguments}'"
         call(to_run, shell=True)
         params_set.add(tuple(params.values()))
-        print(n_test, "RUNNING DONE")
         n_test += 1
