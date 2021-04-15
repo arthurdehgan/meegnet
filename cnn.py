@@ -496,11 +496,11 @@ if __name__ == "__main__":
 
     nchan = 102
     if debug:
-        max_subj = 20
         logging.debug("ENTERING DEBUG MODE")
+        max_subj = 20
         dropout = 0.5
         dropout_option = "same"
-        patience = 2
+        patience = 1
 
     #########################
     ### preparing network ###
@@ -565,10 +565,7 @@ if __name__ == "__main__":
             printmem=printmem,
         )
 
-        if debug:
-            save = False
-            load = False
-        elif mode == "overwrite":
+        if mode == "overwrite":
             save = True
             load = False
         elif mode in ("continue", "evaluate"):
@@ -612,161 +609,7 @@ if __name__ == "__main__":
             f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
         )
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
-
-        # # Final testing
-        # print("Evaluating on test set:")
-        # tloss, tacc = evaluate(net, testloader)
-        # print("loss: ", tloss, " // accuracy: ", tacc)
-        # if save:
-        #     results = loadmat(model_filepath[:-2] + "mat")
-        #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
-        #     results["test_acc"] = tacc
-        #     results["test_loss"] = tloss
-        #     savemat(save_path + net.name + ".mat", results)
-
-    ##################
-    ### data types ###
-    ##################
-
-    if ch_type == "MAG":
-        n_channels = 102
-    elif ch_type == "GRAD":
-        n_channels = 204
-    elif ch_type == "ALL":
-        n_channels = 306
-    else:
-        raise (f"Error: invalid channel type: {ch_type}")
-
-    if features == "bins":
-        bands = False
-        trial_length = 241
-    if features == "bands":
-        bands = False
-        trial_length = 5
-    elif features == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
-
-    ###########################
-    ### learning parameters ###
-    ###########################
-
-    nchan = 102
-    if debug:
-        logging.debug("ENTERING DEBUG MODE")
-        dropout = 0.5
-        dropout_option = "same"
-        patience = 2
-
-    #########################
-    ### preparing network ###
-    #########################
-
-    input_size = (n_channels // 102, nchan, trial_length)
-
-    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
-    net = FullNet(
-        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}",
-        input_size,
-        filters,
-        nchan,
-        linear,
-        dropout,
-        dropout_option,
-    ).to(device)
-
-    if times:
-        # overrides default mode !
-        # tests different values of workers and batch sizes to check which is the fastest
-        num_workers = [16, 32, 64, 128]
-        batch_sizes = [16, 32]
-        perfs = []
-        for nw, bs in product(num_workers, batch_sizes):
-            tl, vl, _ = create_loaders(
-                data_path,
-                train_size,
-                bs,
-                max_subj,
-                ch_type,
-                data_type,
-                num_workers=nw,
-                debug=debug,
-                chunkload=chunkload,
-            )
-            tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
-            perfs.append((nw, bs, tpb, et))
-
-        for x in sorted(perfs, key=lambda x: x[-1]):
-            logging.info("\n{} {} {} {}".format(*x[:4])
-
-    else:
-        if torchsum:
-            logging.info(summary(net, input_size))
-        else:
-            logging.info(net)
-
-        # We create loaders and datasets (see dataloaders.py)
-        trainloader, validloader, testloader = create_loaders(
-            data_path,
-            train_size,
-            batch_size,
-            max_subj,
-            ch_type,
-            data_type,
-            seed=seed,
-            num_workers=num_workers,
-            chunkload=chunkload,
-            debug=debug,
-            printmem=printmem,
-        )
-
-        if debug:
-            save = False
-            load = False
-        elif mode == "overwrite":
-            save = True
-            load = False
-        elif mode in ("continue", "evaluate"):
-            save = True
-            load = True
-        else:
-            save = False
-            load = False
-
-        model_filepath = save_path + net.name + ".pt"
-        logging.info(net.name)
-        # Actual training (loading nework if existing and load option is True)
-        if mode != "evaluate":
-            train(
-                net,
-                trainloader,
-                validloader,
-                model_filepath,
-                save_model=save,
-                load_model=load,
-                debug=debug,
-                p=patience,
-                lr=learning_rate,
-                mode=mode,
-            )
-
-        # Loading best saved model
-        if os.path.exists(model_filepath):
-            _, net_state, _ = load_checkpoint(model_filepath)
-            net.load_state_dict(net_state)
-        else:
-            logging.warning(
-                f"Error: Can't evaluate model {model_filepath}, file not found."
-            )
-            exit()
-
-        # testing
-        logging.info("Evaluating on valid set:")
-        results = loadmat(model_filepath[:-2] + "mat")
-        logging.info(
-            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
-        )
-        logging.info("best epoch: {results['best_epoch']}/{results['n_epochs']}")
+        exit()
 
         # # Final testing
         # print("Evaluating on test set:")

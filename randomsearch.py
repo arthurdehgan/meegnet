@@ -29,6 +29,11 @@ parser.add_argument(
     help="The path where the data samples can be found.",
 )
 parser.add_argument(
+    "--local",
+    action="store_true",
+    help="if run in local don't use sbatch",
+)
+parser.add_argument(
     "--debug",
     action="store_true",
     help="debug mode, load less data and fixed learning rate.",
@@ -47,17 +52,26 @@ parser.add_argument(
 args = parser.parse_args()
 data_path = args.path
 save_path = args.save
+debug = args.debug
+local = args.local
+if debug:
+    N_TESTS = 1
+if local:
+    to_run = f"python cnn.py "
+else:
+    to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh "
+
 if not save_path.endswith("/"):
     save_path += "/"
 script_path = args.script
 chunkload = args.chunkload
-debug = args.debug
 options = args.options
-print(options)
+print(debug, local)
 
 params_set = set()
 n_test = 0
 while n_test < N_TESTS:
+    print(n_test, "RUNNING TEST")
     params = {
         "f": random.choice(tests["f"]),
         "linear": random.choice(tests["linear"]),
@@ -65,6 +79,15 @@ while n_test < N_TESTS:
         "nchan": random.choice(tests["nchan"]),
     }
     if tuple(params.values()) not in params_set:
-        call(f"sbatch -J randomsearch_{n_test} -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh '--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}'", shell=True)
+        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}"
+        if debug:
+            arguments += " --debug"
+        if local:
+            to_run += arguments
+        else:
+            s_args = f"-J randomsearch_{n_test} "
+            to_run += s_args + f"'{arguments}'"
+        call(to_run, shell=True)
         params_set.add(tuple(params.values()))
+        print(n_test, "RUNNING DONE")
         n_test += 1
