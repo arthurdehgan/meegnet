@@ -509,7 +509,7 @@ if __name__ == "__main__":
     # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
     net = FullNet(
         # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        f"{model_name}_dropout{dropout}_filter{filters}_lin{linear}_nchan{nchan}",
+        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
         input_size,
         filters,
         nchan,
