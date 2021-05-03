@@ -494,7 +494,6 @@ if __name__ == "__main__":
     ### learning parameters ###
     ###########################
 
-    nchan = 102
     if debug:
         logging.debug("ENTERING DEBUG MODE")
         max_subj = 20
@@ -506,12 +505,12 @@ if __name__ == "__main__":
     ### preparing network ###
     #########################
 
-    input_size = (n_channels // 102, nchan, trial_length)
+    input_size = (n_channels // 102, 102, trial_length)
 
     # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
     net = FullNet(
         # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}",
+        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
         input_size,
         filters,
         nchan,
