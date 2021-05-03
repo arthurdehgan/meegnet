@@ -2,12 +2,12 @@ from subprocess import call
 import argparse
 import random
 
-N_TESTS = 127
+N_TESTS = 100
 
 tests = {
-    "f": (3, 5, 7, 9, 12),
-    "linear": (100, 200, 400, 800, 1000),
-    "d": (0.25, 0.35, 0.5),
+    "f": (9, 12, 15),
+    "linear": (100, 200, 400, 800, 1600),
+    "d": (0.5),
     "nchan": (10, 25, 50, 100, 200),
 }
 
