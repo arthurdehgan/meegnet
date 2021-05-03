@@ -15,10 +15,6 @@ from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
 from parser import parser
 
-parser.add_argument(
-    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
-)
-
 
 def accuracy(y_pred, target):
     # Compute accuracy from 2 vectors of labels.
@@ -388,6 +384,10 @@ if __name__ == "__main__":
     ###############
     ### PARSING ###
     ###############
+
+    parser.add_argument(
+        "-f", "--filters", default=8, type=int, help="The size of the first convolution"
+    )
 
     args = parser.parse_args()
     data_path = args.path
