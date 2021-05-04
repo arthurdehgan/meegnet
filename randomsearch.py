@@ -56,10 +56,6 @@ debug = args.debug
 local = args.local
 if debug:
     N_TESTS = 1
-if local:
-    to_run = f"python cnn.py "
-else:
-    to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' randomsearch.sh "
 
 if not save_path.endswith("/"):
     save_path += "/"
@@ -81,10 +77,9 @@ while n_test < N_TESTS:
         if debug:
             arguments += " --debug"
         if local:
-            to_run += arguments
+            to_run = f"python cnn.py " + arguments
         else:
-            s_args = f"-J randomsearch_{n_test} "
-            to_run += s_args + f"'{arguments}'"
+            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
         call(to_run, shell=True)
         params_set.add(tuple(params.values()))
         n_test += 1
