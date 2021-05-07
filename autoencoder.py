@@ -238,15 +238,15 @@ class AutoEncoder(CustomNet):
         lin_size = input_size[0] * input_size[1] * input_size[2]
 
         self.encoder = nn.Sequential(
-            nn.Linear(lin_size, 1024),
+            nn.Linear(lin_size, 4096),
             nn.ReLU(True),
-            nn.Linear(1024, 512),
+            nn.Linear(4096, 2048),
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(512, 1024),
+            nn.Linear(2048, 4096),
             nn.ReLU(True),
-            nn.Linear(1024, lin_size),
+            nn.Linear(4096, lin_size),
             nn.Tanh(),
         )
 
