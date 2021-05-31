@@ -84,7 +84,14 @@ def create_loaders(
     num_workers=0,
     chunkload=True,
     printmem=False,
+    exclude=(1, 1, 1),
 ):
+    """create dataloaders iterators.
+
+    exclude allows to only take one of the three outputs without loading data for the other loaders.
+    by default exclude=(1,1,1) will load data for train, valid and test. if set to (0,1,0) It will
+    only load data for the validation set and will return None for the others.
+    """
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
@@ -106,9 +113,7 @@ def create_loaders(
     remaining_size = N - train_size
     valid_size = int(remaining_size / 2)
     test_size = remaining_size - valid_size
-    train_index, test_index, valid_index = random_split(
-        np.arange(N), [train_size, test_size, valid_size]
-    )
+    indexes = random_split(np.arange(N), [train_size, valid_size, test_size])
     logging.info(
         f"Using {N} subjects: {train_size} for train, {valid_size} for validation, and {test_size} for test"
     )
@@ -122,106 +127,64 @@ def create_loaders(
     elif dtype == "both":
         load_fn = load_data
 
-    train_df = (
-        samples_df.loc[samples_df["subs"].isin(subs[train_index])]
+    dataframes = [
+        samples_df.loc[samples_df["subs"].isin(subs[index])]
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
-    )
-    valid_df = (
-        samples_df.loc[samples_df["subs"].isin(subs[valid_index])]
-        .sample(frac=1, random_state=seed)
-        .reset_index(drop=True)
-    )
-    test_df = (
-        samples_df.loc[samples_df["subs"].isin(subs[test_index])]
-        .sample(frac=1, random_state=seed)
-        .reset_index(drop=True)
-    )
+        if exclude[i] == 1
+        else None
+        for i, index in enumerate(indexes)
+    ]
 
     pin_memory = False
     if chunkload:
         pin_memory = True
-        logging.info("Preparing Train Set")
-        train_set = create_dataset(
-            train_df,
-            data_folder,
-            ch_type,
-            dtype=dtype,
-            debug=debug,
-        )
-        logging.info("Preparing Validation Set")
-        valid_set = create_dataset(
-            valid_df,
-            data_folder,
-            ch_type,
-            dtype=dtype,
-            debug=debug,
-        )
-        logging.info("Preparing Test Set")
-        test_set = create_dataset(
-            test_df,
-            data_folder,
-            ch_type,
-            dtype=dtype,
-            debug=debug,
-        )
+        datasets = [
+            create_dataset(
+                df,
+                data_folder,
+                ch_type,
+                dtype=dtype,
+                debug=debug,
+            )
+            if exclude[i] == 1
+            else None
+            for i, df in enumerate(dataframes)
+        ]
 
     else:
         logging.info("Loading Train Set")
-        X_train, y_train = load_fn(
-            train_df,
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            dtype=dtype,
-            debug=debug,
-            printmem=printmem,
-        )
-        logging.info("Loading Validation Set")
-        X_valid, y_valid = load_fn(
-            valid_df,
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            dtype=dtype,
-            debug=debug,
-            printmem=printmem,
-        )
-        logging.info("Loading Test Set")
-        X_test, y_test = load_fn(
-            test_df,
-            dpath=data_folder,
-            ch_type=ch_type,
-            bands=bands,
-            dtype=dtype,
-            debug=debug,
-            printmem=printmem,
-        )
-        train_set = TensorDataset(X_train, y_train)
-        valid_set = TensorDataset(X_valid, y_valid)
-        test_set = TensorDataset(X_test, y_test)
+        datasets = [
+            TensorDataset(
+                *load_fn(
+                    df,
+                    dpath=data_folder,
+                    ch_type=ch_type,
+                    bands=bands,
+                    dtype=dtype,
+                    debug=debug,
+                    printmem=printmem,
+                )
+            )
+            if exclude[i] == 1
+            else None
+            for i, df in enumerate(dataframes)
+        ]
 
     # loading data with num_workers=0 is faster that using more because of IO read speeds on my machine.
-    train_loader = DataLoader(
-        train_set,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-    )
-    valid_loader = DataLoader(
-        valid_set,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-    )
-    test_loader = DataLoader(
-        test_set,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-    )
+    loaders = [
+        DataLoader(
+            st,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
+        if exclude[i] == 1
+        else None
+        for i, st in enumerate(datasets)
+    ]
 
-    return train_loader, valid_loader, test_loader
+    return loaders
 
 
 class chunkedMegDataset(Dataset):

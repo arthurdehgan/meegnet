@@ -2,7 +2,7 @@ import os
 import gc
 import sys
 import logging
-from copy as deepcopy
+from copy import deepcopy
 from itertools import product
 from time import time
 import torch
@@ -234,7 +234,7 @@ class customNet(nn.Module):
         logging.info(model_name)
 
     def _get_lin_size(self, layers):
-        return nn.Sequential(*layers)(torch.zeros((1, *input_size))).shape[-1]
+        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
 
     def forward(self, x):
         return self.model(x)
@@ -259,7 +259,7 @@ class FullNet(customNet):
         model_name,
         input_size,
         filter_size=7,
-        n_channels=5,
+        nchan=5,
         n_linear=150,
         dropout=0.25,
         dropout_option="same",
@@ -292,7 +292,17 @@ class FullNet(customNet):
                 nn.Dropout(dropout),
             ]
         )
-        self.feature_extraction = nn.Sequential(deepcopy(layers))
+        lin_size = self._get_lin_size(layers)
+        layers.extend(
+            nn.ModuleList(
+                [
+                    nn.Linear(lin_size, n_linear),
+                    # nn.Linear(n_linear, n_linear/2),
+                ]
+            )
+        )
+        # Previous version: comment out this line in order to use previous state dicts
+        self.feature_extraction = nn.Sequential(*layers)
 
         # layers = nn.ModuleList(
         #     [
@@ -336,19 +346,25 @@ class FullNet(customNet):
         # nn.ReLU(),
         # Flatten(),
 
-        lin_size = self._get_lin_size(layers)
-        layers.extend(
-            (
-                # nn.Dropout(dropout1),
-                # nn.Linear(lin_size, n_linear),
-                nn.Linear(lin_size, n_linear),
-                nn.Linear(n_linear, 2),
-                # nn.Dropout(dropout2),
-                # nn.Linear(n_linear, 2),
+        # Previous version: unceomment this line and comment the next in order to use previous
+        # state dicts Don't forget to remove unpacking (*)
+        # layers.extend(
+        self.classif = nn.Sequential(
+            *nn.ModuleList(
+                [
+                    nn.Linear(n_linear, 2),
+                    # nn.Linear(n_linear/2, 2),
+                ]
             )
         )
+        # Previous version: uncomment this line and comment out forward method in order to use
+        # previous state dicts
+        # self.model = nn.Sequential(*layers)
 
-        self.model = nn.Sequential(*layers)
+        # self.model = lambda x: self.classif(self.feature_extraction(x))
+
+    def forward(self, x):
+        return self.classif(self.feature_extraction(x))
 
 
 class vanPutNet(customNet):
