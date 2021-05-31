@@ -2,6 +2,7 @@ import os
 import gc
 import sys
 import logging
+from copy as deepcopy
 from itertools import product
 from time import time
 import torch
@@ -14,6 +15,7 @@ from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
 from parser import parser
+
 
 def accuracy(y_pred, target):
     # Compute accuracy from 2 vectors of labels.
@@ -290,6 +292,7 @@ class FullNet(customNet):
                 nn.Dropout(dropout),
             ]
         )
+        self.feature_extraction = nn.Sequential(deepcopy(layers))
 
         # layers = nn.ModuleList(
         #     [
