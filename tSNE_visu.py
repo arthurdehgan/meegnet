@@ -156,7 +156,7 @@ if __name__ == "__main__":
         seed=seed,
         num_workers=num_workers,
         chunkload=chunkload,
-        exclude=(0, 1, 0),
+        include=(0, 1, 0),
     )
 
     model_filepath = save_path + net.name + ".pt"

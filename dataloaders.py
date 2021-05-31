@@ -84,12 +84,12 @@ def create_loaders(
     num_workers=0,
     chunkload=True,
     printmem=False,
-    exclude=(1, 1, 1),
+    include=(1, 1, 1),
 ):
     """create dataloaders iterators.
 
-    exclude allows to only take one of the three outputs without loading data for the other loaders.
-    by default exclude=(1,1,1) will load data for train, valid and test. if set to (0,1,0) It will
+    include allows to only take one of the three outputs without loading data for the other loaders.
+    by default include=(1,1,1) will load data for train, valid and test. if set to (0,1,0) It will
     only load data for the validation set and will return None for the others.
     """
     rng = np.random.RandomState(seed)
@@ -131,7 +131,7 @@ def create_loaders(
         samples_df.loc[samples_df["subs"].isin(subs[index])]
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
-        if exclude[i] == 1
+        if include[i] == 1
         else None
         for i, index in enumerate(indexes)
     ]
@@ -147,7 +147,7 @@ def create_loaders(
                 dtype=dtype,
                 debug=debug,
             )
-            if exclude[i] == 1
+            if include[i] == 1
             else None
             for i, df in enumerate(dataframes)
         ]
@@ -166,7 +166,7 @@ def create_loaders(
                     printmem=printmem,
                 )
             )
-            if exclude[i] == 1
+            if include[i] == 1
             else None
             for i, df in enumerate(dataframes)
         ]
@@ -179,7 +179,7 @@ def create_loaders(
             num_workers=num_workers,
             pin_memory=pin_memory,
         )
-        if exclude[i] == 1
+        if include[i] == 1
         else None
         for i, st in enumerate(datasets)
     ]

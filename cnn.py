@@ -607,6 +607,7 @@ if __name__ == "__main__":
                 p=patience,
                 lr=learning_rate,
                 mode=mode,
+                include=(1, 1, 0),
             )
 
         # Loading best saved model
