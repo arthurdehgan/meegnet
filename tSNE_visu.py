@@ -166,14 +166,19 @@ if __name__ == "__main__":
     net.load_state_dict(net_state)
 
     net.eval()
-    for batch in validloader:
+    n_samples = len(validloader)
+    features = []
+    targets = []
+    for i, batch in enumerate(validloader):
         X, y = batch
-        y = y.view(-1).to(device)
         X = X.view(-1, *net.input_size).to(device)
-        out = net.feature_extraction(X)
-        break  # TODO this is for testing ! remove after testing
+        features.append(net.feature_extraction(X))
+        targets.append(y)
 
+    targets = torch.cat(targets, 0)
     X_emb = TSNE(
         n_components=2, perplexity=30, n_iter=1000, verbose=True
-    ).fit_transform(out)
-    np.save("TSNE.npy", X_emb)
+    ).fit_transform(torch.cat(features, 0))
+    savemat(
+        save_path + f"tSNE_{net.name}.mat", {"embedings": X_emb, "targets": targets}
+    )
