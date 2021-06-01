@@ -580,6 +580,7 @@ if __name__ == "__main__":
             chunkload=chunkload,
             debug=debug,
             printmem=printmem,
+            include=(1, 1, 0),
         )
 
         if mode == "overwrite":
@@ -607,7 +608,6 @@ if __name__ == "__main__":
                 p=patience,
                 lr=learning_rate,
                 mode=mode,
-                include=(1, 1, 0),
             )
 
         # Loading best saved model
