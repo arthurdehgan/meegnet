@@ -4,13 +4,14 @@ import sys
 import logging
 from itertools import product
 from time import time
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from torch.autograd import Variable
+from sklearn.manifold import TSNE
 from scipy.io import savemat, loadmat
-from tsne_torch import TorchTSNE as TSNE
 from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
@@ -65,9 +66,11 @@ if __name__ == "__main__":
     ### Starting log ###
     ####################
 
+    net_name = f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
+
     if log:
         logging.basicConfig(
-            filename=save_path + model_name + ".log",
+            filename=save_path + net_name + ".log",
             filemode="a",
             level=logging.DEBUG,
             format="%(asctime)s %(message)s",
@@ -130,7 +133,7 @@ if __name__ == "__main__":
     input_size = (n_channels // 102, 102, trial_length)
 
     net = FullNet(
-        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        net_name,
         input_size,
         filters,
         nchan,
@@ -145,40 +148,57 @@ if __name__ == "__main__":
     else:
         logging.info(net)
 
-    # We create loaders and datasets (see dataloaders.py)
-    _, validloader, _ = create_loaders(
-        data_path,
-        train_size,
-        batch_size,
-        max_subj,
-        ch_type,
-        data_type,
-        seed=seed,
-        num_workers=num_workers,
-        chunkload=chunkload,
-        include=(0, 1, 0),
-    )
+    file_exists = False
+    if os.path.exists(save_path + f"tSNE_{net_name}.mat"):
+        logging.warning("tSNE map for this architecture already exists")
+        file_exists = True
 
-    model_filepath = save_path + net.name + ".pt"
-    logging.info(net.name)
+    if mode == "overwrite" or not file_exists:
+        # We create loaders and datasets (see dataloaders.py)
+        _, validloader, _ = create_loaders(
+            data_path,
+            train_size,
+            batch_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            num_workers=num_workers,
+            chunkload=chunkload,
+            include=(0, 1, 0),
+        )
 
-    _, net_state, _ = load_checkpoint(model_filepath)
-    net.load_state_dict(net_state)
+        model_filepath = save_path + f"{net_name}.pt"
+        logging.info(net.name)
 
-    net.eval()
-    n_samples = len(validloader)
-    features = []
-    targets = []
-    for i, batch in enumerate(validloader):
-        X, y = batch
-        X = X.view(-1, *net.input_size).to(device)
-        features.append(net.feature_extraction(X))
-        targets.append(y)
+        _, net_state, _ = load_checkpoint(model_filepath)
+        net.load_state_dict(net_state)
 
-    targets = torch.cat(targets, 0)
-    X_emb = TSNE(
-        n_components=2, perplexity=30, n_iter=1000, verbose=True
-    ).fit_transform(torch.cat(features, 0))
-    savemat(
-        save_path + f"tSNE_{net.name}.mat", {"embedings": X_emb, "targets": targets}
-    )
+        net.eval()
+        n_samples = len(validloader)
+        features = []
+        targets = []
+        for i, batch in enumerate(validloader):
+            X, y = batch
+            X = X.view(-1, *net.input_size).to(device)
+            features.append(net.feature_extraction(X).cpu().detach().numpy())
+            targets.append(y.cpu().numpy())
+
+        targets = np.concatenate(targets, 0)
+        X_emb = TSNE().fit_transform(np.concatenate(features))
+        savemat(
+            save_path + f"tSNE_{net_name}.mat", {"embedings": X_emb, "targets": targets}
+        )
+
+    elif mode == "continue":
+        dc = loadmat(save_path + f"tSNE_{net_name}.mat")
+        X_emb = dc["embedings"]
+        targets = dc["targets"].flatten()
+
+    else:
+        logging.warning("mode argument is not correct for this function. Exiting...")
+        exit()
+
+    sns.set(rc={"figure.figsize": (11.7, 8.27)})
+    plot = sns.scatterplot(X_emb[:, 0], X_emb[:, 1], hue=targets, legend="full")
+    plot.figure.savefig(save_path + f"tSNE_{net_name}.png")
