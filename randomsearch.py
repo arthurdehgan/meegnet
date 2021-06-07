@@ -5,10 +5,10 @@ import random
 N_TESTS = 100
 
 tests = {
-    "f": (9, 12, 15),
-    "linear": (100, 200, 400, 800, 1600),
-    "d": (0.5),
-    "nchan": (10, 25, 50, 100, 200),
+    "f": (12, 18, 24),
+    "linear": (400, 800, 1600),
+    "d": (0.5, 0.5),
+    "nchan": (25, 50, 100),
 }
 
 parser = argparse.ArgumentParser()

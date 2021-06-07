@@ -297,7 +297,7 @@ class FullNet(customNet):
             nn.ModuleList(
                 [
                     nn.Linear(lin_size, n_linear),
-                    nn.Linear(n_linear, n_linear / 2),
+                    nn.Linear(n_linear, int(n_linear / 2)),
                 ]
             )
         )
@@ -353,7 +353,7 @@ class FullNet(customNet):
             *nn.ModuleList(
                 [
                     # nn.Linear(n_linear, 2),
-                    nn.Linear(n_linear / 2, 2),
+                    nn.Linear(int(n_linear / 2), 2),
                 ]
             )
         )
