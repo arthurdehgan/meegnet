@@ -174,7 +174,7 @@ if __name__ == "__main__":
                 )
                 targets.append(target.cpu().numpy())
 
-        gbps = torch.cat(gbps).numpy()
-        print(gbps[0])
-        print(gbps.shape)
-        savemat(save_path + f"gbp_{net_name}.mat", {"gbp": gbps, "targets": targets})
+            gbps = torch.cat(gbps).numpy()
+            savemat(
+                save_path + f"gbp_{net_name}.mat", {"gbp": gbps, "targets": targets}
+            )
