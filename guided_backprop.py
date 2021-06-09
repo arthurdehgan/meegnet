@@ -167,10 +167,14 @@ if __name__ == "__main__":
         for i, batch in enumerate(validloader):
             X, y = batch
             X = X.view(-1, *net.input_size).to(device)
-            for single_trial, label in zip(X, y):
+            y = y.to(torch.int64).to(device)
+            for trial, target in zip(X, y):
                 gbps.append(
-                    gbp.attribute(torch.unsqueeze(single_trial, 0).float(), label)
+                    gbp.attribute(torch.unsqueeze(trial.float(), 0), target).cpu()
                 )
-                targets.append(label)
+                targets.append(target.cpu().numpy())
 
+        gbps = torch.cat(gbps).numpy()
+        print(gbps[0])
+        print(gbps.shape)
         savemat(save_path + f"gbp_{net_name}.mat", {"gbp": gbps, "targets": targets})
