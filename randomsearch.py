@@ -64,7 +64,7 @@ chunkload = args.chunkload
 options = args.options
 
 params_set = set()
-n_test = 27
+n_test = 0
 while n_test < N_TESTS:
     params = {
         "f": random.choice(tests["f"]),
