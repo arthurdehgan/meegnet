@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     if log:
         logging.basicConfig(
-            filename=save_path +  f"tSNE_{net_name}.log",
+            filename=save_path + f"tSNE_{net_name}.log",
             filemode="a",
             level=logging.DEBUG,
             format="%(asctime)s %(message)s",

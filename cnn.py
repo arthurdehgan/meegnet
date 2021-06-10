@@ -352,7 +352,7 @@ class FullNet(customNet):
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
-                    # nn.Linear(n_linear, 2),
+                    nn.Linear(n_linear, 2),
                     nn.Linear(int(n_linear / 2), 2),
                 ]
             )
