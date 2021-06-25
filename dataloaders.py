@@ -85,7 +85,7 @@ def create_loaders(
     chunkload=True,
     printmem=False,
     include=(1, 1, 1),
-    age=(0, 100),
+    ages=(0, 100),
 ):
     """create dataloaders iterators.
 
@@ -111,7 +111,7 @@ def create_loaders(
     )
 
     subs = subs.merge(ages_df[ages_df["subs"].isin(subs["subs"])].dropna(), "left")
-    subs = np.array(subs[subs["age"].between(*age)].drop(["age"], axis=1).subs)
+    subs = np.array(subs[subs["age"].between(*ages)].drop(["age"], axis=1).subs)
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
