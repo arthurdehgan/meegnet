@@ -243,15 +243,6 @@ class customNet(nn.Module):
         if not filepath.endswith("/"):
             filepath += "/"
 
-        orig_stdout = sys.stdout
-        with open(filepath + self.name + ".txt", "a") as f:
-            sys.stdout = f
-            if torchsum:
-                summary(self, (input_size))
-            else:
-                logging.info(self)
-            sys.stdout = orig_stdout
-
 
 class FullNet(customNet):
     def __init__(
@@ -436,6 +427,7 @@ if __name__ == "__main__":
     learning_rate = args.lr
     log = args.log
     printmem = args.printmem
+    ages = (args.age_min, args.age_max)
 
     ####################
     ### Starting log ###
@@ -538,6 +530,7 @@ if __name__ == "__main__":
     ).to(device)
 
     if times:
+        # OBSOLETE: DO NOT WORK ANYMORE, WILL CAUSE CRASHES TODO
         # overrides default mode !
         # tests different values of workers and batch sizes to check which is the fastest
         num_workers = [16, 32, 64, 128]
@@ -562,10 +555,6 @@ if __name__ == "__main__":
             logging.info(f"\n{x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
 
     else:
-        if torchsum:
-            logging.info(summary(net, input_size))
-        else:
-            logging.info(net)
 
         # We create loaders and datasets (see dataloaders.py)
         trainloader, validloader, testloader = create_loaders(
@@ -581,7 +570,14 @@ if __name__ == "__main__":
             debug=debug,
             printmem=printmem,
             include=(1, 1, 0),
+            ages=ages,
         )
+
+        if torchsum:
+            # TODO BUG: error with dumensions...
+            logging.info(summary(net, input_size))
+        else:
+            logging.info(net)
 
         if mode == "overwrite":
             save = True

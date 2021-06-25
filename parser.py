@@ -66,6 +66,16 @@ parser.add_argument(
     help="maximum number of subjects to use (1000 uses all subjects)",
 )
 parser.add_argument(
+    "--age-min",
+    default=1,
+    help="The minimum age of the subjects to be included in the learning and testing process",
+)
+parser.add_argument(
+    "--age-max",
+    default=100,
+    help="The maximum age of the subjects to be included in the learning and testing process",
+)
+parser.add_argument(
     "-e",
     "--elec",
     default="MAG",

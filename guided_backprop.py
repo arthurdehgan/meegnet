@@ -41,6 +41,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     patience = args.patience
     log = args.log
+    ages = (args.age_min, args.age_max)
 
     #####################
     ### PARSER CHECKS ###
@@ -153,6 +154,7 @@ if __name__ == "__main__":
             num_workers=num_workers,
             chunkload=chunkload,
             include=(0, 1, 0),
+            ages=ages,
         )
 
         model_filepath = save_path + f"{net_name}.pt"
