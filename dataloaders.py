@@ -85,6 +85,7 @@ def create_loaders(
     chunkload=True,
     printmem=False,
     include=(1, 1, 1),
+    age=(0, 100),
 ):
     """create dataloaders iterators.
 
@@ -98,12 +99,19 @@ def create_loaders(
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
     samples_df = pd.read_csv(f"{data_folder}trials_df_clean.csv", index_col=0)
-    subs = np.array(
+    ages_df = (
+        pd.read_csv(f"{data_folder}clean_participant_new.csv", index_col=0)
+        .rename(columns={"participant_id": "subs"})
+        .drop(["hand", "sex_text", "sex"], axis=1)
+    )
+    subs = (
         samples_df.drop(["begin", "end", "sex"], axis=1)
         .drop_duplicates(subset=["subs"])
         .reset_index(drop=True)
-        .values.tolist()
-    ).flatten()
+    )
+
+    subs = subs.merge(ages_df[ages_df["subs"].isin(subs["subs"])].dropna(), "left")
+    subs = np.array(subs[subs["age"].between(*age)].drop(["age"], axis=1).subs)
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
