@@ -93,6 +93,7 @@ def create_loaders(
     by default include=(1,1,1) will load data for train, valid and test. if set to (0,1,0) It will
     only load data for the validation set and will return None for the others.
     """
+    ages = (int(ages[0]), int(ages[1]))
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
