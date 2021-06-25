@@ -279,19 +279,24 @@ class FullNet(customNet):
                 nn.ReLU(),
                 # Explore different stride and maybe dilation parameters:
                 nn.Conv2d(nchan, nchan, (1, filter_size)),
+                # nn.ReLU()
                 Flatten(),
                 nn.Dropout(dropout),
             ]
         )
         lin_size = self._get_lin_size(layers)
-        layers.extend(
-            nn.ModuleList(
-                [
-                    nn.Linear(lin_size, n_linear),
-                    nn.Linear(n_linear, int(n_linear / 2)),
-                ]
-            )
-        )
+
+        # 2606 Somehow, these linear layers were added in the feature extraction, this is wrong
+        # and i don't remember when or why i would have done that, probably a copy pase mistake
+        # layers.extend(
+        #     nn.ModuleList(
+        #         [
+        #             nn.Linear(lin_size, n_linear),
+        #             nn.Linear(n_linear, int(n_linear / 2)),
+        #         ]
+        #     )
+        # )
+
         # Previous version: comment out this line in order to use previous state dicts
         self.feature_extraction = nn.Sequential(*layers)
 
@@ -343,7 +348,7 @@ class FullNet(customNet):
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
-                    nn.Linear(n_linear, 2),
+                    nn.Linear(lin_size, int(n_linear / 2)),
                     nn.Linear(int(n_linear / 2), 2),
                 ]
             )
@@ -351,8 +356,6 @@ class FullNet(customNet):
         # Previous version: uncomment this line and comment out forward method in order to use
         # previous state dicts
         # self.model = nn.Sequential(*layers)
-
-        # self.model = lambda x: self.classif(self.feature_extraction(x))
 
     def forward(self, x):
         return self.classif(self.feature_extraction(x))
@@ -574,7 +577,6 @@ if __name__ == "__main__":
         )
 
         if torchsum:
-            # TODO BUG: error with dumensions...
             logging.info(summary(net, input_size))
         else:
             logging.info(net)
