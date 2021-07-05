@@ -1,29 +1,23 @@
 import os
-import gc
 import sys
 import logging
-from itertools import product
-from time import time
 import seaborn as sns
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import numpy as np
-from torch.autograd import Variable
 from sklearn.manifold import TSNE
 from scipy.io import savemat, loadmat
-from utils import nice_time as nt
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
-from parser import parser
-from cnn import FullNet, load_checkpoint
+from parsing import parser
+from utils import load_checkpoint
+from network import FullNet
 
 
 if __name__ == "__main__":
 
-    ###############
-    ### PARSING ###
-    ###############
+    ###########
+    # PARSING #
+    ###########
 
     parser.add_argument(
         "-f", "--filters", default=8, type=int, help="The size of the first convolution"
@@ -52,9 +46,9 @@ if __name__ == "__main__":
     log = args.log
     ages = (args.age_min, args.age_max)
 
-    #####################
-    ### PARSER CHECKS ###
-    #####################
+    #################
+    # PARSER CHECKS #
+    #################
 
     assert data_path is not None, "Empty data_path argument!"
     assert save_path is not None, "Empty save_path argument!"
@@ -63,9 +57,9 @@ if __name__ == "__main__":
     if not save_path.endswith("/"):
         save_path += "/"
 
-    ####################
-    ### Starting log ###
-    ####################
+    ################
+    # Starting log #
+    ################
 
     net_name = f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
 
@@ -84,9 +78,9 @@ if __name__ == "__main__":
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
 
-    ###########################
-    ### Torchsummary checks ###
-    ###########################
+    #######################
+    # Torchsummary checks #
+    #######################
 
     torchsum = True
     try:
@@ -95,9 +89,9 @@ if __name__ == "__main__":
         logging.warning("Warning: Error loading torchsummary")
         torchsum = False
 
-    #########################
-    ### CUDA verification ###
-    #########################
+    #####################
+    # CUDA verification #
+    #####################
 
     if torch.cuda.is_available():
         device = "cuda"
@@ -105,9 +99,9 @@ if __name__ == "__main__":
         logging.warning("Warning: gpu device not available")
         device = "cpu"
 
-    ##################
-    ### data types ###
-    ##################
+    ##############
+    # data types #
+    ##############
 
     if ch_type == "MAG":
         n_channels = 102
@@ -116,7 +110,7 @@ if __name__ == "__main__":
     elif ch_type == "ALL":
         n_channels = 306
     else:
-        raise (f"Error: invalid channel type: {ch_type}")
+        raise f"Error: invalid channel type: {ch_type}"
 
     if features == "bins":
         bands = False
@@ -127,9 +121,9 @@ if __name__ == "__main__":
     elif features == "temporal":
         trial_length = TIME_TRIAL_LENGTH
 
-    #########################
-    ### preparing network ###
-    #########################
+    #####################
+    # preparing network #
+    #####################
 
     input_size = (n_channels // 102, 102, trial_length)
 
@@ -173,8 +167,8 @@ if __name__ == "__main__":
         model_filepath = save_path + f"{net_name}.pt"
         logging.info(net.name)
 
-        # _, net_state, _ = load_checkpoint(model_filepath)
-        # net.load_state_dict(net_state)
+        _, net_state, _ = load_checkpoint(model_filepath)
+        net.load_state_dict(net_state)
 
         net.eval()
         n_samples = len(validloader)
@@ -199,7 +193,7 @@ if __name__ == "__main__":
 
     else:
         logging.warning("mode argument is not correct for this function. Exiting...")
-        exit()
+        sys.exit()
 
     sns.set(rc={"figure.figsize": (11.7, 8.27)})
     plot = sns.scatterplot(X_emb[:, 0], X_emb[:, 1], hue=targets, legend="full")

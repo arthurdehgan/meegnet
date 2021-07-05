@@ -1,10 +1,8 @@
 from __future__ import print_function, division
-from time import time
-import gc
 import os
+import logging
 import torch
 import psutil
-import logging
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
@@ -252,10 +250,14 @@ class chunkedMegDataset(Dataset):
         return sample
 
 
-def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
-    """Loading psd values, subject by subject. Still viable, takes some time
+def load_freq_data(
+    dataframe, dpath, ch_type="MAG", bands=True, debug=False, printmem=False
+):
+    """[Might not work (old)] Loading psd values, subject by subject. Still viable, takes some time
     but data is small, so not too much. Might need repairing as code has changed
     a lot since last time this function was used.
+
+    printmem added for compatibility purposes.
     """
     if ch_type == "MAG":
         chan_index = [2]
@@ -268,7 +270,7 @@ def load_freq_data(dataframe, dpath, ch_type="MAG", bands=True, debug=False):
         # Not currently working
         print("ENTERING DEBUG MODE")
         nb = 5 if bands else 241
-        dummy = np.zeros((25000, len(elec_index), nb))
+        dummy = np.zeros((25000, len(chan_index), nb))
         return torch.Tensor(dummy).float(), torch.Tensor(dummy).float()
 
     X = None
@@ -321,7 +323,7 @@ def load_data(
     y = []
     logging.debug(f"Loading {n_subj} subjects data")
     if printmem:
-        subj_sizes = []
+        # subj_sizes = [] # assigned but never used ?
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
     for i, row in enumerate(subs_df.iterrows()):
