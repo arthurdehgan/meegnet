@@ -63,7 +63,7 @@ class FullNet(CustomNet):
                 nn.ReLU(),
                 # Explore different stride and maybe dilation parameters:
                 nn.Conv2d(nchan, nchan, (1, filter_size)),
-                # nn.ReLU()
+                nn.ReLU(),
                 Flatten(),
                 nn.Dropout(dropout),
             ]
