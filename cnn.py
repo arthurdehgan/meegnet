@@ -1,230 +1,19 @@
-import os
-import gc
-import sys
-import logging
-from copy import deepcopy
 from itertools import product
-from time import time
+import os
+import logging
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import numpy as np
-from torch.autograd import Variable
-from scipy.io import savemat, loadmat
-from utils import nice_time as nt
+from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
-from parser import parser
 from network import FullNet
-
-
-def accuracy(y_pred, target):
-    # Compute accuracy from 2 vectors of labels.
-    correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
-    return correct / len(target)
-
-
-def load_checkpoint(filename):
-    # Function to load a network state from a filename.
-    logging.info("=> loading checkpoint '{}'".format(filename))
-    checkpoint = torch.load(filename)
-    start_epoch = checkpoint["epoch"]
-    model_state = checkpoint["state_dict"]
-    optimizer_state = checkpoint["optimizer"]
-    return start_epoch, model_state, optimizer_state
-
-
-def save_checkpoint(state, filename="checkpoint.pth.tar"):
-    # Saves a checkpoint of the network
-    torch.save(state, filename)
-
-
-def train(
-    net,
-    trainloader,
-    validloader,
-    model_filepath,
-    criterion=nn.CrossEntropyLoss(),
-    optimizer=optim.Adam,
-    save_model=False,
-    load_model=False,
-    debug=False,
-    timing=False,
-    mode="overwrite",
-    p=20,
-    lr=0.00001,
-):
-    # The train function trains and evaluates the network multiple times and prints the
-    # loss and accuracy for each batch and each epoch. Everything is saved in a dictionnary
-    # with the best checkpoint of the network.
-
-    if debug:
-        optimizer = optimizer(net.parameters())
-    else:
-        optimizer = optimizer(net.parameters(), lr=lr)
-
-    # Load if asked and if the checkpoint exists in the specified path
-    epoch = 0
-    if load_model and os.path.exists(model_filepath):
-        epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
-        net.load_state_dict(net_state)
-        optimizer.load_state_dict(optimizer_state)
-        results = loadmat(model_filepath[:-2] + "mat")
-        best_vacc = results["acc_score"]
-        best_vloss = results["loss_score"]
-        valid_accs = results["acc"]
-        train_accs = results["train_acc"]
-        valid_losses = results["valid_loss"]
-        train_losses = results["train_loss"]
-        best_epoch = results["best_epoch"]
-        epoch = results["n_epochs"]
-        try:  # For backward compatibility purposes
-            if mode == "continue":
-                j = 0
-                lpatience = patience
-            else:
-                j = results["current_patience"]
-                lpatience = results["patience"]
-        except:
-            j = 0
-            lpatience = patience
-
-        if lpatience != patience:
-            logging.warning(
-                f"Warning: current patience ({patience}) is different from loaded patience ({lpatience})."
-            )
-            answer = input("Would you like to continue anyway ? (y/n)")
-            while answer not in ["y", "n"]:
-                answer = input("Would you like to continue anyway ? (y/n)")
-            if answer == "n":
-                exit()
-
-    elif load_model:
-        logging.warning(
-            f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
-        )
-        j = 0
-
-    else:
-        j = 0
-
-    train_accs = []
-    valid_accs = []
-    train_losses = []
-    valid_losses = []
-    best_vloss = float("inf")
-    net.train()
-
-    # The training and evaluation loop with patience early stop. j tracks the patience state.
-    while j < p:
-        epoch += 1
-        n_batches = len(trainloader)
-        if timing:
-            t1 = time()
-        for i, batch in enumerate(trainloader):
-            optimizer.zero_grad()
-            X, y = batch
-
-            y = y.view(-1).to(device)
-            X = X.view(-1, *net.input_size).to(device)
-
-            net.train()
-            out = net.forward(X)
-            loss = criterion(out, Variable(y.long()))
-            loss.backward()
-            optimizer.step()
-
-            progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
-
-            if timing:
-                tpb = (time() - t1) / (i + 1)
-                et = tpb * n_batches
-                progress += f"// time per batch = {tpb:.5f} // epoch time = {nt(et)}"
-
-            if n_batches > 10:
-                if i % (n_batches // 10) == 0:
-                    logging.info(progress)
-            else:
-                logging.info(progress)
-
-            condition = i >= 999 or i == n_batches - 1
-            if timing and condition:
-                return tpb, et
-
-        train_loss, train_acc = evaluate(net, trainloader, criterion)
-        valid_loss, valid_acc = evaluate(net, validloader, criterion)
-
-        train_accs.append(train_acc)
-        train_losses.append(train_loss)
-        valid_losses.append(valid_loss)
-        valid_accs.append(valid_acc)
-        if valid_loss < best_vloss:
-            best_vacc = valid_acc
-            best_vloss = valid_loss
-            best_net = net
-            best_epoch = epoch
-            j = 0
-            if save_model:
-                checkpoint = {
-                    "epoch": epoch + 1,
-                    "state_dict": best_net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                }
-                save_checkpoint(checkpoint, model_filepath)
-                net.save_model(save_path)
-        else:
-            j += 1
-
-        logging.info("Epoch: {}".format(epoch))
-        logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-        logging.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
-        if save_model:
-            results = {
-                "acc_score": [best_vacc],
-                "loss_score": [best_vloss],
-                "acc": valid_accs,
-                "train_acc": train_accs,
-                "valid_loss": valid_losses,
-                "train_loss": train_losses,
-                "best_epoch": best_epoch,
-                "n_epochs": epoch,
-                "patience": patience,
-                "current_patience": j,
-            }
-            savemat(save_path + net.name + ".mat", results)
-
-    return net
-
-
-def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
-    # function to evaluate a network on a dataloader. will return loss and accuracy
-    net.eval()
-    with torch.no_grad():
-        LOSSES = 0
-        ACCURACY = 0
-        COUNTER = 0
-        for batch in dataloader:
-            X, y = batch
-            y = y.view(-1).to(device)
-            X = X.view(-1, *net.input_size).to(device)
-
-            out = net.forward(X)
-            loss = criterion(out, Variable(y.long()))
-            acc = accuracy(out, y)
-            n = y.size(0)
-            LOSSES += loss.sum().data.cpu().numpy() * n
-            ACCURACY += acc.sum().data.cpu().numpy() * n
-            COUNTER += n
-        floss = LOSSES / float(COUNTER)
-        faccuracy = ACCURACY / float(COUNTER)
-    return floss, faccuracy
-
+from utils import train, load_checkpoint, nice_time as nt
+from parsing import parser
 
 if __name__ == "__main__":
 
-    ###############
-    ### PARSING ###
-    ###############
+    ###########
+    # PARSING #
+    ###########
 
     parser.add_argument(
         "-f", "--filters", default=8, type=int, help="The size of the first convolution"
@@ -261,9 +50,19 @@ if __name__ == "__main__":
     printmem = args.printmem
     ages = (args.age_min, args.age_max)
 
-    ####################
-    ### Starting log ###
-    ####################
+    ##############
+    # CUDA CHECK #
+    ##############
+
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        logging.warning("Warning: gpu device not available")
+        device = "cpu"
+
+    ################
+    # Starting log #
+    ################
 
     if log:
         logging.basicConfig(
@@ -280,9 +79,9 @@ if __name__ == "__main__":
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
 
-    ###########################
-    ### Torchsummary checks ###
-    ###########################
+    #######################
+    # Torchsummary checks #
+    #######################
 
     torchsum = True
     try:
@@ -291,28 +90,18 @@ if __name__ == "__main__":
         logging.warning("Warning: Error loading torchsummary")
         torchsum = False
 
-    #####################
-    ### Parser checks ###
-    #####################
+    #################
+    # Parser checks #
+    #################
 
     if printmem and chunkload:
         logging.info(
             "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
         )
 
-    #########################
-    ### CUDA verification ###
-    #########################
-
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        logging.warning("Warning: gpu device not available")
-        device = "cpu"
-
-    ##################
-    ### data types ###
-    ##################
+    ##############
+    # data types #
+    ##############
 
     if ch_type == "MAG":
         n_channels = 102
@@ -320,8 +109,6 @@ if __name__ == "__main__":
         n_channels = 204
     elif ch_type == "ALL":
         n_channels = 306
-    else:
-        raise (f"Error: invalid channel type: {ch_type}")
 
     if features == "bins":
         bands = False
@@ -332,9 +119,9 @@ if __name__ == "__main__":
     elif features == "temporal":
         trial_length = TIME_TRIAL_LENGTH
 
-    ###########################
-    ### learning parameters ###
-    ###########################
+    #######################
+    # learning parameters #
+    #######################
 
     if debug:
         logging.debug("ENTERING DEBUG MODE")
@@ -343,9 +130,9 @@ if __name__ == "__main__":
         dropout_option = "same"
         patience = 1
 
-    #########################
-    ### preparing network ###
-    #########################
+    #####################
+    # preparing network #
+    #####################
 
     input_size = (n_channels // 102, 102, trial_length)
 
@@ -435,6 +222,7 @@ if __name__ == "__main__":
                 p=patience,
                 lr=learning_rate,
                 mode=mode,
+                save_path=save_path,
             )
 
         # Loading best saved model

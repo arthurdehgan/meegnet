@@ -30,7 +30,7 @@ def extract_bands(data):
     return data
 
 
-def create_dataset(data_df, data_path, ch_type, dtype="temporal", debug=False):
+def create_dataset(data_df, data_path, ch_type, domain="temporal", debug=False):
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -42,7 +42,7 @@ def create_dataset(data_df, data_path, ch_type, dtype="temporal", debug=False):
         data_df=data_df,
         root_dir=data_path,
         chan_index=chan_index,
-        dtype=dtype,
+        domain=domain,
     )
     # else:
     #     sexlist = []
@@ -76,7 +76,7 @@ def create_loaders(
     batch_size,
     max_subj,
     ch_type,
-    dtype,
+    domain,
     debug=False,
     seed=0,
     num_workers=0,
@@ -84,6 +84,7 @@ def create_loaders(
     printmem=False,
     include=(1, 1, 1),
     ages=(0, 100),
+    dattype="rest",
 ):
     """create dataloaders iterators.
 
@@ -124,13 +125,13 @@ def create_loaders(
         f"Using {N} subjects: {train_size} for train, {valid_size} for validation, and {test_size} for test"
     )
 
-    bands = False
+    frequential = False
     load_fn = load_freq_data
-    if dtype == "temporal":
+    if domain == "temporal":
         load_fn = load_data
-    elif dtype == "bands":
-        bands = True
-    elif dtype == "both":
+    elif domain == "frequential":
+        frequential = True
+    elif domain == "both":
         load_fn = load_data
 
     dataframes = [
@@ -150,7 +151,7 @@ def create_loaders(
                 df,
                 data_folder,
                 ch_type,
-                dtype=dtype,
+                domain=domain,
                 debug=debug,
             )
             if include[i] == 1
@@ -166,10 +167,11 @@ def create_loaders(
                     df,
                     dpath=data_folder,
                     ch_type=ch_type,
-                    bands=bands,
-                    dtype=dtype,
+                    frequential=frequential,
+                    domain=domain,
                     debug=debug,
                     printmem=printmem,
+                    dattype=dattype,
                 )
             )
             if include[i] == 1
@@ -196,7 +198,9 @@ def create_loaders(
 class chunkedMegDataset(Dataset):
     """MEG dataset, from examples of the pytorch website: FaceLandmarks"""
 
-    def __init__(self, data_df, root_dir, chan_index, dtype="temporal"):
+    # has not been updated for different environments (for IRM, SAND-mask etc)
+
+    def __init__(self, data_df, root_dir, chan_index, domain="temporal"):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -206,7 +210,7 @@ class chunkedMegDataset(Dataset):
         self.data_df = data_df
         self.root_dir = root_dir
         self.chan_index = chan_index
-        self.dtype = dtype
+        self.domain = domain
 
     def __len__(self):
         return len(self.data_df)
@@ -220,7 +224,7 @@ class chunkedMegDataset(Dataset):
         begin = self.data_df["begin"].iloc[idx]
         end = self.data_df["end"].iloc[idx]
 
-        if self.dtype == "temporal":
+        if self.domain == "temporal":
             data_path = os.path.join(
                 self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             )
@@ -228,12 +232,12 @@ class chunkedMegDataset(Dataset):
             trial = zscore(trial, axis=1)
             if np.isnan(np.sum(trial)):
                 logging.warning(f"Warning: {data_path} becomes nan")
-        elif self.dtype.startswith("freq"):
+        elif self.domain.startswith("freq"):
             data_path = os.path.join(self.root_dir, f"{sub}_psd.npy")
             trial = np.load(data_path)[:, self.chan_index]
-            if self.dtype == "freqbands":
+            if self.domain == "freqbands":
                 trial = extract_bands(trial)
-        elif self.dtype == "both":
+        elif self.domain == "both":
             data_path = os.path.join(
                 self.root_dir, f"{sub}_{sex}_{begin}_{end}_ICA_ds200.npy"
             )
@@ -251,7 +255,7 @@ class chunkedMegDataset(Dataset):
 
 
 def load_freq_data(
-    dataframe, dpath, ch_type="MAG", bands=True, debug=False, printmem=False
+    dataframe, dpath, ch_type="MAG", frequential=True, debug=False, printmem=False
 ):
     """[Might not work (old)] Loading psd values, subject by subject. Still viable, takes some time
     but data is small, so not too much. Might need repairing as code has changed
@@ -269,7 +273,7 @@ def load_freq_data(
     if debug:
         # Not currently working
         print("ENTERING DEBUG MODE")
-        nb = 5 if bands else 241
+        nb = 5 if frequential else 241
         dummy = np.zeros((25000, len(chan_index), nb))
         return torch.Tensor(dummy).float(), torch.Tensor(dummy).float()
 
@@ -287,7 +291,7 @@ def load_freq_data(
         X = sub_data if X is None else np.concatenate((X, sub_data), axis=0)
         y += [lab] * len(sub_data)
         i += 1
-    if bands:
+    if frequential:
         X = extract_bands(X)
     return torch.Tensor(X).float(), torch.Tensor(y).long()
 
@@ -297,20 +301,26 @@ def load_data(
     dpath,
     offset=2000,
     ch_type="MAG",
-    bands=True,
-    dtype="temporal",
+    frequential=True,
+    domain="temporal",
     debug=False,
     printmem=False,
+    dattype="rest",
 ):
     """Loading data subject per subject.
 
-    bands is here only for compatibility with load_freq_data"""
+    frequential is here only for compatibility with load_freq_data"""
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
         chan_index = [0, 1]
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
+
+    if dattype not in ["rest", "passive", "task"]:
+        logging.error(
+            f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
+        )
 
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
@@ -319,7 +329,7 @@ def load_data(
     )
 
     n_subj = len(subs_df)
-    X = np.empty(n_subj, dtype=object)
+    X = []
     y = []
     logging.debug(f"Loading {n_subj} subjects data")
     if printmem:
@@ -338,13 +348,15 @@ def load_data(
 
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
-            sub_data = np.load(dpath + f"{sub}_ICA_transdef_mfds200.npy")[chan_index]
+            sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
+                chan_index
+            ]
         except:
             logging.warning(f"Warning: There was a problem loading subject {sub}")
             continue
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
-        if dtype == "both":
+        if domain == "both":
             sub_data = [
                 np.append(
                     zscore(sub_data[:, :, begin:end], axis=1),
@@ -352,14 +364,15 @@ def load_data(
                 )
                 for begin, end in zip(sub_segments["begin"], sub_segments["end"])
             ]
-        elif dtype == "temporal":
+        elif domain == "temporal":
             sub_data = [
                 zscore(sub_data[:, :, begin:end], axis=1)
                 for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                if sub_data[:, :, begin:end].shape[-1] == end - begin
             ]
 
         sub_data = np.array(sub_data)
-        X[i] = sub_data
+        X.append(sub_data)
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
     return torch.Tensor(np.concatenate(X, axis=0)), torch.Tensor(y)
