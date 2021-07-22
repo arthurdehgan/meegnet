@@ -357,19 +357,28 @@ def load_data(
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         if domain == "both":
-            sub_data = [
-                np.append(
-                    zscore(sub_data[:, :, begin:end], axis=1),
-                    welch(sub_data, fs=200)[1],
-                )
-                for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-            ]
+            try:
+                sub_data = [
+                    np.append(
+                        zscore(sub_data[:, :, begin:end], axis=1),
+                        welch(sub_data, fs=200)[1],
+                    )
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                ]
+            except:
+                logging.warning(f"Warning: There was a problem loading subject {sub}")
+                continue
+
         elif domain == "temporal":
-            sub_data = [
-                zscore(sub_data[:, :, begin:end], axis=1)
-                for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                if sub_data[:, :, begin:end].shape[-1] == end - begin
-            ]
+            try:
+                sub_data = [
+                    zscore(sub_data[:, :, begin:end], axis=1)
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if sub_data[:, :, begin:end].shape[-1] == end - begin
+                ]
+            except:
+                logging.warning(f"Warning: There was a problem loading subject {sub}")
+                continue
 
         sub_data = np.array(sub_data)
         X.append(sub_data)

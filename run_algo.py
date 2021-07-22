@@ -217,7 +217,7 @@ if __name__ == "__main__":
     logging.info(net.name)
     # Actual training (loading nework if existing and load option is True)
     hparams = {
-        "lr": 0.00002,
+        "lr": learning_rate,
         "weight_decay": 0.0,
         "irm_lambda": 1e2,
         "irm_penalty_anneal_iters": 500,
