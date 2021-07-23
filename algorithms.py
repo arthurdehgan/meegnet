@@ -89,8 +89,11 @@ class ERM(Algorithm):
         )
 
     def update(self, minibatches, unlabeled=None):
-        all_x = torch.cat([x for x, y in minibatches]).to(self.device)
-        all_y = torch.cat([y for x, y in minibatches]).long().to(self.device)
+        all_x, all_y = minibatches
+        all_x = all_x.to(self.device)
+        all_y = all_y.to(self.device).long().to(self.device)
+        # all_x = torch.cat([x for x, y in minibatches]).to(self.device)
+        # all_y = torch.cat([y for x, y in minibatches]).long().to(self.device)
         loss = F.cross_entropy(self.predict(all_x), all_y)
 
         self.optimizer.zero_grad()
