@@ -231,7 +231,8 @@ if __name__ == "__main__":
     #         "irm_penalty_anneal_iters", 500, lambda r: int(10 ** r.uniform(0, 4)), seed
     #     )
     # )
-    algorithm = IRM(input_size, 2, 2, net, hparams, device)
+    # algorithm = IRM(input_size, 2, 2, net, hparams, device)
+    algorithm = ERM(input_size, 2, 2, net, hparams, device)
 
     algorithm.to(device)
 
