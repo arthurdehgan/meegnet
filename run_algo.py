@@ -31,6 +31,12 @@ if __name__ == "__main__":
     ###########
 
     parser.add_argument(
+        "--algo",
+        default="ERM",
+        choices=["ERM", "IRM"],
+        help="The algo to use for training (only ERM and IRM implemented for now",
+    )
+    parser.add_argument(
         "-f", "--filters", default=8, type=int, help="The size of the first convolution"
     )
 
@@ -60,6 +66,7 @@ if __name__ == "__main__":
     model_name = args.model_name
     times = args.times
     patience = args.patience
+    algo = args.algo
     learning_rate = args.lr
     log = args.log
     printmem = args.printmem
@@ -230,7 +237,10 @@ if __name__ == "__main__":
     #         "irm_penalty_anneal_iters", 500, lambda r: int(10 ** r.uniform(0, 4)), seed
     #     )
     # )
-    algorithm = IRM(input_size, 2, 2, net, hparams, device)
+    if algo == "ERM":
+        algorithm = ERM(input_size, 2, 2, net, hparams, device)
+    elif algo == "IRM":
+        algorithm = IRM(input_size, 2, 2, net, hparams, device)
 
     algorithm.to(device)
 
