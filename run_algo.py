@@ -290,6 +290,7 @@ if __name__ == "__main__":
         valid_losses.append(floss)
         train_losses.append(loss)
 
+        best_vacc = 0.5
         if floss < best_vloss:
             best_net = algorithm.network
             optimizer = algorithm.optimizer
