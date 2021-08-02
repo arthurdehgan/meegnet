@@ -11,6 +11,57 @@ from torch.utils.data import Dataset, DataLoader, random_split, TensorDataset
 from params import NBINS
 
 
+# From Domainbed, modified
+class _InfiniteSampler(torch.utils.data.Sampler):
+    """Wraps another Sampler to yield an infinite stream."""
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            for batch in self.sampler:
+                yield batch
+
+
+class InfiniteDataLoader:
+    def __init__(self, dataset, batch_size, pin_memory, num_workers, weights=None):
+        super().__init__()
+
+        if weights is not None:
+            sampler = torch.utils.data.WeightedRandomSampler(
+                weights, replacement=True, num_samples=batch_size
+            )
+        else:
+            sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
+
+        if weights == None:
+            weights = torch.ones(len(dataset))
+
+        batch_sampler = torch.utils.data.BatchSampler(
+            sampler, batch_size=batch_size, drop_last=True
+        )
+
+        self._infinite_iterator = iter(
+            torch.utils.data.DataLoader(
+                dataset,
+                num_workers=num_workers,
+                pin_memory=pin_memory,
+                batch_sampler=_InfiniteSampler(batch_sampler),
+            )
+        )
+
+    def __iter__(self):
+        while True:
+            yield next(self._infinite_iterator)
+
+    def __len__(self):
+        raise ValueError
+
+
+# End of domainBed code
+
+
 def extract_bands(data):
     if len(data.shape) < 3:
         data = data[np.newaxis, :, :]
@@ -85,6 +136,7 @@ def create_loaders(
     include=(1, 1, 1),
     ages=(0, 100),
     dattype="rest",
+    infinite=False,
 ):
     """create dataloaders iterators.
 
@@ -180,8 +232,13 @@ def create_loaders(
         ]
 
     # loading data with num_workers=0 is faster that using more because of IO read speeds on my machine.
+    if infinite:
+        loader = InfiniteDataLoader
+    else:
+        loader = DataLoader
+
     loaders = [
-        DataLoader(
+        loader(
             st,
             batch_size=batch_size,
             num_workers=num_workers,

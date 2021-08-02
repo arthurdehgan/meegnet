@@ -2,6 +2,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
+)
+parser.add_argument(
     "--printmem",
     action="store_true",
     help="Shows RAM information before and during the data loading process.",

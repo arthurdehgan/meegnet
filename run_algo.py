@@ -167,7 +167,7 @@ if __name__ == "__main__":
     ).to(device)
 
     # We create loaders and datasets (see dataloaders.py)
-    task_train, task_valid, task_test = create_loaders(
+    task_train, task_valid, _ = create_loaders(
         data_path,
         train_size,
         batch_size,
@@ -182,8 +182,9 @@ if __name__ == "__main__":
         include=(1, 1, 0),
         ages=ages,
         dattype="task",
+        infinite=True,
     )
-    rest_train, rest_valid, rest_test = create_loaders(
+    rest_train, rest_valid, _ = create_loaders(
         data_path,
         train_size,
         batch_size,
@@ -252,23 +253,29 @@ if __name__ == "__main__":
         n_batches = len(rest_train)
         train_minibatches_iterator = zip(*train_loaders)
         valid_minibatches_iterator = zip(*valid_loaders)
+        tloss, counter = 0, 0
         for i, minibatches in enumerate(train_minibatches_iterator):
             result = algorithm.update(minibatches)
             loss = result["loss"]
+            n = len(minibatches[1])
+            tloss += loss * n
+            counter += n
 
-            progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
+            closs = tloss / float(counter)
+            progress = (
+                f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {closs:.5f}"
+            )
             if n_batches > 10:
                 if i % (n_batches // 10) == 0:
                     logging.info(progress)
             else:
                 logging.info(progress)
+        tloss /= float(counter)
 
         # EVAL
         algorithm.network.eval()
         with torch.no_grad():
-            LOSSES = 0
-            ACCURACY = 0
-            COUNTER = 0
+            vloss, vacc, counter = 0, 0, 0
             for minibatches in valid_minibatches_iterator:
                 all_x = torch.cat([x for x, y in minibatches]).to(device)
                 all_y = torch.cat([y for x, y in minibatches]).long().to(device)
@@ -276,22 +283,22 @@ if __name__ == "__main__":
                 loss = F.cross_entropy(out, all_y)
                 acc = accuracy(out, all_y)
                 n = all_y.size(0)
-                LOSSES += loss.sum().data.cpu().numpy() * n
-                ACCURACY += acc.sum().data.cpu().numpy() * n
-                COUNTER += n
-            floss = LOSSES / float(COUNTER)
-            faccuracy = ACCURACY / float(COUNTER)
+                vloss += loss.sum().data.cpu().numpy() * n
+                vacc += acc.sum().data.cpu().numpy() * n
+                counter += n
+            vloss /= float(counter)
+            vacc /= float(counter)
 
-        valid_accs.append(faccuracy)
-        valid_losses.append(floss)
-        train_losses.append(loss)
+        valid_accs.append(vacc)
+        valid_losses.append(vloss)
+        train_losses.append(tloss)
 
         best_vacc = 0.5
-        if floss < best_vloss:
+        if vloss < best_vloss:
             best_net = algorithm.network
             optimizer = algorithm.optimizer
-            best_vacc = faccuracy
-            best_vloss = floss
+            best_vacc = vacc
+            best_vloss = vloss
             best_epoch = epoch
             k = 0
             if save:
@@ -308,7 +315,7 @@ if __name__ == "__main__":
                 }
                 savemat(save_path + net.name + ".mat", results)
                 checkpoint = {
-                    "epoch": epoch + 1,
+                    "epoch": epoch,
                     "state_dict": best_net.state_dict(),
                     "optimizer": optimizer.state_dict(),
                 }
