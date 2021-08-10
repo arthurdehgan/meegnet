@@ -356,17 +356,19 @@ def load_freq_data(
 def load_data(
     dataframe,
     dpath,
-    offset=2000,
+    offset=30,
     ch_type="MAG",
     frequential=True,
     domain="temporal",
     debug=False,
     printmem=False,
     dattype="rest",
+    samples=100,
 ):
     """Loading data subject per subject.
 
     frequential is here only for compatibility with load_freq_data"""
+    SAMPLING_FREQ = 200
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -418,10 +420,11 @@ def load_data(
                 sub_data = [
                     np.append(
                         zscore(sub_data[:, :, begin:end], axis=1),
-                        welch(sub_data, fs=200)[1],
+                        welch(sub_data, fs=SAMPLING_FREQ)[1],
                     )
                     for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                ]
+                    if begin >= offset * SAMPLING_FREQ
+                ][:samples]
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
@@ -432,7 +435,8 @@ def load_data(
                     zscore(sub_data[:, :, begin:end], axis=1)
                     for begin, end in zip(sub_segments["begin"], sub_segments["end"])
                     if sub_data[:, :, begin:end].shape[-1] == end - begin
-                ]
+                    and begin >= offset * SAMPLING_FREQ
+                ][:samples]
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
