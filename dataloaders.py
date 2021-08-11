@@ -179,13 +179,17 @@ def create_loaders(
     )
 
     frequential = False
-    load_fn = load_freq_data
-    if domain == "temporal":
-        load_fn = load_data
-    elif domain == "frequential":
+    if domain == "frequential":
         frequential = True
-    elif domain == "both":
-        load_fn = load_data
+    # load_freq_data hasnt been updated for a while and is deprecated
+    # load_fn = load_freq_data
+    load_fn = load_data
+    # if domain == "temporal":
+    #     load_fn = load_data
+    # elif domain == "frequential":
+    #     frequential = True
+    # elif domain == "both":
+    #     load_fn = load_data
 
     dataframes = [
         samples_df.loc[samples_df["subs"].isin(subs[index])]
@@ -226,6 +230,7 @@ def create_loaders(
                     printmem=printmem,
                     dattype=dattype,
                     samples=samples,
+                    seed=seed,
                 )
             )
             if include[i] == 1
@@ -366,6 +371,7 @@ def load_data(
     printmem=False,
     dattype="rest",
     samples=100,
+    seed=0,
 ):
     """Loading data subject per subject.
 
@@ -398,6 +404,7 @@ def load_data(
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
     for i, row in enumerate(subs_df.iterrows()):
+        np.random.seed(seed)
         if printmem:
             usedmem = psutil.virtual_memory().used / 10 ** 9
             memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
@@ -419,26 +426,38 @@ def load_data(
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         if domain == "both":
             try:
-                sub_data = [
-                    np.append(
-                        zscore(sub_data[:, :, begin:end], axis=1),
-                        welch(sub_data, fs=SAMPLING_FREQ)[1],
-                    )
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
-                ][:samples]
+                sub_data = np.random.choice(
+                    [
+                        np.append(
+                            zscore(sub_data[:, :, begin:end], axis=1),
+                            welch(sub_data, fs=SAMPLING_FREQ)[1],
+                        )
+                        for begin, end in zip(
+                            sub_segments["begin"], sub_segments["end"]
+                        )
+                        if begin >= offset * SAMPLING_FREQ
+                    ],
+                    samples,
+                    replace=False,
+                )
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
 
         elif domain == "temporal":
             try:
-                sub_data = [
-                    zscore(sub_data[:, :, begin:end], axis=1)
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if sub_data[:, :, begin:end].shape[-1] == end - begin
-                    and begin >= offset * SAMPLING_FREQ
-                ][:samples]
+                sub_data = np.random.choice(
+                    [
+                        zscore(sub_data[:, :, begin:end], axis=1)
+                        for begin, end in zip(
+                            sub_segments["begin"], sub_segments["end"]
+                        )
+                        if sub_data[:, :, begin:end].shape[-1] == end - begin
+                        and begin >= offset * SAMPLING_FREQ
+                    ],
+                    samples,
+                    replace=False,
+                )
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
