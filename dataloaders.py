@@ -426,43 +426,34 @@ def load_data(
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         if domain == "both":
             try:
-                sub_data = np.random.choice(
-                    [
-                        np.append(
-                            zscore(sub_data[:, :, begin:end], axis=1),
-                            welch(sub_data, fs=SAMPLING_FREQ)[1],
-                        )
-                        for begin, end in zip(
-                            sub_segments["begin"], sub_segments["end"]
-                        )
-                        if begin >= offset * SAMPLING_FREQ
-                    ],
-                    samples,
-                    replace=False,
-                )
+                sub_data = [
+                    np.append(
+                        zscore(sub_data[:, :, begin:end], axis=1),
+                        welch(sub_data, fs=SAMPLING_FREQ)[1],
+                    )
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
 
         elif domain == "temporal":
             try:
-                sub_data = np.random.choice(
-                    [
-                        zscore(sub_data[:, :, begin:end], axis=1)
-                        for begin, end in zip(
-                            sub_segments["begin"], sub_segments["end"]
-                        )
-                        if sub_data[:, :, begin:end].shape[-1] == end - begin
-                        and begin >= offset * SAMPLING_FREQ
-                    ],
-                    samples,
-                    replace=False,
-                )
+                sub_data = [
+                    zscore(sub_data[:, :, begin:end], axis=1)
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if sub_data[:, :, begin:end].shape[-1] == end - begin
+                    and begin >= offset * SAMPLING_FREQ
+                ]
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
-
-        sub_data = np.array(sub_data)
+        random_samples = np.random.choice(
+            np.arange(len(sub_data)), samples, replace=False
+        )
+        sub_data = np.array(sub_data)[random_samples]
         X.append(sub_data)
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
