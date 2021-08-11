@@ -136,6 +136,7 @@ def create_loaders(
     include=(1, 1, 1),
     ages=(0, 100),
     dattype="rest",
+    samples=1000,
     infinite=False,
 ):
     """create dataloaders iterators.
@@ -224,6 +225,7 @@ def create_loaders(
                     debug=debug,
                     printmem=printmem,
                     dattype=dattype,
+                    samples=samples,
                 )
             )
             if include[i] == 1

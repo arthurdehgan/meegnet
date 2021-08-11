@@ -2,6 +2,13 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "-s",
+    "--samples",
+    default=100,
+    type=int,
+    help="limit of number of samples per subjects",
+)
+parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
 )
 parser.add_argument(

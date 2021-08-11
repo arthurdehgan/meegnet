@@ -66,6 +66,7 @@ if __name__ == "__main__":
     learning_rate = args.lr
     log = args.log
     printmem = args.printmem
+    samples = args.samples
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -182,6 +183,7 @@ if __name__ == "__main__":
         include=(1, 1, 0),
         ages=ages,
         dattype="task",
+        samples=samples,
         infinite=True,
     )
     rest_train, rest_valid, _ = create_loaders(
@@ -198,6 +200,7 @@ if __name__ == "__main__":
         printmem=printmem,
         include=(1, 1, 0),
         ages=ages,
+        samples=samples,
     )
     train_loaders = [task_train, rest_train]
     valid_loaders = [task_valid, rest_valid]
