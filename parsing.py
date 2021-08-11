@@ -69,7 +69,6 @@ parser.add_argument(
     help="Seed to use for random splits.",
 )
 parser.add_argument(
-    "-s",
     "--max-subj",
     default=1000,
     type=int,
