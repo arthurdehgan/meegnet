@@ -136,7 +136,7 @@ def create_loaders(
     include=(1, 1, 1),
     ages=(0, 100),
     dattype="rest",
-    samples=1000,
+    samples=None,
     infinite=False,
 ):
     """create dataloaders iterators.
@@ -370,7 +370,7 @@ def load_data(
     debug=False,
     printmem=False,
     dattype="rest",
-    samples=100,
+    samples=None,
     seed=0,
 ):
     """Loading data subject per subject.
@@ -450,10 +450,13 @@ def load_data(
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
-        random_samples = np.random.choice(
-            np.arange(len(sub_data)), samples, replace=False
-        )
-        sub_data = np.array(sub_data)[random_samples]
+        if samples is not None:
+            random_samples = np.random.choice(
+                np.arange(len(sub_data)), samples, replace=False
+            )
+            sub_data = np.array(sub_data)[random_samples]
+        else:
+            sub_data = np.array(sub_data)
         X.append(sub_data)
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
