@@ -248,6 +248,7 @@ if __name__ == "__main__":
     epoch = 0
     best_vloss = 1000
     valid_accs, valid_losses = [], []
+    best_net = algorithm.network
     train_accs, train_losses = [], []
     while k < patience:
         epoch += 1
@@ -298,7 +299,6 @@ if __name__ == "__main__":
 
         best_vacc = 0.5
         if vloss < best_vloss:
-            best_net = algorithm.network
             optimizer = algorithm.optimizer
             best_vacc = vacc
             best_vloss = vloss
@@ -327,7 +327,7 @@ if __name__ == "__main__":
             k += 1
 
         logging.info("Epoch: {}".format(epoch))
-        logging.info(" [LOSS] TRAIN {} / VALID {}".format(loss, best_vloss))
-        logging.info(" [ACC] VALID {}".format(best_vacc))
+        logging.info(" [LOSS] TRAIN {} / VALID {}".format(loss, vloss))
+        logging.info(" [ACC] VALID {}".format(vacc))
 
     checkpoint_vals = collections.defaultdict(lambda: [])
