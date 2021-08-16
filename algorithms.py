@@ -98,6 +98,7 @@ class ERM(Algorithm):
 
         self.optimizer.zero_grad()
         loss.backward()
+        nn.utils.clip_grad_norm_(self.network.parameters(), max_norm=2.0, norm_type=2)
         self.optimizer.step()
 
         return {"loss": loss.item()}
