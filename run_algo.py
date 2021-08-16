@@ -327,7 +327,7 @@ if __name__ == "__main__":
             k += 1
 
         logging.info("Epoch: {}".format(epoch))
-        logging.info(" [LOSS] TRAIN {} / VALID {}".format(loss, vloss))
+        logging.info(" [LOSS] TRAIN {} / VALID {}".format(tloss, vloss))
         logging.info(" [ACC] VALID {}".format(vacc))
 
     checkpoint_vals = collections.defaultdict(lambda: [])
