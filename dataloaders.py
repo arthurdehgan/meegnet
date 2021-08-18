@@ -465,9 +465,11 @@ def load_data(
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
 
+    y = torch.Tensor(y)
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
-    return torch.Tensor(np.concatenate(X, axis=0)), torch.Tensor(y)
+
+    return torch.Tensor(np.concatenate(X, axis=0)), y
 
 
 def load_subject(sub, data_path, data=None, timepoints=500, ch_type="all"):
