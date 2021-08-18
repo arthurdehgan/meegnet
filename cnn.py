@@ -44,6 +44,7 @@ if __name__ == "__main__":
     learning_rate = args.lr
     log = args.log
     printmem = args.printmem
+    permute_labels = args.permute_labels
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -219,6 +220,7 @@ if __name__ == "__main__":
                 lr=learning_rate,
                 mode=mode,
                 save_path=save_path,
+                permute_labels=permute_labels,
             )
 
         # Loading best saved model

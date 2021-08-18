@@ -12,6 +12,11 @@ parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
 )
 parser.add_argument(
+    "--permute-labels",
+    action="store_true",
+    help="Permutes the labesl in order to test for chance level",
+)
+parser.add_argument(
     "--printmem",
     action="store_true",
     help="Shows RAM information before and during the data loading process.",

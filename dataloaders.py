@@ -138,6 +138,7 @@ def create_loaders(
     dattype="rest",
     samples=None,
     infinite=False,
+    permute_labels=False,
 ):
     """create dataloaders iterators.
 
@@ -210,6 +211,7 @@ def create_loaders(
                 ch_type,
                 domain=domain,
                 debug=debug,
+                permute_labels=permute_labels,
             )
             if include[i] == 1
             else None
@@ -231,6 +233,7 @@ def create_loaders(
                     dattype=dattype,
                     samples=samples,
                     seed=seed,
+                    permute_labels=permute_labels,
                 )
             )
             if include[i] == 1
@@ -372,6 +375,7 @@ def load_data(
     dattype="rest",
     samples=None,
     seed=0,
+    permute_labels=False,
 ):
     """Loading data subject per subject.
 
@@ -460,6 +464,9 @@ def load_data(
         X.append(sub_data)
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
+
+    if permute_labels:
+        y = y[np.random.permutation(list(range(len(y))))]
     return torch.Tensor(np.concatenate(X, axis=0)), torch.Tensor(y)
 
 
