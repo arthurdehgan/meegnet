@@ -163,6 +163,7 @@ if __name__ == "__main__":
                 num_workers=nw,
                 debug=debug,
                 chunkload=chunkload,
+                permute_labels=permute_labels,
             )
             tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
             perfs.append((nw, bs, tpb, et))
@@ -187,6 +188,7 @@ if __name__ == "__main__":
             printmem=printmem,
             include=(1, 1, 0),
             ages=ages,
+            permute_labels=permute_labels,
         )
 
         if torchsum:
@@ -220,7 +222,6 @@ if __name__ == "__main__":
                 lr=learning_rate,
                 mode=mode,
                 save_path=save_path,
-                permute_labels=permute_labels,
             )
 
         # Loading best saved model
