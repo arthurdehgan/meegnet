@@ -458,9 +458,9 @@ def load_data(
             random_samples = np.random.choice(
                 np.arange(len(sub_data)), samples, replace=False
             )
-            sub_data = np.array(sub_data)[random_samples]
+            sub_data = torch.Tensor(sub_data)[random_samples]
         else:
-            sub_data = np.array(sub_data)
+            sub_data = torch.Tensor(sub_data)
         X.append(sub_data)
         y += [lab] * len(sub_data)
     logging.info("Loading successfull\n")
@@ -469,7 +469,7 @@ def load_data(
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
 
-    return torch.Tensor(np.concatenate(X, axis=0)), y
+    return torch.cat(X, 0), y
 
 
 def load_subject(sub, data_path, data=None, timepoints=500, ch_type="all"):
