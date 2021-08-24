@@ -106,6 +106,7 @@ def train(
     train_losses = []
     valid_losses = []
     best_vloss = float("inf")
+    best_vacc = 0.5
     net.train()
 
     # The training and evaluation loop with patience early stop. j tracks the patience state.
