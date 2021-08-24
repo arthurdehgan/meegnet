@@ -392,6 +392,8 @@ def load_data(
         logging.error(
             f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
         )
+    else:
+        logging.info(f"Loading data from the {dattype} data set")
 
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
@@ -468,6 +470,7 @@ def load_data(
     y = torch.Tensor(y)
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
+        logging.info("Labels shuffled for permutation test!")
 
     return torch.cat(X, 0), y
 
