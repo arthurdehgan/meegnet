@@ -247,7 +247,6 @@ def create_loaders(
     else:
         loader = DataLoader
 
-    print(datasets[0][:10])
     loaders = [
         loader(
             st,
