@@ -254,7 +254,6 @@ def create_loaders(
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=pin_memory,
-            shuffle=False,
         )
         if include[i] == 1
         else None
