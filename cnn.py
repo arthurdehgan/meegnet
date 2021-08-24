@@ -1,476 +1,255 @@
-import os
-import gc
-import sys
-import argparse
 from itertools import product
-from time import time
+import os
+import logging
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchsummary import summary
-import numpy as np
-from scipy.io import savemat, loadmat
-from utils import elapsed_time
+from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loaders
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--save",
-    type=str,
-    help="The path where the model will be saved.",
-)
-parser.add_argument(
-    "-p",
-    "--path",
-    type=str,
-    help="The path where the data samples can be found.",
-)
-parser.add_argument(
-    "-s",
-    "--max-subj",
-    default=1000,
-    type=int,
-    help="maximum number of subjects to use (1000 uses all subjects)",
-)
-parser.add_argument(
-    "-e",
-    "--elec",
-    default="MAG",
-    choices=["GRAD", "MAG", "ALL"],
-    help="The type of electrodes to keep, default=MAG",
-)
-parser.add_argument(
-    "--feature",
-    default="temporal",
-    choices=["temporal", "bands", "bins"],
-    help="Data type to use.",
-)
-parser.add_argument(
-    "-b",
-    "--batch-size",
-    default=128,
-    type=int,
-    help="The batch size used for learning.",
-)
-parser.add_argument(
-    "-d",
-    "--dropout",
-    default=0.25,
-    type=float,
-    help="The dropout rate of the linear layers",
-)
-parser.add_argument(
-    "--debug",
-    action="store_true",
-    help="loads dummy data in the net to ensure everything is working fine",
-)
-parser.add_argument(
-    "--dropout_option",
-    default="same",
-    choices=["same", "double", "inverted"],
-    help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
-)
-parser.add_argument(
-    "-l", "--linear", type=int, help="The size of the second linear layer"
-)
-parser.add_argument(
-    "-m",
-    "--mode",
-    type=str,
-    choices=["overwrite", "continue", "empty_run"],
-    default="continue",
-    help="CHANGE THIS TODO",
-)
-parser.add_argument(
-    "-f", "--filters", type=int, help="The size of the first convolution"
-)
-parser.add_argument(
-    "-n",
-    "--nchan",
-    type=int,
-    help="the number of channels for the first convolution, the other channel numbers scale with this one",
-)
-
-
-def accuracy(y_pred, target):
-    correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
-    return correct / len(target)
-
-
-class Flatten(nn.Module):
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        return x
-
-
-def load_checkpoint(filename):
-    print("=> loading checkpoint '{}'".format(filename))
-    checkpoint = torch.load(filename)
-    start_epoch = checkpoint["epoch"]
-    model_state = checkpoint["state_dict"]
-    optimizer_state = checkpoint["optimizer"]
-    return start_epoch, model_state, optimizer_state
-
-
-def save_checkpoint(state, filename="checkpoint.pth.tar"):
-    torch.save(state, filename)
-
-
-def train(
-    net,
-    trainloader,
-    validloader,
-    model_filepath,
-    criterion=nn.CrossEntropyLoss(),
-    optimizer=optim.Adam,
-    save_model=False,
-    load_model=False,
-    debug=False,
-):
-    if debug:
-        optimizer = optimizer(net.parameters())
-    else:
-        optimizer = optimizer(net.parameters(), lr=LEARNING_RATE)
-
-    if load_model and os.path.exists(model_filepath):
-        epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
-        net.load_state_dict(net_state)
-        optimizer.load_state_dict(optimizer_state)
-        results = loadmat(model_filepath[:-2] + "mat")
-        best_vacc = results["acc_score"]
-        best_vloss = results["loss_score"]
-        valid_accs = results["acc"]
-        train_accs = results["train_acc"]
-        valid_losses = results["valid_loss"]
-        train_losses = results["train_loss"]
-        best_epoch = results["best_epoch"]
-        epoch = results["n_epochs"]
-    else:
-        epoch = 0
-
-    p = PATIENCE
-    j = 0
-    train_accs = []
-    valid_accs = []
-    train_losses = []
-    valid_losses = []
-    best_vloss = float("inf")
-    net.train()
-    while j < p:
-        epoch += 1
-        N_BATCHES = len(trainloader)
-        for i, batch in enumerate(trainloader):
-            optimizer.zero_grad()
-            X, y = batch
-
-            y = y.view(-1).to(device)
-            X = X.view(-1, 1, N_CHANNELS, TRIAL_LENGTH).float().to(device)
-
-            net.train()
-            out = net.forward(X)
-            loss = criterion(out, y)
-            loss.backward()
-            optimizer.step()
-            print(
-                f"Epoch: {epoch} // Batch {i+1}/{N_BATCHES} // loss = {loss}", end="\r"
-            )
-
-        train_loss, train_acc = evaluate(net, trainloader, criterion)
-        valid_loss, valid_acc = evaluate(net, validloader, criterion)
-
-        train_accs.append(train_acc)
-        train_losses.append(train_loss)
-        valid_losses.append(valid_loss)
-        valid_accs.append(valid_acc)
-        if valid_loss < best_vloss:
-            best_vacc = valid_acc
-            best_vloss = valid_loss
-            best_net = net
-            best_epoch = epoch
-            j = 0
-            if save_model:
-                checkpoint = {
-                    "epoch": epoch + 1,
-                    "state_dict": best_net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                }
-                save_checkpoint(checkpoint, model_filepath)
-                net.save_model(save_path)
-        else:
-            j += 1
-
-        print("Epoch: {}".format(epoch))
-        print(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-        print(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
-        if save_model:
-            results = {
-                "acc_score": [best_vacc],
-                "loss_score": [best_vloss],
-                "acc": valid_accs,
-                "train_acc": train_accs,
-                "valid_loss": valid_losses,
-                "train_loss": train_losses,
-                "best_epoch": best_epoch,
-                "n_epochs": epoch,
-            }
-            savemat(save_path + net.name + ".mat", results)
-
-    return net
-
-
-def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
-    net.eval()
-    with torch.no_grad():
-        LOSSES = 0
-        ACCURACY = 0
-        COUNTER = 0
-        for batch in dataloader:
-            X, y = batch
-            y = y.view(-1).to(device)
-            X = X.view(-1, 1, N_CHANNELS, TRIAL_LENGTH).float().to(device)
-
-            out = net.forward(X)
-            loss = criterion(out, y)
-            acc = accuracy(out, y)
-            n = y.size(0)
-            LOSSES += loss.sum().data.cpu().numpy() * n
-            ACCURACY += acc.sum().data.cpu().numpy() * n
-            COUNTER += n
-        floss = LOSSES / float(COUNTER)
-        faccuracy = ACCURACY / float(COUNTER)
-    return floss, faccuracy
-
-
-class FullNet(nn.Module):
-    def __init__(
-        self,
-        model_name,
-        input_size,
-        filter_size=50,
-        n_channels=5,
-        n_linear=150,
-        dropout=0.3,
-        dropout_option="same",
-    ):
-        if dropout_option == "same":
-            dropout1 = dropout
-            dropout2 = dropout
-        else:
-            assert (
-                dropout < 0.5
-            ), "dropout cannot be higher than .5 in this configuration"
-            if dropout_option == "double":
-                dropout1 = dropout
-                dropout2 = dropout * 2
-            elif dropout_option == "inverted":
-                dropout1 = dropout * 2
-                dropout2 = dropout
-            else:
-                print(f"{dropout_option} is not a valid option")
-
-        super(FullNet, self).__init__()
-        layers = nn.ModuleList(
-            [
-                nn.Conv2d(1, 5 * n_channels, (1, filter_size)),
-                nn.BatchNorm2d(5 * n_channels),
-                nn.ReLU(),
-                nn.Conv2d(5 * n_channels, 5 * n_channels, (N_CHANNELS, 1)),
-                nn.BatchNorm2d(5 * n_channels),
-                nn.ReLU(),
-                nn.MaxPool2d((1, 5)),
-                nn.Conv2d(5 * n_channels, 8 * n_channels, (1, int(filter_size / 10))),
-                nn.BatchNorm2d(8 * n_channels),
-                nn.ReLU(),
-                nn.MaxPool2d((1, 5)),
-                nn.Conv2d(8 * n_channels, 16 * n_channels, (1, int(filter_size / 5))),
-                nn.BatchNorm2d(16 * n_channels),
-                nn.ReLU(),
-                Flatten(),
-            ]
-        )
-
-        lin_size = nn.Sequential(*layers)(torch.zeros(input_size)).shape[-1]
-
-        layers.extend(
-            (
-                nn.Dropout(dropout1),
-                nn.Linear(lin_size, n_linear),
-                nn.Dropout(dropout2),
-                nn.Linear(n_linear, 2),
-            )
-        )
-
-        self.model = nn.Sequential(*layers)
-        self.name = model_name
-
-    def forward(self, x):
-        return self.model(x)
-
-    def save_model(self, filepath="."):
-        if not filepath.endswith("/"):
-            filepath += "/"
-
-        orig_stdout = sys.stdout
-        with open(filepath + self.name + ".txt", "a") as f:
-            sys.stdout = f
-            summary(self, (1, N_CHANNELS, TRIAL_LENGTH))
-            sys.stdout = orig_stdout
-
-
-class vanPutNet(nn.Module):
-    def __init__(self, model_name, input_size, dropout=0.25):
-
-        super(vanPutNet, self).__init__()
-        layers = nn.ModuleList(
-            [
-                nn.Conv2d(1, 100, 3),
-                nn.ReLU(),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 100, 3),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 300, (2, 3)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 300, (1, 7)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 100, (1, 3)),
-                nn.Conv2d(100, 100, (1, 3)),
-                Flatten(),
-            ]
-        )
-
-        lin_size = nn.Sequential(*layers)(torch.zeros(input_size)).shape[-1]
-
-        layers.append(nn.Linear(lin_size, 2))
-
-        self.model = nn.Sequential(*layers)
-
-        self.name = model_name
-
-    def forward(self, x):
-        return self.model(x)
-
-    def save_model(self, filepath="."):
-        if not filepath.endswith("/"):
-            filepath += "/"
-
-        orig_stdout = sys.stdout
-        with open(filepath + self.name + ".txt", "a") as f:
-            sys.stdout = f
-            summary(self, (1, N_CHANNELS, TRIAL_LENGTH))
-            sys.stdout = orig_stdout
-
+from network import FullNet
+from utils import train, load_checkpoint, nice_time as nt
+from parsing import parser
 
 if __name__ == "__main__":
 
-    gc.enable()
-
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        device = "cpu"
+    ###########
+    # PARSING #
+    ###########
 
     args = parser.parse_args()
     data_path = args.path
+    if not data_path.endswith("/"):
+        data_path += "/"
     save_path = args.save
     if not save_path.endswith("/"):
         save_path += "/"
-
-    DATA_TYPE = args.feature
-    BATCH_SIZE = args.batch_size
-    MAX_SUBJ = args.max_subj
-
-    CH_TYPE = args.elec
-    if CH_TYPE == "MAG":
-        N_CHANNELS = 102
-    elif CH_TYPE == "GRAD":
-        N_CHANNELS = 204
-    elif CH_TYPE == "all":
-        N_CHANNELS = 306
-
-    if args.feature == "bins":
-        bands = False
-        TRIAL_LENGTH = 241
-    if args.feature == "bands":
-        bands = False
-        TRIAL_LENGTH = 5
-    elif args.feature == "temporal":
-        TRIAL_LENGTH = TIME_TRIAL_LENGTH
-
-    PATIENCE = 20
-    LEARNING_RATE = 0.00001
-    TRAIN_SIZE = 0.8
-    SEED = 420
-
+    data_type = args.feature
+    batch_size = args.batch_size
+    max_subj = args.max_subj
+    ch_type = args.elec
+    features = args.feature
     debug = args.debug
+    chunkload = args.chunkload
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
     dropout_option = args.dropout_option
     linear = args.linear
+    seed = args.seed
+    mode = args.mode
+    train_size = args.train_size
+    num_workers = args.num_workers
+    model_name = args.model_name
+    times = args.times
+    patience = args.patience
+    learning_rate = args.lr
+    log = args.log
+    printmem = args.printmem
+    permute_labels = args.permute_labels
+    ages = (args.age_min, args.age_max)
+
+    ##############
+    # CUDA CHECK #
+    ##############
+
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        logging.warning("Warning: gpu device not available")
+        device = "cpu"
+
+    ################
+    # Starting log #
+    ################
+
+    if log:
+        logging.basicConfig(
+            filename=save_path + model_name + ".log",
+            filemode="a",
+            level=logging.DEBUG,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
+
+    #######################
+    # Torchsummary checks #
+    #######################
+
+    torchsum = True
+    try:
+        from torchsummary import summary
+    except:
+        logging.warning("Warning: Error loading torchsummary")
+        torchsum = False
+
+    #################
+    # Parser checks #
+    #################
+
+    if printmem and chunkload:
+        logging.info(
+            "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
+        )
+
+    ##############
+    # data types #
+    ##############
+
+    if ch_type == "MAG":
+        n_channels = 102
+    elif ch_type == "GRAD":
+        n_channels = 204
+    elif ch_type == "ALL":
+        n_channels = 306
+
+    if features == "bins":
+        bands = False
+        trial_length = 241
+    if features == "bands":
+        bands = False
+        trial_length = 5
+    elif features == "temporal":
+        trial_length = TIME_TRIAL_LENGTH
+
+    #######################
+    # learning parameters #
+    #######################
 
     if debug:
-        print("ENTERING DEBUG MODE")
-        nchan = 102
-        dropout = 0
+        logging.debug("ENTERING DEBUG MODE")
+        max_subj = 20
+        dropout = 0.5
         dropout_option = "same"
+        patience = 1
 
-    # net = FullNet("", filters, nchan)
-    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+    #####################
+    # preparing network #
+    #####################
 
-    # net = FullNet(
-    #     f"model_{dropout_option}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-    #     filters,
-    #     nchan,
-    #     linear,
-    #     dropout,
-    #     dropout_option,
-    #     lin_size,
-    # )
-    # lin_size = compute_lin_size(np.zeros((2, 1, N_CHANNELS, TRIAL_LENGTH)), net)
+    input_size = (n_channels // 102, 102, trial_length)
 
-    input_size = (BATCH_SIZE, 1, N_CHANNELS, TRIAL_LENGTH)
-    net = vanPutNet("van_Putten_network", input_size, dropout=dropout).to(device)
-    print(net)
-    print(summary(net, (1, N_CHANNELS, TRIAL_LENGTH)))
+    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
+    net = FullNet(
+        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
+        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        input_size,
+        filters,
+        nchan,
+        linear,
+        dropout,
+        dropout_option,
+    ).to(device)
 
-    a = time()
-    trainloader, validloader, testloader = create_loaders(
-        data_path,
-        TRAIN_SIZE,
-        BATCH_SIZE,
-        MAX_SUBJ,
-        CH_TYPE,
-        DATA_TYPE,
-        seed=SEED,
-    )
-    print(elapsed_time(time(), a))
+    if times:
+        # OBSOLETE: DO NOT WORK ANYMORE, WILL CAUSE CRASHES TODO
+        # overrides default mode !
+        # tests different values of workers and batch sizes to check which is the fastest
+        num_workers = [16, 32, 64, 128]
+        batch_sizes = [16, 32]
+        perfs = []
+        for nw, bs in product(num_workers, batch_sizes):
+            tl, vl, _ = create_loaders(
+                data_path,
+                train_size,
+                bs,
+                max_subj,
+                ch_type,
+                data_type,
+                num_workers=nw,
+                debug=debug,
+                chunkload=chunkload,
+                permute_labels=permute_labels,
+            )
+            tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
+            perfs.append((nw, bs, tpb, et))
 
-    if args.mode == "overwrite":
-        save = True
-        load = False
-    elif args.mode == "continue":
-        save = True
-        load = True
+        for x in sorted(perfs, key=lambda x: x[-1]):
+            logging.info(f"\n{x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
+
     else:
-        save = False
-        loaf = False
 
-    model_filepath = save_path + net.name + ".pt"
-    train(
-        net,
-        trainloader,
-        validloader,
-        model_filepath,
-        save_model=save,
-        load_model=load,
-        debug=debug,
-    )
-    _, net_state, _ = load_checkpoint(model_filepath)
-    net.load_state_dict(net_state)
+        # We create loaders and datasets (see dataloaders.py)
+        trainloader, validloader, testloader = create_loaders(
+            data_path,
+            train_size,
+            batch_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            num_workers=num_workers,
+            chunkload=chunkload,
+            debug=debug,
+            printmem=printmem,
+            include=(1, 1, 0),
+            ages=ages,
+            permute_labels=permute_labels,
+        )
 
-    print(evaluate(net, testloader))
+        if torchsum:
+            logging.info(summary(net, input_size))
+        else:
+            logging.info(net)
+
+        if mode == "overwrite":
+            save = True
+            load = False
+        elif mode in ("continue", "evaluate"):
+            save = True
+            load = True
+        else:
+            save = False
+            load = False
+
+        model_filepath = save_path + net.name + ".pt"
+        logging.info(net.name)
+        # Actual training (loading nework if existing and load option is True)
+        if mode != "evaluate":
+            train(
+                net,
+                trainloader,
+                validloader,
+                model_filepath,
+                save_model=save,
+                load_model=load,
+                debug=debug,
+                p=patience,
+                lr=learning_rate,
+                mode=mode,
+                save_path=save_path,
+            )
+
+        # Loading best saved model
+        if os.path.exists(model_filepath):
+            _, net_state, _ = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+        else:
+            logging.warning(
+                f"Error: Can't evaluate model {model_filepath}, file not found."
+            )
+            exit()
+
+        # testing
+        logging.info("Evaluating on valid set:")
+        results = loadmat(model_filepath[:-2] + "mat")
+        logging.info(
+            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
+        )
+        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
+        exit()
+
+        # # Final testing
+        # print("Evaluating on test set:")
+        # tloss, tacc = evaluate(net, testloader)
+        # print("loss: ", tloss, " // accuracy: ", tacc)
+        # if save:
+        #     results = loadmat(model_filepath[:-2] + "mat")
+        #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+        #     results["test_acc"] = tacc
+        #     results["test_loss"] = tloss
+        #     savemat(save_path + net.name + ".mat", results)

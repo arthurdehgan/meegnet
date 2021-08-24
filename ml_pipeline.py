@@ -1,6 +1,6 @@
 import os
 import time
-from parser import args
+from ml_parser import args
 import xgboost as xgb
 import scipy as sp
 import numpy as np
