@@ -247,12 +247,14 @@ def create_loaders(
     else:
         loader = DataLoader
 
+    print(datasets[0][:10])
     loaders = [
         loader(
             st,
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            shuffle=False,
         )
         if include[i] == 1
         else None
