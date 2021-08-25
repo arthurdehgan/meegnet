@@ -446,14 +446,19 @@ def load_data(
                 continue
 
         elif domain == "temporal":
-            try:
-                sub_data = [
-                    zscore(sub_data[:, :, begin:end], axis=1)
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if sub_data[:, :, begin:end].shape[-1] == end - begin
+            sub_data = []
+            for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
+                seg = sub_data[:, :, begin:end]
+                if (
+                    seg.shape[-1] == end - begin
                     and begin >= offset * SAMPLING_FREQ
-                ]
-            except:
+                    and not np.isnan(seg).any()
+                ):
+                    try:
+                        sub_data.append(zscore(seg, axis=1))
+                    except:
+                        continue
+            if len(sub_data) < 50:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 continue
         if samples is not None:
