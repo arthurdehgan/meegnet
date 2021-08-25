@@ -246,7 +246,8 @@ if __name__ == "__main__":
 
     k = 0
     epoch = 0
-    best_vloss = 1000
+    best_vloss = np.inf()
+    best_vacc = 0.0
     valid_accs, valid_losses = [], []
     best_net = algorithm.network
     train_accs, train_losses = [], []
@@ -297,7 +298,6 @@ if __name__ == "__main__":
         valid_losses.append(vloss)
         train_losses.append(tloss)
 
-        best_vacc = 0.5
         if vloss < best_vloss:
             optimizer = algorithm.optimizer
             best_vacc = vacc
