@@ -427,6 +427,7 @@ def load_data(
             ]
         except:
             logging.warning(f"Warning: There was a problem loading subject {sub}")
+            n_subj -= 1
             continue
 
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
@@ -443,6 +444,7 @@ def load_data(
 
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
+                n_subj -= 1
                 continue
 
         elif domain == "temporal":
@@ -460,7 +462,9 @@ def load_data(
                         continue
             if len(sub_data) < 50:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
+                n_subj -= 1
                 continue
+
         if samples is not None:
             random_samples = np.random.choice(
                 np.arange(len(sub_data)), samples, replace=False
@@ -470,7 +474,7 @@ def load_data(
             sub_data = torch.Tensor(sub_data)
         X.append(sub_data)
         y += [lab] * len(sub_data)
-    logging.info("Loading successfull\n")
+    logging.info("Loaded {n_subj} subjects succesfully\n")
 
     y = torch.Tensor(y)
     if permute_labels:
