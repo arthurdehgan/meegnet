@@ -4,8 +4,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-s",
     "--samples",
-    default=100,
-    type=int,
+    default=None,
     help="limit of number of samples per subjects",
 )
 parser.add_argument(
