@@ -45,6 +45,7 @@ if __name__ == "__main__":
     log = args.log
     printmem = args.printmem
     permute_labels = args.permute_labels
+    samples = args.samples
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -164,6 +165,7 @@ if __name__ == "__main__":
                 debug=debug,
                 chunkload=chunkload,
                 permute_labels=permute_labels,
+                samples=samples,
             )
             tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
             perfs.append((nw, bs, tpb, et))
@@ -189,6 +191,7 @@ if __name__ == "__main__":
             include=(1, 1, 0),
             ages=ages,
             permute_labels=permute_labels,
+            samples=samples,
         )
 
         if torchsum:
