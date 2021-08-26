@@ -15,6 +15,12 @@ if __name__ == "__main__":
     # PARSING #
     ###########
 
+    parser.add_argument(
+        "--dattype",
+        default="rest",
+        choices=["rest", "task", "passive"],
+        help="the type of data to be loaded",
+    )
     args = parser.parse_args()
     data_path = args.path
     if not data_path.endswith("/"):
@@ -46,6 +52,7 @@ if __name__ == "__main__":
     printmem = args.printmem
     permute_labels = args.permute_labels
     samples = args.samples
+    dattype = args.dattype
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -166,6 +173,7 @@ if __name__ == "__main__":
                 chunkload=chunkload,
                 permute_labels=permute_labels,
                 samples=samples,
+                dattype=dattype,
             )
             tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
             perfs.append((nw, bs, tpb, et))
@@ -192,6 +200,7 @@ if __name__ == "__main__":
             ages=ages,
             permute_labels=permute_labels,
             samples=samples,
+            dattype=dattype,
         )
 
         if torchsum:

@@ -433,7 +433,7 @@ def load_data(
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         if domain == "both":
             try:
-                sub_data = [
+                data = [
                     np.append(
                         zscore(sub_data[:, :, begin:end], axis=1),
                         welch(sub_data, fs=SAMPLING_FREQ)[1],
@@ -448,7 +448,7 @@ def load_data(
                 continue
 
         elif domain == "temporal":
-            sub_data = []
+            data = []
             for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
                 seg = sub_data[:, :, begin:end]
                 if (
@@ -457,24 +457,24 @@ def load_data(
                     and not np.isnan(seg).any()
                 ):
                     try:
-                        sub_data.append(zscore(seg, axis=1))
+                        data.append(zscore(seg, axis=1))
                     except:
                         continue
-            if len(sub_data) < 50:
+            if len(data) < 50:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 n_subj -= 1
                 continue
 
         if samples is not None:
             random_samples = np.random.choice(
-                np.arange(len(sub_data)), samples, replace=False
+                np.arange(len(data)), samples, replace=False
             )
-            sub_data = torch.Tensor(sub_data)[random_samples]
+            data = torch.Tensor(data)[random_samples]
         else:
-            sub_data = torch.Tensor(sub_data)
-        X.append(sub_data)
-        y += [lab] * len(sub_data)
-    logging.info("Loaded {n_subj} subjects succesfully\n")
+            data = torch.Tensor(data)
+        X.append(data)
+        y += [lab] * len(data)
+    logging.info(f"Loaded {n_subj} subjects succesfully\n")
 
     y = torch.Tensor(y)
     if permute_labels:
