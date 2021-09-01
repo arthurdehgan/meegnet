@@ -38,6 +38,7 @@ class FullNet(CustomNet):
         n_linear=150,
         dropout=0.25,
         dropout_option="same",
+        batchnorm=False,
     ):
         CustomNet.__init__(self, model_name, input_size)
         if dropout_option == "same":
@@ -56,18 +57,25 @@ class FullNet(CustomNet):
             else:
                 logging.warning("{} is not a valid option".format(dropout_option))
 
-        layers = nn.ModuleList(
-            [
-                # equivalent to doing nn.Linear(input_size[0], nchan)
-                nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
-                nn.ReLU(),
-                # Explore different stride and maybe dilation parameters:
-                nn.Conv2d(nchan, nchan, (1, filter_size)),
-                nn.ReLU(),
-                Flatten(),
-                nn.Dropout(dropout),
-            ]
-        )
+        layer_list = [
+            # equivalent to doing nn.Linear(input_size[0], nchan)
+            nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
+        ]
+        if batchnorm:
+            layer_list += [nn.BatchNorm2d(nchan)]
+        layer_list += [
+            nn.ReLU(),
+            nn.Conv2d(nchan, nchan, (1, filter_size)),
+        ]
+        if batchnorm:
+            layer_list += [nn.BatchNorm2d(nchan)]
+        layer_list += [
+            nn.ReLU(),
+            Flatten(),
+            nn.Dropout(dropout),
+        ]
+
+        layers = nn.ModuleList(layer_list)
         lin_size = self._get_lin_size(layers)
 
         # 2606 Somehow, these linear layers were added in the feature extraction, this is wrong

@@ -11,6 +11,11 @@ parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
 )
 parser.add_argument(
+    "--batchnorm",
+    action="store_true",
+    help="adds a batchnorm layer in between conv layers",
+)
+parser.add_argument(
     "--permute-labels",
     action="store_true",
     help="Permutes the labesl in order to test for chance level",

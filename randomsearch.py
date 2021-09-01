@@ -5,10 +5,11 @@ import random
 N_TESTS = 100
 
 tests = {
-    "f": (12, 18, 24),
-    "linear": (400, 800, 1600),
+    "f": (6, 12, 18, 24, 48),
+    "linear": (200, 400, 800, 1600),
     "d": (0.5, 0.5),
-    "nchan": (25, 50, 100),
+    "nchan": (25, 50, 100, 200),
+    "batchnorm": (True, False),
 }
 
 parser = argparse.ArgumentParser()
@@ -66,20 +67,24 @@ options = args.options
 params_set = set()
 n_test = 0
 while n_test < N_TESTS:
-    params = {
-        "f": random.choice(tests["f"]),
-        "linear": random.choice(tests["linear"]),
-        "d": random.choice(tests["d"]),
-        "nchan": random.choice(tests["nchan"]),
-    }
-    if tuple(params.values()) not in params_set:
-        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test} -e=ALL -b=32 -f={params['f']} --patience=20 --lr=0.00001 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}"
-        if debug:
-            arguments += " --debug"
-        if local:
-            to_run = f"python cnn.py " + arguments
-        else:
-            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
-        call(to_run, shell=True)
-        params_set.add(tuple(params.values()))
-        n_test += 1
+    for seed in range(10):
+        params = {
+            "f": random.choice(tests["f"]),
+            "linear": random.choice(tests["linear"]),
+            "d": random.choice(tests["d"]),
+            "nchan": random.choice(tests["nchan"]),
+            "batchnorm": random.choice(tests["batchnorm"]),
+        }
+        if tuple(params.values()) not in params_set:
+            arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test}_{seed} -e=ALL -b=32 -f={params['f']} --patience=20 --seed={seed} --lr=0.00002 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}"
+            if params["batchnorm"]:
+                arguments += " --batchnorm"
+            if debug:
+                arguments += " --debug"
+            if local:
+                to_run = f"python cnn.py " + arguments
+            else:
+                to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
+            call(to_run, shell=True)
+            params_set.add(tuple(params.values()))
+            n_test += 1

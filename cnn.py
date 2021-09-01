@@ -53,6 +53,7 @@ if __name__ == "__main__":
     permute_labels = args.permute_labels
     samples = args.samples
     dattype = args.dattype
+    batchnorm = args.batchnorm
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -141,16 +142,20 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
+    name = f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
+    if batchnorm:
+        name += "_BN"
     # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
     net = FullNet(
         # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+        name,
         input_size,
         filters,
         nchan,
         linear,
         dropout,
         dropout_option,
+        batchnorm,
     ).to(device)
 
     if times:
