@@ -7,9 +7,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import zscore
 from scipy.signal import welch
-from torch.utils.data import Dataset, DataLoader, random_split, TensorDataset
-from params import NBINS
-
+from torch.utils.data import DataLoader, random_split, TensorDataset
 
 # From Domainbed, modified
 class _InfiniteSampler(torch.utils.data.Sampler):
@@ -25,7 +23,9 @@ class _InfiniteSampler(torch.utils.data.Sampler):
 
 
 class InfiniteDataLoader:
-    def __init__(self, dataset, batch_size, pin_memory, num_workers, weights=None):
+    def __init__(
+        self, dataset, batch_size, num_workers, pin_memory=False, weights=None
+    ):
         super().__init__()
 
         if weights is not None:
@@ -35,7 +35,7 @@ class InfiniteDataLoader:
         else:
             sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
 
-        if weights == None:
+        if weights is None:
             weights = torch.ones(len(dataset))
 
         batch_sampler = torch.utils.data.BatchSampler(
@@ -46,8 +46,8 @@ class InfiniteDataLoader:
             torch.utils.data.DataLoader(
                 dataset,
                 num_workers=num_workers,
-                pin_memory=pin_memory,
                 batch_sampler=_InfiniteSampler(batch_sampler),
+                pin_memory=pin_memory,
             )
         )
 
@@ -89,7 +89,6 @@ def create_datasets(
     domain,
     debug=False,
     seed=0,
-    num_workers=0,
     printmem=False,
     ages=(0, 100),
     dattype="rest",
@@ -163,53 +162,6 @@ def create_datasets(
     return datasets
 
 
-def create_loaders(
-    data_folder,
-    train_size,
-    batch_size,
-    max_subj,
-    ch_type,
-    domain,
-    debug=False,
-    seed=0,
-    num_workers=0,
-    printmem=False,
-    ages=(0, 100),
-    dattype="rest",
-    samples=None,
-    infinite=False,
-    permute_labels=False,
-):
-
-    datasets = create_datasets(
-        data_folder,
-        train_size,
-        max_subj,
-        ch_type,
-        domain,
-        debug=False,
-        seed=0,
-        num_workers=0,
-        printmem=False,
-        ages=(0, 100),
-        dattype="rest",
-        samples=None,
-        permute_labels=False,
-    )
-
-    loaders = [
-        create_loader(
-            dataset,
-            batch_size,
-            infinite=infinite,
-            num_workers=num_workers,
-        )
-        for i, st in enumerate(datasets)
-    ]
-
-    return loaders[:-1], loaders[-1]
-
-
 def create_loader(
     dataset,
     batch_size,
@@ -222,7 +174,7 @@ def create_loader(
         loader = DataLoader
 
     loader(
-        st,
+        dataset,
         batch_size=batch_size,
         num_workers=num_workers,
     )
@@ -236,7 +188,6 @@ def load_data(
     offset=30,
     ch_type="MAG",
     domain="temporal",
-    debug=False,
     printmem=False,
     dattype="rest",
     samples=None,
@@ -346,37 +297,3 @@ def load_data(
         logging.info("Labels shuffled for permutation test!")
 
     return torch.cat(X, 0), y
-
-
-def load_subject(sub, data_path, data=None, timepoints=500, ch_type="all"):
-    """Loads a single subject from info found in the csv file. Deprecated, takes too much time.
-    path needs to be updated as CHAN_DF is no longer defined and paths have changed.
-    """
-    df = pd.read_csv("{}/cleansub_data_camcan_participant_data.csv".format(data_path))
-    df = df.set_index("participant_id")
-    sex = (df["sex"])[sub]
-    subject_file = "{}_rest.mat".format(data_path + sub)
-    # trial = read_raw_fif(subject_file,
-    #                      preload=True).pick_types(meg=True)[:][0]
-    trial = np.load(subject_file)
-    if ch_type == "all":
-        mask = [True for _ in range(len(trial))]
-        n_channels = 306
-    elif ch_type == "mag":
-        mask = CHAN_DF["mag_mask"]
-        n_channels = 102
-    elif ch_type == "grad":
-        mask = CHAN_DF["grad_mask"]
-        n_channels = 204
-    else:
-        raise ("Error : bad channel type selected")
-    trial = trial[mask]
-
-    n_trials = trial.shape[-1] // timepoints
-    for i in range(1, n_trials - 1):
-        curr = trial[:, i * timepoints : (i + 1) * timepoints]
-        curr = curr.reshape(1, n_channels, timepoints)
-        data = curr if data is None else np.concatenate((data, curr))
-    labels = [sex] * (n_trials - 2)
-    data = data.astype(np.float32, copy=False)
-    return data, labels
