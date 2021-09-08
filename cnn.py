@@ -4,9 +4,10 @@ import logging
 import torch
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loaders
+from dataloaders import create_loader, create_datasets
+frim torch.utils.data import ConcatDataset
 from network import FullNet
-from utils import train, load_checkpoint, nice_time as nt
+from utils import train, load_checkpoint
 from parsing import parser
 
 if __name__ == "__main__":
@@ -15,6 +16,11 @@ if __name__ == "__main__":
     # PARSING #
     ###########
 
+    parser.add_argument(
+        "--crossval",
+        action="store_true",
+        help="wether to do a 4-FOLD cross-validation on the train+valid set.",
+    )
     parser.add_argument(
         "--dattype",
         default="rest",
@@ -29,12 +35,12 @@ if __name__ == "__main__":
     if not save_path.endswith("/"):
         save_path += "/"
     data_type = args.feature
+    crossval = args.crossval
     batch_size = args.batch_size
     max_subj = args.max_subj
     ch_type = args.elec
     features = args.feature
     debug = args.debug
-    chunkload = args.chunkload
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -45,7 +51,6 @@ if __name__ == "__main__":
     train_size = args.train_size
     num_workers = args.num_workers
     model_name = args.model_name
-    times = args.times
     patience = args.patience
     learning_rate = args.lr
     log = args.log
@@ -100,11 +105,6 @@ if __name__ == "__main__":
     # Parser checks #
     #################
 
-    if printmem and chunkload:
-        logging.info(
-            "Warning: chunkload and printmem selected, but chunkload does not allow for printing memory as it loads in chunks during training"
-        )
-
     ##############
     # data types #
     ##############
@@ -142,90 +142,67 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
-    name = f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
-    if batchnorm:
-        name += "_BN"
-    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
-    net = FullNet(
-        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        name,
-        input_size,
-        filters,
-        nchan,
-        linear,
-        dropout,
-        dropout_option,
-        batchnorm,
-    ).to(device)
 
-    if times:
-        # OBSOLETE: DO NOT WORK ANYMORE, WILL CAUSE CRASHES TODO
-        # overrides default mode !
-        # tests different values of workers and batch sizes to check which is the fastest
-        num_workers = [16, 32, 64, 128]
-        batch_sizes = [16, 32]
-        perfs = []
-        for nw, bs in product(num_workers, batch_sizes):
-            tl, vl, _ = create_loaders(
-                data_path,
-                train_size,
-                bs,
-                max_subj,
-                ch_type,
-                data_type,
-                num_workers=nw,
-                debug=debug,
-                chunkload=chunkload,
-                permute_labels=permute_labels,
-                samples=samples,
-                dattype=dattype,
-            )
-            tpb, et = train(net, tl, vl, "", lr=learning_rate, timing=True)
-            perfs.append((nw, bs, tpb, et))
+    # We create loaders and datasets (see dataloaders.py)
+    datasets = create_datasets(
+        data_path,
+        train_size,
+        max_subj,
+        ch_type,
+        data_type,
+        seed=seed,
+        num_workers=num_workers,
+        debug=debug,
+        printmem=printmem,
+        ages=ages,
+        permute_labels=permute_labels,
+        samples=samples,
+        dattype=dattype,
+    )
 
-        for x in sorted(perfs, key=lambda x: x[-1]):
-            logging.info(f"\n{x[0]} {x[1]} {nt(x[2])} {nt(x[3])}")
-
+    if mode == "overwrite":
+        save = True
+        load = False
+    elif mode in ("continue", "evaluate"):
+        save = True
+        load = True
     else:
+        save = False
+        load = False
 
-        # We create loaders and datasets (see dataloaders.py)
-        trainloader, validloader, testloader = create_loaders(
-            data_path,
-            train_size,
-            batch_size,
-            max_subj,
-            ch_type,
-            data_type,
-            seed=seed,
-            num_workers=num_workers,
-            chunkload=chunkload,
-            debug=debug,
-            printmem=printmem,
-            include=(1, 1, 0),
-            ages=ages,
-            permute_labels=permute_labels,
-            samples=samples,
-            dattype=dattype,
-        )
 
+    fold = 1
+    if crossval:
+        fold = 4
+
+    # Actual training (loading nework if existing and load option is True)
+    for i in range(fold):
+        name = f"{model_name}_seed{seed}_fold{i}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
+        if batchnorm:
+            name += "_BN"
+        net = FullNet(
+            name,
+            input_size,
+            filters,
+            nchan,
+            linear,
+            dropout,
+            dropout_option,
+            batchnorm,
+        ).to(device)
+
+        model_filepath = save_path + net.name + ".pt"
+        logging.info(net.name)
         if torchsum:
             logging.info(summary(net, input_size))
         else:
             logging.info(net)
 
-        if mode == "overwrite":
-            save = True
-            load = False
-        elif mode in ("continue", "evaluate"):
-            save = True
-            load = True
-        else:
-            save = False
-            load = False
-
-        model_filepath = save_path + net.name + ".pt"
-        logging.info(net.name)
-        # Actual training (loading nework if existing and load option is True)
+        logging.info(f"Training model for fold {i}/4:")
+        train_dataset = ConcatDataset(datasets[:i] + datasets[i+1:])
+        trainloader = create_loader(train_dataset, batch_size=batch_size)
+        validloader = create_loader(datasets[i], batch_size=len(datasets[i]))
+        # TODO update modes and check if we can add testing to this script or needs another one
         if mode != "evaluate":
             train(
                 net,
@@ -240,33 +217,39 @@ if __name__ == "__main__":
                 mode=mode,
                 save_path=save_path,
             )
-
-        # Loading best saved model
-        if os.path.exists(model_filepath):
-            _, net_state, _ = load_checkpoint(model_filepath)
-            net.load_state_dict(net_state)
         else:
-            logging.warning(
-                f"Error: Can't evaluate model {model_filepath}, file not found."
-            )
-            exit()
+            if os.path.exists(model_filepath):
+                _, net_state, _ = load_checkpoint(model_filepath)
+                net.load_state_dict(net_state)
+            else:
+                logging.warning(
+                    f"Error: Can't evaluate model {model_filepath}, file not found."
+                )
 
-        # testing
-        logging.info("Evaluating on valid set:")
+
+        # Evaluating
+        logging.info(f"Evaluating model for fold {i}/4:")
         results = loadmat(model_filepath[:-2] + "mat")
+        acc = results['acc_score']
         logging.info(
-            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
+            f"loss: {results['loss_score']} // accuracy: {acc}"
         )
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
-        exit()
 
-        # # Final testing
-        # print("Evaluating on test set:")
-        # tloss, tacc = evaluate(net, testloader)
-        # print("loss: ", tloss, " // accuracy: ", tacc)
-        # if save:
-        #     results = loadmat(model_filepath[:-2] + "mat")
-        #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
-        #     results["test_acc"] = tacc
-        #     results["test_loss"] = tloss
-        #     savemat(save_path + net.name + ".mat", results)
+    # # Final testing
+    # if os.path.exists(model_filepath):
+    #     _, net_state, _ = load_checkpoint(model_filepath)
+    #     net.load_state_dict(net_state)
+    # else:
+    #     logging.warning(
+    #         f"Error: Can't evaluate model {model_filepath}, file not found."
+    #     )
+    # print("Evaluating on test set:")
+    # tloss, tacc = evaluate(net, testloader)
+    # print("loss: ", tloss, " // accuracy: ", tacc)
+    # if save:
+    #     results = loadmat(model_filepath[:-2] + "mat")
+    #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+    #     results["test_acc"] = tacc
+    #     results["test_loss"] = tloss
+    #     savemat(save_path + net.name + ".mat", results)
