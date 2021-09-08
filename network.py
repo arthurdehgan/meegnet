@@ -33,6 +33,7 @@ class FullNet(CustomNet):
         self,
         model_name,
         input_size,
+        hlayers=2,
         filter_size=7,
         nchan=5,
         n_linear=150,
@@ -60,17 +61,32 @@ class FullNet(CustomNet):
         layer_list = [
             # equivalent to doing nn.Linear(input_size[0], nchan)
             nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
-        ]
-        if batchnorm:
-            layer_list += [nn.BatchNorm2d(nchan)]
-        layer_list += [
             nn.ReLU(),
-            nn.Conv2d(nchan, nchan, (1, filter_size)),
         ]
-        if batchnorm:
-            layer_list += [nn.BatchNorm2d(nchan)]
+        prev = nchan
+        for i in range(0, int(hlayers / 2)):
+            nex = prev * 2
+            layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
+            if batchnorm:
+                layer_list += [nn.BatchNorm2d(nchan)]
+            layer_list += [nn.ReLU()]
+            prev = nex
+
+        if hlayers % 2 != 0:
+            layer_list += [nn.Conv2d(prev, prev, (1, filter_size))]
+            if batchnorm:
+                layer_list += [nn.BatchNorm2d(nchan)]
+            layer_list += [nn.ReLU()]
+
+        for i in range(0, int(hlayers / 2)):
+            nex = int(prev / 2)
+            layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
+            if batchnorm:
+                layer_list += [nn.BatchNorm2d(nchan)]
+            layer_list += [nn.ReLU()]
+            prev = nex
+
         layer_list += [
-            nn.ReLU(),
             Flatten(),
             nn.Dropout(dropout),
         ]

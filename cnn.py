@@ -36,6 +36,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     features = args.feature
     debug = args.debug
+    hlayers = args.hlayers
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -175,6 +176,7 @@ if __name__ == "__main__":
         net = FullNet(
             name,
             input_size,
+            hlayers,
             filters,
             nchan,
             linear,
@@ -190,7 +192,10 @@ if __name__ == "__main__":
         else:
             logging.info(net)
 
-        logging.info(f"Training model for fold {i+1}/4:")
+        if crossval:
+            logging.info(f"Training model for fold {i+1}/4:")
+        else:
+            logging.info("Training model:")
         train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
         trainloader = create_loader(
             train_dataset,
@@ -227,7 +232,10 @@ if __name__ == "__main__":
                 )
 
         # Evaluating
-        logging.info(f"Evaluating model for fold {i}/4:")
+        if crossval:
+            logging.info(f"Evaluating model for fold {i}/4:")
+        else:
+            logging.info("Evaluating model:")
         results = loadmat(model_filepath[:-2] + "mat")
         acc = results["acc_score"]
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")

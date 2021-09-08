@@ -42,6 +42,12 @@ parser.add_argument(
     help="the starting learning rate of the optimizer",
 )
 parser.add_argument(
+    "--hlayers",
+    type=int,
+    default=1,
+    help="number of hidden layers",
+)
+parser.add_argument(
     "--patience",
     type=int,
     default=20,

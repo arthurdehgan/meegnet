@@ -44,6 +44,7 @@ if __name__ == "__main__":
     save_path = args.save
     if not save_path.endswith("/"):
         save_path += "/"
+    hlayers = args.hlayers
     data_type = args.feature
     batch_size = args.batch_size
     max_subj = args.max_subj
@@ -219,6 +220,7 @@ if __name__ == "__main__":
         net = FullNet(
             f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
             input_size,
+            hlayers,
             filters,
             nchan,
             linear,
