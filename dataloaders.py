@@ -149,7 +149,6 @@ def create_datasets(
                 dpath=data_folder,
                 ch_type=ch_type,
                 domain=domain,
-                debug=debug,
                 printmem=printmem,
                 dattype=dattype,
                 samples=samples,
@@ -173,13 +172,7 @@ def create_loader(
     else:
         loader = DataLoader
 
-    loader(
-        dataset,
-        batch_size=batch_size,
-        num_workers=num_workers,
-    )
-
-    return loader
+    return loader(dataset, batch_size=batch_size, num_workers=num_workers)
 
 
 def load_data(

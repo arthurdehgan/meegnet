@@ -2,6 +2,11 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--crossval",
+    action="store_true",
+    help="wether to do a 4-FOLD cross-validation on the train+valid set.",
+)
+parser.add_argument(
     "-s",
     "--samples",
     default=None,

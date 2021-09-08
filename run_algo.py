@@ -7,7 +7,8 @@ import torch
 import torch.nn.functional as F
 from scipy.io import savemat, loadmat
 from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loaders
+from dataloaders import create_loader, create_datasets
+from torch.utils.data import ConcatDataset
 from network import FullNet
 from utils import train, accuracy, load_checkpoint, nice_time as nt
 from algorithms import ERM, IRM
@@ -67,6 +68,7 @@ if __name__ == "__main__":
     log = args.log
     printmem = args.printmem
     samples = args.samples
+    crossval = args.crossval
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -155,60 +157,33 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
-    # net = vanPutNet("vanputnet_512linear_GRAD", input_size).to(device)
-    net = FullNet(
-        # f"{model_name}_{dropout_option}_dropout{dropout}_filter{filters}_nchan{n_channels}_lin{linear}",
-        f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
-        input_size,
-        filters,
-        nchan,
-        linear,
-        dropout,
-        dropout_option,
-    ).to(device)
-
     # We create loaders and datasets (see dataloaders.py)
-    task_train, task_valid, _ = create_loaders(
+    task_datasets = create_datasets(
         data_path,
         train_size,
-        batch_size,
         max_subj,
         ch_type,
         data_type,
         seed=seed,
-        num_workers=num_workers,
-        chunkload=chunkload,
         debug=debug,
         printmem=printmem,
-        include=(1, 1, 0),
         ages=ages,
-        dattype="task",
         samples=samples,
+        dattype="task",
         infinite=True,
     )
-    rest_train, rest_valid, _ = create_loaders(
+    rest_datasets = create_datasets(
         data_path,
         train_size,
-        batch_size,
         max_subj,
         ch_type,
         data_type,
         seed=seed,
-        num_workers=num_workers,
-        chunkload=chunkload,
         debug=debug,
         printmem=printmem,
-        include=(1, 1, 0),
         ages=ages,
         samples=samples,
     )
-    train_loaders = [task_train, rest_train]
-    valid_loaders = [task_valid, rest_valid]
-
-    if torchsum:
-        logging.info(summary(net, input_size))
-    else:
-        logging.info(net)
 
     if mode == "overwrite":
         save = True
@@ -220,8 +195,6 @@ if __name__ == "__main__":
         save = False
         load = False
 
-    model_filepath = save_path + net.name + ".pt"
-    logging.info(net.name)
     # Actual training (loading nework if existing and load option is True)
     hparams = {
         "lr": learning_rate,
@@ -237,97 +210,147 @@ if __name__ == "__main__":
     #         "irm_penalty_anneal_iters", 500, lambda r: int(10 ** r.uniform(0, 4)), seed
     #     )
     # )
-    if algo == "ERM":
-        algorithm = ERM(input_size, 2, 2, net, hparams, device)
-    elif algo == "IRM":
-        algorithm = IRM(input_size, 2, 2, net, hparams, device)
 
-    algorithm.to(device)
+    fold = 1
+    if crossval:
+        fold = 4
 
-    k = 0
-    epoch = 0
-    best_vloss = np.inf()
-    best_vacc = 0.0
-    valid_accs, valid_losses = [], []
-    best_net = algorithm.network
-    train_accs, train_losses = [], []
-    while k < patience:
-        epoch += 1
-        # TRAIN
-        algorithm.network.train()
-        n_batches = len(rest_train)
-        train_minibatches_iterator = zip(*train_loaders)
-        valid_minibatches_iterator = zip(*valid_loaders)
-        tloss, counter = 0, 0
-        for i, minibatches in enumerate(train_minibatches_iterator):
-            result = algorithm.update(minibatches)
-            loss = result["loss"]
-            n = len(minibatches[1])
-            tloss += loss * n
-            counter += n
+    for i in range(fold):
+        net = FullNet(
+            f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}",
+            input_size,
+            filters,
+            nchan,
+            linear,
+            dropout,
+            dropout_option,
+        ).to(device)
 
-            closs = tloss / float(counter)
-            progress = (
-                f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {closs:.5f}"
-            )
-            if n_batches > 10:
-                if i % (n_batches // 10) == 0:
-                    logging.info(progress)
-            else:
-                logging.info(progress)
-        tloss /= float(counter)
-
-        # EVAL
-        algorithm.network.eval()
-        with torch.no_grad():
-            vloss, vacc, counter = 0, 0, 0
-            for minibatches in valid_minibatches_iterator:
-                all_x = torch.cat([x for x, y in minibatches]).to(device)
-                all_y = torch.cat([y for x, y in minibatches]).long().to(device)
-                out = algorithm.predict(all_x)
-                loss = F.cross_entropy(out, all_y)
-                acc = accuracy(out, all_y)
-                n = all_y.size(0)
-                vloss += loss.sum().data.cpu().numpy() * n
-                vacc += acc.sum().data.cpu().numpy() * n
-                counter += n
-            vloss /= float(counter)
-            vacc /= float(counter)
-
-        valid_accs.append(vacc)
-        valid_losses.append(vloss)
-        train_losses.append(tloss)
-
-        if vloss < best_vloss:
-            optimizer = algorithm.optimizer
-            best_vacc = vacc
-            best_vloss = vloss
-            best_epoch = epoch
-            k = 0
-            if save:
-                results = {
-                    "acc_score": [best_vacc],
-                    "loss_score": [best_vloss],
-                    "acc": valid_accs,
-                    "valid_loss": valid_losses,
-                    "train_loss": train_losses,
-                    "best_epoch": best_epoch,
-                    "n_epochs": epoch,
-                    "patience": patience,
-                    "current_patience": k,
-                }
-                savemat(save_path + net.name + ".mat", results)
-                checkpoint = {
-                    "epoch": epoch,
-                    "state_dict": best_net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                }
-                torch.save(checkpoint, model_filepath)
+        model_filepath = save_path + net.name + ".pt"
+        logging.info(net.name)
+        if torchsum:
+            logging.info(summary(net, input_size))
         else:
-            k += 1
+            logging.info(net)
 
-        logging.info("Epoch: {}".format(epoch))
-        logging.info(" [LOSS] TRAIN {} / VALID {}".format(tloss, vloss))
-        logging.info(" [ACC] VALID {}".format(vacc))
+        if algo == "ERM":
+            algorithm = ERM(input_size, 2, 2, net, hparams, device)
+        elif algo == "IRM":
+            algorithm = IRM(input_size, 2, 2, net, hparams, device)
 
-    checkpoint_vals = collections.defaultdict(lambda: [])
+        algorithm.to(device)
+
+        logging.info(f"Training model for fold {i}/4:")
+        rest_train = ConcatDataset(rest_datasets[:i] + rest_datasets[i + 1 :])
+        trainloader = create_loader(
+            rest_train,
+            batch_size=batch_size,
+            num_workers=num_workers,
+        )
+        rest_valid = create_loader(
+            rest_datasets[i],
+            batch_size=len(rest_datasets[i]),
+            num_workers=num_workers,
+        )
+        task_train = ConcatDataset(task_datasets[:i] + task_datasets[i + 1 :])
+        trainloader = create_loader(
+            task_train,
+            batch_size=batch_size,
+            num_workers=num_workers,
+        )
+        task_valid = create_loader(
+            task_datasets[i],
+            batch_size=len(rest_datasets[i]),
+            num_workers=num_workers,
+        )
+
+        train_loaders = [task_train, rest_train]
+        valid_loaders = [task_valid, rest_valid]
+
+        k = 0
+        epoch = 0
+        best_vloss = np.inf()
+        best_vacc = 0.0
+        valid_accs, valid_losses = [], []
+        best_net = algorithm.network
+        train_accs, train_losses = [], []
+        while k < patience:
+            epoch += 1
+            # TRAIN
+            algorithm.network.train()
+            n_batches = len(rest_train)
+            train_minibatches_iterator = zip(*train_loaders)
+            valid_minibatches_iterator = zip(*valid_loaders)
+            tloss, counter = 0, 0
+            for i, minibatches in enumerate(train_minibatches_iterator):
+                result = algorithm.update(minibatches)
+                loss = result["loss"]
+                n = len(minibatches[1])
+                tloss += loss * n
+                counter += n
+
+                closs = tloss / float(counter)
+                progress = (
+                    f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {closs:.5f}"
+                )
+                if n_batches > 10:
+                    if i % (n_batches // 10) == 0:
+                        logging.info(progress)
+                else:
+                    logging.info(progress)
+            tloss /= float(counter)
+
+            # EVAL
+            algorithm.network.eval()
+            with torch.no_grad():
+                vloss, vacc, counter = 0, 0, 0
+                for minibatches in valid_minibatches_iterator:
+                    all_x = torch.cat([x for x, y in minibatches]).to(device)
+                    all_y = torch.cat([y for x, y in minibatches]).long().to(device)
+                    out = algorithm.predict(all_x)
+                    loss = F.cross_entropy(out, all_y)
+                    acc = accuracy(out, all_y)
+                    n = all_y.size(0)
+                    vloss += loss.sum().data.cpu().numpy() * n
+                    vacc += acc.sum().data.cpu().numpy() * n
+                    counter += n
+                vloss /= float(counter)
+                vacc /= float(counter)
+
+            valid_accs.append(vacc)
+            valid_losses.append(vloss)
+            train_losses.append(tloss)
+
+            if vloss < best_vloss:
+                optimizer = algorithm.optimizer
+                best_vacc = vacc
+                best_vloss = vloss
+                best_epoch = epoch
+                k = 0
+                if save:
+                    results = {
+                        "acc_score": [best_vacc],
+                        "loss_score": [best_vloss],
+                        "acc": valid_accs,
+                        "valid_loss": valid_losses,
+                        "train_loss": train_losses,
+                        "best_epoch": best_epoch,
+                        "n_epochs": epoch,
+                        "patience": patience,
+                        "current_patience": k,
+                    }
+                    savemat(save_path + net.name + ".mat", results)
+                    checkpoint = {
+                        "epoch": epoch,
+                        "state_dict": best_net.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                    }
+                    torch.save(checkpoint, model_filepath)
+            else:
+                k += 1
+
+            logging.info("Epoch: {}".format(epoch))
+            logging.info(" [LOSS] TRAIN {} / VALID {}".format(tloss, vloss))
+            logging.info(" [ACC] VALID {}".format(vacc))
+
+        checkpoint_vals = collections.defaultdict(lambda: [])

@@ -17,11 +17,6 @@ if __name__ == "__main__":
     ###########
 
     parser.add_argument(
-        "--crossval",
-        action="store_true",
-        help="wether to do a 4-FOLD cross-validation on the train+valid set.",
-    )
-    parser.add_argument(
         "--dattype",
         default="rest",
         choices=["rest", "task", "passive"],
@@ -150,7 +145,6 @@ if __name__ == "__main__":
         ch_type,
         data_type,
         seed=seed,
-        num_workers=num_workers,
         debug=debug,
         printmem=printmem,
         ages=ages,
@@ -196,10 +190,18 @@ if __name__ == "__main__":
         else:
             logging.info(net)
 
-        logging.info(f"Training model for fold {i}/4:")
+        logging.info(f"Training model for fold {i+1}/4:")
         train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
-        trainloader = create_loader(train_dataset, batch_size=batch_size)
-        validloader = create_loader(datasets[i], batch_size=len(datasets[i]))
+        trainloader = create_loader(
+            train_dataset,
+            batch_size=batch_size,
+            num_workers=num_workers,
+        )
+        validloader = create_loader(
+            datasets[i],
+            batch_size=len(datasets[i]),
+            num_workers=num_workers,
+        )
         # TODO update modes and check if we can add testing to this script or needs another one
         if mode != "evaluate":
             train(
@@ -229,7 +231,7 @@ if __name__ == "__main__":
         results = loadmat(model_filepath[:-2] + "mat")
         acc = results["acc_score"]
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
-        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
+        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
 
     # # Final testing
     # if os.path.exists(model_filepath):
