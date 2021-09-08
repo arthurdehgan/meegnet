@@ -5,7 +5,7 @@ import torch
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loader, create_datasets
-frim torch.utils.data import ConcatDataset
+from torch.utils.data import ConcatDataset
 from network import FullNet
 from utils import train, load_checkpoint
 from parsing import parser
@@ -142,7 +142,6 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
-
     # We create loaders and datasets (see dataloaders.py)
     datasets = create_datasets(
         data_path,
@@ -169,7 +168,6 @@ if __name__ == "__main__":
     else:
         save = False
         load = False
-
 
     fold = 1
     if crossval:
@@ -199,7 +197,7 @@ if __name__ == "__main__":
             logging.info(net)
 
         logging.info(f"Training model for fold {i}/4:")
-        train_dataset = ConcatDataset(datasets[:i] + datasets[i+1:])
+        train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
         trainloader = create_loader(train_dataset, batch_size=batch_size)
         validloader = create_loader(datasets[i], batch_size=len(datasets[i]))
         # TODO update modes and check if we can add testing to this script or needs another one
@@ -226,14 +224,11 @@ if __name__ == "__main__":
                     f"Error: Can't evaluate model {model_filepath}, file not found."
                 )
 
-
         # Evaluating
         logging.info(f"Evaluating model for fold {i}/4:")
         results = loadmat(model_filepath[:-2] + "mat")
-        acc = results['acc_score']
-        logging.info(
-            f"loss: {results['loss_score']} // accuracy: {acc}"
-        )
+        acc = results["acc_score"]
+        logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}")
 
     # # Final testing
