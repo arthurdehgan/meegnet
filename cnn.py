@@ -247,7 +247,8 @@ if __name__ == "__main__":
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
 
-    logging.info(f"\nAverage accuracy: {np.mean(cv)}")
+    if crossval:
+        logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     # # Final testing
     # if os.path.exists(model_filepath):
