@@ -2,6 +2,7 @@ from itertools import product
 import os
 import logging
 import torch
+import numpy as np
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loader, create_datasets
@@ -167,6 +168,7 @@ if __name__ == "__main__":
     fold = 1
     if crossval:
         fold = 4
+        cv = []
 
     # Actual training (loading nework if existing and load option is True)
     for i in range(fold):
@@ -238,8 +240,12 @@ if __name__ == "__main__":
             logging.info("Evaluating model:")
         results = loadmat(model_filepath[:-2] + "mat")
         acc = results["acc_score"]
+        if crossval:
+            cv.append(acc)
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
+
+    logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     # # Final testing
     # if os.path.exists(model_filepath):
