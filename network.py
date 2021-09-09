@@ -71,7 +71,7 @@ class FullNet(CustomNet):
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nex)]
             if maxpool is not None:
-                layer_list += [nn.MaxPool1d((1, maxpool), 1)]
+                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
             layer_list += [nn.ReLU()]
             prev = nex
 
@@ -80,7 +80,7 @@ class FullNet(CustomNet):
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nex)]
             if maxpool is not None:
-                layer_list += [nn.MaxPool1d((1, maxpool), 1)]
+                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
             layer_list += [nn.ReLU()]
 
         for i in range(0, int(hlayers / 2)):
@@ -89,7 +89,7 @@ class FullNet(CustomNet):
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nex)]
             if maxpool is not None:
-                layer_list += [nn.MaxPool1d((1, maxpool), 1)]
+                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
             layer_list += [nn.ReLU()]
             prev = nex
 
