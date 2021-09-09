@@ -40,6 +40,7 @@ class FullNet(CustomNet):
         dropout=0.25,
         dropout_option="same",
         batchnorm=False,
+        maxpool=None,
     ):
         CustomNet.__init__(self, model_name, input_size)
         if dropout_option == "same":
@@ -69,6 +70,8 @@ class FullNet(CustomNet):
             layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nchan)]
+            if maxpool is not None:
+                layer_list += [nn.MaxPool1d((1, maxpool)), int(maxpool / 2)]
             layer_list += [nn.ReLU()]
             prev = nex
 
@@ -76,6 +79,8 @@ class FullNet(CustomNet):
             layer_list += [nn.Conv2d(prev, prev, (1, filter_size))]
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nchan)]
+            if maxpool is not None:
+                layer_list += [nn.MaxPool1d((1, maxpool)), int(maxpool / 2)]
             layer_list += [nn.ReLU()]
 
         for i in range(0, int(hlayers / 2)):
@@ -83,6 +88,8 @@ class FullNet(CustomNet):
             layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
             if batchnorm:
                 layer_list += [nn.BatchNorm2d(nchan)]
+            if maxpool is not None:
+                layer_list += [nn.MaxPool1d((1, maxpool)), int(maxpool / 2)]
             layer_list += [nn.ReLU()]
             prev = nex
 

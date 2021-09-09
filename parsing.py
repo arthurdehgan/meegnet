@@ -16,6 +16,12 @@ parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
 )
 parser.add_argument(
+    "--maxpool",
+    type=int,
+    default=None,
+    help="adds a maxpool layer in between conv layers",
+)
+parser.add_argument(
     "--batchnorm",
     action="store_true",
     help="adds a batchnorm layer in between conv layers",

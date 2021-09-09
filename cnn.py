@@ -32,6 +32,7 @@ if __name__ == "__main__":
         save_path += "/"
     data_type = args.feature
     crossval = args.crossval
+    maxpool = args.maxpool
     batch_size = args.batch_size
     max_subj = args.max_subj
     ch_type = args.elec
@@ -185,6 +186,7 @@ if __name__ == "__main__":
             dropout,
             dropout_option,
             batchnorm,
+            maxpool,
         ).to(device)
 
         model_filepath = save_path + net.name + ".pt"
