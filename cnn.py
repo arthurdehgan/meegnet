@@ -208,7 +208,7 @@ if __name__ == "__main__":
         )
         validloader = create_loader(
             datasets[i],
-            batch_size=len(datasets[i]),
+            batch_size=int(len(datasets[i]) / 4),
             num_workers=num_workers,
         )
         # TODO update modes and check if we can add testing to this script or needs another one

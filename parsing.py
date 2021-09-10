@@ -18,7 +18,7 @@ parser.add_argument(
 parser.add_argument(
     "--maxpool",
     type=int,
-    default=None,
+    default=0,
     help="adds a maxpool layer in between conv layers",
 )
 parser.add_argument(
