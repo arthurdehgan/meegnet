@@ -78,7 +78,7 @@ class FullNet(CustomNet):
         if hlayers % 2 != 0:
             layer_list += [nn.Conv2d(prev, prev, (1, filter_size))]
             if batchnorm:
-                layer_list += [nn.BatchNorm2d(nex)]
+                layer_list += [nn.BatchNorm2d(prev)]
             if maxpool != 0:
                 layer_list += [nn.MaxPool2d((1, maxpool), 1)]
             layer_list += [nn.ReLU()]
