@@ -122,7 +122,7 @@ parser.add_argument(
 parser.add_argument(
     "--feature",
     default="temporal",
-    choices=["temporal", "bands", "bins"],
+    choices=["temporal", "bands", "bins", "cov", "cosp"],
     help="Data type to use.",
 )
 parser.add_argument(
