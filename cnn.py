@@ -173,9 +173,11 @@ if __name__ == "__main__":
 
     # Actual training (loading nework if existing and load option is True)
     for i in range(fold):
-        name = f"{model_name}_seed{seed}_fold{i}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
+        name = f"{model_name}_{seed}_fold{i}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
         if batchnorm:
             name += "_BN"
+        if maxpool != 0:
+            name += f"_maxpool{maxpool}"
         net = FullNet(
             name,
             input_size,
