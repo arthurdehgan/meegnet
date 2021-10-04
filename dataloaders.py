@@ -235,30 +235,64 @@ def load_data(
 
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
-            sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
-                chan_index
-            ]
+            # TODO MUST COMPUTE COV AND COSP MATRICES, and this will work (Will have to use sub_segments to compute cov and cosp)
+            if domain == "cov":
+                sub_data = np.load(
+                    dpath + f"{sub}_{dattype}_ICA_transdef_mfds200_cov.npy"
+                )[chan_index]
+            elif domain == "cosp":
+                sub_data = np.load(
+                    dpath + f"{sub}_{dattype}_ICA_transdef_mfds200_cosp.npy"
+                )[chan_index]
+            else:
+                sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
+                    chan_index
+                ]
         except:
             logging.warning(f"Warning: There was a problem loading subject {sub}")
             n_subj -= 1
             continue
 
+        # TODO there must be a better way to code this.
         sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
         if domain == "both":
+            # TODO the welch code might be wrong, check if the transformation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
             try:
                 data = [
                     np.append(
                         zscore(sub_data[:, :, begin:end], axis=1),
-                        welch(sub_data, fs=SAMPLING_FREQ)[1],
+                        welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1],
                     )
                     for begin, end in zip(sub_segments["begin"], sub_segments["end"])
                     if begin >= offset * SAMPLING_FREQ
                 ]
-
             except:
                 logging.warning(f"Warning: There was a problem loading subject {sub}")
                 n_subj -= 1
                 continue
+
+        elif domain == "bands":
+            # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
+            try:
+                data = [
+                    np.append(welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1])
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+            except:
+                logging.warning(f"Warning: There was a problem loading subject {sub}")
+                n_subj -= 1
+
+        elif domain == "bins":
+            try:
+                data = [
+                    np.append(welch(sub_data, fs=SAMPLING_FREQ)[1])
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+            except:
+                logging.warning(f"Warning: There was a problem loading subject {sub}")
+                n_subj -= 1
 
         elif domain == "temporal":
             data = []
@@ -278,6 +312,7 @@ def load_data(
                 n_subj -= 1
                 continue
 
+        # TODO Here add something to only load the cov and cosp matrices from offset to end
         if samples is not None:
             random_samples = np.random.choice(
                 np.arange(len(data)), samples, replace=False
