@@ -36,7 +36,6 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     max_subj = args.max_subj
     ch_type = args.elec
-    features = args.feature
     debug = args.debug
     hlayers = args.hlayers
     filters = args.filters
@@ -114,13 +113,13 @@ if __name__ == "__main__":
     elif ch_type == "ALL":
         n_channels = 306
 
-    if features == "bins":
+    if data_type == "bins":
         bands = False
         trial_length = 241
-    if features == "bands":
+    if data_type == "bands":
         bands = False
         trial_length = 5
-    elif features == "temporal":
+    elif data_type == "temporal":
         trial_length = TIME_TRIAL_LENGTH
 
     #######################
