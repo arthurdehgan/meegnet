@@ -94,6 +94,7 @@ def create_datasets(
     dattype="rest",
     samples=None,
     permute_labels=False,
+    load_groups=False,
     testing=False,
 ):
     """create dataloaders iterators."""
@@ -154,6 +155,7 @@ def create_datasets(
                 samples=samples,
                 seed=seed,
                 permute_labels=permute_labels,
+                load_groups=load_groups,
             )
         )
         for i, df in enumerate(dataframes)
@@ -186,6 +188,7 @@ def load_data(
     samples=None,
     seed=0,
     permute_labels=False,
+    load_groups=False,
 ):
     """Loading data subject per subject."""
     SAMPLING_FREQ = 200
@@ -212,6 +215,8 @@ def load_data(
     n_subj = len(subs_df)
     X = []
     y = []
+    if load_groups:
+        groups = []
     logging.debug(f"Loading {n_subj} subjects data")
     if printmem:
         # subj_sizes = [] # assigned but never used ?
@@ -282,6 +287,8 @@ def load_data(
             data = torch.Tensor(data)
         X.append(data)
         y += [lab] * len(data)
+        if load_groups:
+            groups += [i] * len(data)
     logging.info(f"Loaded {n_subj} subjects succesfully\n")
 
     y = torch.Tensor(y)
@@ -289,4 +296,7 @@ def load_data(
         y = y[np.random.permutation(list(range(len(y))))]
         logging.info("Labels shuffled for permutation test!")
 
-    return torch.cat(X, 0), y
+    if load_groups:
+        return torch.cat(X, 0), y, groups
+    else:
+        return torch.cat(X, 0), y
