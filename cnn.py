@@ -114,13 +114,17 @@ if __name__ == "__main__":
         n_channels = 306
 
     if data_type == "bins":
-        bands = False
         trial_length = 241
     if data_type == "bands":
-        bands = False
         trial_length = 5
     elif data_type == "temporal":
         trial_length = TIME_TRIAL_LENGTH
+    elif data_type == "cov":
+        # TODO
+        pass
+    elif data_type == "cosp":
+        # TODO
+        pass
 
     #######################
     # learning parameters #
