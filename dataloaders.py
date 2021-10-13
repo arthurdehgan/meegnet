@@ -9,17 +9,6 @@ from scipy.stats import zscore
 from scipy.signal import welch
 from torch.utils.data import DataLoader, random_split, TensorDataset
 
-
-def check_PDD(mat):
-    if len(mat.shape) > 2:
-        out = []
-        for submat in mat:
-            out.append(check_PDD(submat))
-        return np.array(out)
-    else:
-        return np.all(np.linalg.eigvals(mat) > 0)
-
-
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
     """Wraps another Sampler to yield an infinite stream."""
@@ -327,11 +316,11 @@ def load_data(
         X.append(torch.as_tensor(data))
         y += [lab] * len(data)
         if load_groups:
-            groups += [i] * len(data)
+            groups += [int(sub[2:])] * len(data)
     logging.info(f"Loaded {n_subj} subjects succesfully\n")
 
-    y = torch.Tensor(y)
-    groups = torch.Tensor(groups)
+    y = torch.as_tensor(y)
+    groups = torch.as_tensor(groups)
     X = torch.cat(X, 0)
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
