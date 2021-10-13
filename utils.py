@@ -15,7 +15,7 @@ def check_PD(mat):
     if len(mat.shape) > 2:
         out = []
         for submat in mat:
-            out.append(check_PDD(submat))
+            out.append(check_PD(submat))
         return np.array(out)
     else:
         return np.all(np.linalg.eigvals(mat) > 0)
