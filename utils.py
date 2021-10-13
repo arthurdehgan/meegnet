@@ -11,6 +11,16 @@ import pandas as pd
 from path import Path as path
 
 
+def check_PD(mat):
+    if len(mat.shape) > 2:
+        out = []
+        for submat in mat:
+            out.append(check_PDD(submat))
+        return np.array(out)
+    else:
+        return np.all(np.linalg.eigvals(mat) > 0)
+
+
 def accuracy(y_pred, target):
     # Compute accuracy from 2 vectors of labels.
     correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
