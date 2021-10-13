@@ -9,7 +9,18 @@ from scipy.stats import zscore
 from scipy.signal import welch
 from torch.utils.data import DataLoader, random_split, TensorDataset
 
-# From Domainbed, modified
+
+def check_PDD(mat):
+    if len(mat.shape) > 2:
+        out = []
+        for submat in mat:
+            out.append(check_PDD(submat))
+        return np.array(out)
+    else:
+        return np.all(np.linalg.eigvals(mat) > 0)
+
+
+# From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
     """Wraps another Sampler to yield an infinite stream."""
 
@@ -92,6 +103,7 @@ def create_datasets(
     printmem=False,
     ages=(0, 100),
     dattype="rest",
+    band="",
     samples=None,
     permute_labels=False,
     load_groups=False,
@@ -235,15 +247,9 @@ def load_data(
 
         sub, lab = row[1]["subs"], row[1]["sex"]
         try:
-            # TODO MUST COMPUTE COV AND COSP MATRICES, and this will work (Will have to use sub_segments to compute cov and cosp)
-            if domain == "cov":
-                sub_data = np.load(
-                    dpath + f"{sub}_{dattype}_ICA_transdef_mfds200_cov.npy"
-                )[chan_index]
-            elif domain == "cosp":
-                sub_data = np.load(
-                    dpath + f"{sub}_{dattype}_ICA_transdef_mfds200_cosp.npy"
-                )[chan_index]
+            if domain in ("cov", "cosp"):
+                data = np.load(dpath + f"{sub}_{dattype}_{domain}.npy")[chan_index]
+                data = np.swapaxes(data, 0, 1)
             else:
                 sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
                     chan_index
@@ -312,26 +318,26 @@ def load_data(
                 n_subj -= 1
                 continue
 
-        # TODO Here add something to only load the cov and cosp matrices from offset to end
         if samples is not None:
             random_samples = np.random.choice(
                 np.arange(len(data)), samples, replace=False
             )
             data = torch.Tensor(data)[random_samples]
-        else:
-            data = torch.Tensor(data)
-        X.append(data)
+
+        X.append(torch.as_tensor(data))
         y += [lab] * len(data)
         if load_groups:
             groups += [i] * len(data)
     logging.info(f"Loaded {n_subj} subjects succesfully\n")
 
     y = torch.Tensor(y)
+    groups = torch.Tensor(groups)
+    X = torch.cat(X, 0)
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
         logging.info("Labels shuffled for permutation test!")
 
     if load_groups:
-        return torch.cat(X, 0), y, groups
+        return X, y, groups
     else:
-        return torch.cat(X, 0), y
+        return X, y
