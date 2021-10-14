@@ -14,8 +14,11 @@ def split_data(dat, df, sf, offset=10):
     """By default we skip the first 10s of the data.
     Change to 0 if you want to use all data
 
+    This function is adapted for ELEKTA systems with 2 planar gradiometers and 1 magnetometer
+    at each channel location. We split the channels for cov and cosp computations.
+
     input data must be of shape n_elec x n_samples
-    Output is of shape n_trials x n_elec x n_samples for covariance computations.
+    Output is of shape 3 x n_trials x n_elec x n_samples for covariance computations.
 
     """
     data = []
@@ -33,6 +36,13 @@ def split_data(dat, df, sf, offset=10):
                 data.append(seg)
             except:
                 continue
+    data = np.array(data)
+    # Splitting channels
+    data = (
+        data[:, np.arange(0, 306, 3), :],
+        data[:, np.arange(1, 306, 3), :],
+        data[:, np.arange(2, 306, 3), :],
+    )
 
     return np.array(data)
 
@@ -40,50 +50,51 @@ def split_data(dat, df, sf, offset=10):
 def load_and_compute(
     data_path, save_path, sub_inf, bands, window, overlap, sf, dattype, feature
 ):
-    # Probably will parallelize here
     sub_df = pd.read_csv(sub_inf, index_col=0)
     subs = list(sub_df["subs"])
     for some_file in os.listdir(data_path):
         sub = some_file.split("_")[0]
         if dattype in some_file and sub in subs:
-            data = np.load(data_path + some_file)
-            data = split_data(data.T, sub_df[sub_df["subs"] == sub], sf, 10)
             savename = save_path + f"{sub}_{dattype}_{feature}.npy"
-            compute_feature(data, savename, feature, window, bands, overlap, sf)
-
-
-def compute_feature(
-    data,
-    savename,
-    feature,
-    window,
-    bands,
-    overlap,
-    sf,
-):
-    """Data must be of shape n_trials x n_elec x n_samples
-    will return n_trials x n_elec x n_elec
-    """
-
-    if not os.path.exists(savename):
-        if feature == "cosp":
-            for fmin, fmax in bands:
-                cov = CospCovariances(
-                    window=window, overlap=overlap, fmin=fmin, fmax=fmax, fs=sf
-                )
-                mat = cov.fit_transform(data)
-                if len(mat.shape) > 3:
-                    mat = np.mean(mat, axis=-1)
-        elif feature == "cov":
-            cov = Covariances()
-            mat = cov.fit_transform(data)
-            if len(mat.shape) > 3:
-                mat = np.mean(mat, axis=-1)
-        np.save(savename, mat)
+            if not os.path.exists(savename):
+                data = np.load(data_path + some_file)
+                data = split_data(data.T, sub_df[sub_df["subs"] == sub], sf, 10)
+                channels = []
+                for channel in data:
+                    if feature == "cosp":
+                        cov = CospCovariances(
+                            window=window,
+                            overlap=overlap,
+                            fmin=1,
+                            fmax=50,
+                            fs=sf,
+                        )
+                        mat = cov.fit_transform(channel)
+                        mat = np.array(
+                            [
+                                mat[:, :, :, :4].mean(axis=-1),
+                                mat[:, :, :, 4:8].mean(axis=-1),
+                                mat[:, :, :, 8:12].mean(axis=-1),
+                                mat[:, :, :, 12:30].mean(axis=-1),
+                                mat[:, :, :, 30:].mean(axis=-1),
+                            ]
+                        )
+                        mat = np.swapaxes(mat, 0, 1)
+                    elif feature == "cov":
+                        mat = Covariances(estimator="lwf").fit_transform(channel)
+                    channels.append(mat)
+                final = np.array(channels)
+                np.save(savename, final)
 
 
 if __name__ == "__main__":
-    bands = ((1, 4), (4, 8), (8, 15), (15, 25), (25, 50))
+    bands = {
+        "delta": (0, 4),
+        "theta": (4, 8),
+        "alpha": (8, 15),
+        "beta": (15, 25),
+        "gamma": (25, 50),
+    }
 
     ###########
     # PARSING #
