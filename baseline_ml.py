@@ -1,17 +1,43 @@
-from itertools import product
-import os
 import logging
-import torch
 import sklearn as sk
+import numpy as np
+import scipy
+from utils import check_PD
 from mlneurotools.ml import StratifiedGroupKFold
-from sklearn.model_selection import cross_val_score
-from scipy.io import loadmat
+from numpy.core.numerictypes import typecodes
+from sklearn.model_selection import cross_val_score, RandomizedSearchCV
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from scipy.io import savemat
 from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loader, create_datasets
+from dataloaders import create_datasets
 from torch.utils.data import ConcatDataset, DataLoader
-from network import FullNet
-from utils import train, load_checkpoint
 from parsing import parser
+
+
+def run_classif(clf, X, y, groups, crossval, params, hypop):
+    if hypop != 0:
+        clf = RandomizedSearchCV(
+            estimator=clf,
+            param_distributions=params,
+            random_state=seed,
+            n_iter=hypop,
+            cv=crossval,
+            verbose=0,
+            n_jobs=-1,
+        )
+        scores = clf.fit(X=X, y=y, groups=groups)
+
+    else:
+        scores = cross_val_score(
+            estimator=clf,
+            X=X,
+            y=y,
+            groups=groups,
+            cv=crossval,
+            n_jobs=-1,
+        )
+    return scores
+
 
 if __name__ == "__main__":
 
@@ -61,6 +87,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     debug = args.debug
     seed = args.seed
+    cv = args.cv
     train_size = args.train_size
     num_workers = args.num_workers
     model_name = args.model_name
@@ -81,7 +108,7 @@ if __name__ == "__main__":
     ###############
 
     if classifier == "LDA":
-        clf = sk.discriminant_analysis()
+        clf = LDA()
         params = {}
     elif classifier == "SVM":
         clf = sk.svm.SVC()
@@ -93,7 +120,7 @@ if __name__ == "__main__":
         }
     elif classifier == "LR":
         clf = sk.linear.LogisticRegression()
-        params = {"penality": ["l1", "l2"], "C": uniform(loc=0, scale=4)}
+        params = {"penality": ["l1", "l2"], "C": scipy.stats.uniform(loc=0, scale=4)}
 
     ################
     # Starting log #
@@ -158,7 +185,6 @@ if __name__ == "__main__":
         ch_type,
         data_type,
         seed=seed,
-        num_workers=num_workers,
         debug=debug,
         printmem=printmem,
         ages=ages,
@@ -169,35 +195,31 @@ if __name__ == "__main__":
     )
     crossval = StratifiedGroupKFold(n_splits=cv, random_state=seed)
 
-    if space == "riemannian":
+    if space == "riemannian" or data_type in ["cov", "cosp"]:
         classifier = f"riemannian{classifier}"
-        clf = TSClassifier(clf=clf)
+        clf = TSclassifier(clf=clf)
     name = f"{model_name}_{seed}_{classifier}_{ch_type}_{data_type}"
-
-    logging.info(f"{clf}")
-    logging.info(f"Training...")
-    train_dataset = ConcatDataset(datasets[:4])
-    X, y, groups = next(iter(DataLoader(train_dataset, batch_size=len(train_dataset))))
-
     if hypop != 0:
         name += "_opti"
-        clf = RandomizedSearchCV(
-            estimator=clf,
-            param_distributions=params,
-            random_state=seed,
-            n_iter=hypop,
-            cv=crossval,
-            verbose=0,
-            n_jobs=-1,
-        )
-        clf.fit(X=X, y=y, groups=groups)
-        scores = clf.fit()
-    else:
-        scores = cross_val_score(
-            estimator=clf,
-            X=X,
-            y=y,
-            groups=groups,
-            cv=crossval,
-            n_jobs=-1,
-        )
+    logging.info(f"{clf}")
+    logging.info("Training...")
+    train_dataset = ConcatDataset(datasets[:4])
+    X, y, groups = next(iter(DataLoader(train_dataset, batch_size=len(train_dataset))))
+    X = np.array(X.numpy())
+    y = np.array(y.numpy())
+    groups = np.array(groups.numpy())
+
+    for i, eln in enumerate(["GRAD1", "GRAD2", "MAG"]):
+        data = X[:, i]
+        if data_type == "cosp":
+            for j in range(5):
+                bands = ["delta", "theta", "alpha", "beta", "gamma"]
+                scores = run_classif(
+                    clf, data[:, j], y, groups, crossval, params, hypop
+                )
+                savemat(
+                    save_path + name + f"_{eln}_{bands[j]}.mat", {"results": scores}
+                )
+        else:
+            scores = run_classif(clf, data, y, groups, crossval, params, hypop)
+            savemat(save_path + name + f"_{eln}.mat", {"results": scores})
