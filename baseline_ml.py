@@ -56,6 +56,12 @@ if __name__ == "__main__":
         help="number of parameters to test in randomsearch if hyperparameter optimization. set to 0 for no hyperparammeter optimization",
     )
     parser.add_argument(
+        "--band",
+        default="",
+        choices=["delta", "theta", "alpha", "beta", "gamma"],
+        help="Only for cosp computations, chooses a frequency band to load",
+    )
+    parser.add_argument(
         "--dattype",
         default="rest",
         choices=["rest", "task", "passive"],
@@ -87,6 +93,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     debug = args.debug
     seed = args.seed
+    band = args.band
     cv = args.cv
     train_size = args.train_size
     num_workers = args.num_workers
@@ -192,6 +199,7 @@ if __name__ == "__main__":
         samples=samples,
         dattype=dattype,
         load_groups=True,
+        band=band,
     )
     crossval = StratifiedGroupKFold(n_splits=cv, random_state=seed)
 
@@ -210,16 +218,8 @@ if __name__ == "__main__":
     groups = np.array(groups.numpy())
 
     for i, eln in enumerate(["GRAD1", "GRAD2", "MAG"]):
-        data = X[:, i]
+        savename = save_path + name + f"_{eln}"
+        scores = run_classif(clf, X[:, i], y, groups, crossval, params, hypop)
         if data_type == "cosp":
-            for j in range(5):
-                bands = ["delta", "theta", "alpha", "beta", "gamma"]
-                scores = run_classif(
-                    clf, data[:, j], y, groups, crossval, params, hypop
-                )
-                savemat(
-                    save_path + name + f"_{eln}_{bands[j]}.mat", {"results": scores}
-                )
-        else:
-            scores = run_classif(clf, data, y, groups, crossval, params, hypop)
-            savemat(save_path + name + f"_{eln}.mat", {"results": scores})
+            savename += "_{bands[j]}.mat"
+        savemat(savename, {"results": scores})

@@ -9,6 +9,8 @@ from scipy.stats import zscore
 from scipy.signal import welch
 from torch.utils.data import DataLoader, random_split, TensorDataset
 
+BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
+
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
     """Wraps another Sampler to yield an infinite stream."""
@@ -157,6 +159,7 @@ def create_datasets(
                 seed=seed,
                 permute_labels=permute_labels,
                 load_groups=load_groups,
+                band=band,
             )
         )
         for i, df in enumerate(dataframes)
@@ -190,6 +193,7 @@ def load_data(
     seed=0,
     permute_labels=False,
     load_groups=False,
+    band="",
 ):
     """Loading data subject per subject."""
     SAMPLING_FREQ = 200
@@ -199,6 +203,16 @@ def load_data(
         chan_index = [0, 1]
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
+
+    if domain == "cosp":
+        if band == "":
+            logging.error(
+                "A frequency band must be specified when using co-spectrum matrices"
+            )
+        elif band not in BANDS:
+            logging.error(
+                f"{band} is not a correct band option. band must be in {BANDS}"
+            )
 
     if dattype not in ["rest", "passive", "task"]:
         logging.error(
@@ -239,6 +253,8 @@ def load_data(
             if domain in ("cov", "cosp"):
                 data = np.load(dpath + f"{sub}_{dattype}_{domain}.npy")[chan_index]
                 data = np.swapaxes(data, 0, 1)
+                if domain == "cosp":
+                    data = data[:, :, BANDS.index(band)]
             else:
                 sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
                     chan_index
