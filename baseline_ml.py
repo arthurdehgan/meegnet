@@ -15,7 +15,7 @@ from parsing import parser
 
 
 def run_classif(clf, X, y, groups, crossval, params, hypop):
-    if hypop != 0:
+    if hypop != 0 and params != {}:
         clf = RandomizedSearchCV(
             estimator=clf,
             param_distributions=params,
