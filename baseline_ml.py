@@ -58,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--band",
         default="",
-        choices=["delta", "theta", "alpha", "beta", "gamma"],
+        choices=["", "delta", "theta", "alpha", "beta", "gamma"],
         help="Only for cosp computations, chooses a frequency band to load",
     )
     parser.add_argument(
