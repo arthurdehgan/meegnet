@@ -16,7 +16,6 @@ from parsing import parser
 
 
 def run_classif(clf, X, y, groups, crossval, params, hypop):
-    print(clf.get_params())
     if hypop != 0 and params != {}:
         clf = RandomizedSearchCV(
             estimator=clf,
@@ -209,7 +208,6 @@ if __name__ == "__main__":
         band=band,
     )
     crossval = StratifiedGroupKFold(n_splits=cv, random_state=seed)
-    print(type(crossval.get_n_splits(1, 2, 3)))
 
     if space == "riemannian" or data_type in ["cov", "cosp"]:
         classifier = f"riemannian{classifier}"
