@@ -48,6 +48,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--cv",
+        type=int,
         default=4,
         help="number of Fold in a K-FOLD",
     )
