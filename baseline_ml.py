@@ -1,5 +1,4 @@
 import logging
-import sklearn as sk
 import numpy as np
 import scipy
 from utils import check_PD
@@ -7,6 +6,8 @@ from mlneurotools.ml import StratifiedGroupKFold
 from numpy.core.numerictypes import typecodes
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.linear_model import LogisticRegression as LR
+from sklearn.svm import SVC as SVM
 from scipy.io import savemat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_datasets
@@ -118,7 +119,7 @@ if __name__ == "__main__":
         clf = LDA()
         params = {}
     elif classifier == "SVM":
-        clf = sk.svm.SVC()
+        clf = SVM()
         params = {
             "C": scipy.stats.expon(scale=100),
             "gamma": scipy.stats.expon(scale=0.1),
@@ -126,7 +127,7 @@ if __name__ == "__main__":
             "class_weight": ["balanced", None],
         }
     elif classifier == "LR":
-        clf = sk.linear.LogisticRegression()
+        clf = LR()
         params = {"penality": ["l1", "l2"], "C": scipy.stats.uniform(loc=0, scale=4)}
 
     ################
@@ -222,4 +223,6 @@ if __name__ == "__main__":
         scores = run_classif(clf, X[:, i], y, groups, crossval, params, hypop)
         if data_type == "cosp":
             savename += "_{bands[j]}.mat"
+        else:
+            savename += ".mat"
         savemat(savename, {"results": scores})
