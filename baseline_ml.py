@@ -16,6 +16,7 @@ from parsing import parser
 
 
 def run_classif(clf, X, y, groups, crossval, params, hypop):
+    print(clf.get_params())
     if hypop != 0 and params != {}:
         clf = RandomizedSearchCV(
             estimator=clf,
@@ -54,6 +55,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--hypop",
+        type=int,
         default=0,
         help="number of parameters to test in randomsearch if hyperparameter optimization. set to 0 for no hyperparammeter optimization",
     )
@@ -96,7 +98,7 @@ if __name__ == "__main__":
     debug = args.debug
     seed = args.seed
     band = args.band
-    cv = args.cv
+    cv = int(args.cv)
     train_size = args.train_size
     num_workers = args.num_workers
     model_name = args.model_name
@@ -122,14 +124,17 @@ if __name__ == "__main__":
     elif classifier == "SVM":
         clf = SVM()
         params = {
-            "C": scipy.stats.expon(scale=100),
-            "gamma": scipy.stats.expon(scale=0.1),
-            "kernel": ["rbf"],
-            "class_weight": ["balanced", None],
+            "clf__C": scipy.stats.expon(scale=100),
+            "clf__gamma": scipy.stats.expon(scale=0.1),
+            "clf__kernel": ["rbf"],
+            "clf__class_weight": ["balanced", None],
         }
     elif classifier == "LR":
         clf = LR()
-        params = {"penality": ["l1", "l2"], "C": scipy.stats.uniform(loc=0, scale=4)}
+        params = {
+            "clf__penality": ["l1", "l2"],
+            "clf__C": scipy.stats.uniform(loc=0, scale=4),
+        }
 
     ################
     # Starting log #
@@ -204,6 +209,7 @@ if __name__ == "__main__":
         band=band,
     )
     crossval = StratifiedGroupKFold(n_splits=cv, random_state=seed)
+    print(type(crossval.get_n_splits(1, 2, 3)))
 
     if space == "riemannian" or data_type in ["cov", "cosp"]:
         classifier = f"riemannian{classifier}"
