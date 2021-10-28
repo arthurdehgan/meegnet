@@ -131,7 +131,7 @@ if __name__ == "__main__":
     elif classifier == "LR":
         clf = LR()
         params = {
-            "clf__penality": ["l1", "l2"],
+            "clf__penalty": ["none", "l1", "l2", "elasticnet"],
             "clf__C": scipy.stats.uniform(loc=0, scale=4),
         }
 
