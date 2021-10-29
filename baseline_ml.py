@@ -213,7 +213,7 @@ if __name__ == "__main__":
         classifier = f"riemannian{classifier}"
         clf = TSclassifier(clf=clf)
     name = f"{model_name}_{seed}_{classifier}_{ch_type}_{data_type}"
-    if hypop != 0:
+    if hypop != 0 and params != {}:
         name += "_opti"
     logging.info(f"{clf}")
     logging.info("Training...")
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         savename = save_path + name + f"_{eln}"
         scores = run_classif(clf, X[:, i], y, groups, crossval, params, hypop)
         if data_type == "cosp":
-            savename += "_{bands[j]}.mat"
+            savename += f"_{bands[j]}.mat"
         else:
             savename += ".mat"
         savemat(savename, {"results": scores})
