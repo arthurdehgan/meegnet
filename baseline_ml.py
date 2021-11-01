@@ -14,6 +14,7 @@ from dataloaders import create_datasets
 from torch.utils.data import ConcatDataset, DataLoader
 from parsing import parser
 
+BANDS= ['delta', 'theta', 'alpha', 'beta', 'gamma']]
 
 def run_classif(clf, X, y, groups, crossval, params, hypop):
     if hypop != 0 and params != {}:
@@ -227,7 +228,7 @@ if __name__ == "__main__":
         savename = save_path + name + f"_{eln}"
         scores = run_classif(clf, X[:, i], y, groups, crossval, params, hypop)
         if data_type == "cosp":
-            savename += f"_{bands[j]}.mat"
+            savename += f"_{BANDS[j]}.mat"
         else:
             savename += ".mat"
         savemat(savename, {"results": scores})
