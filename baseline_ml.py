@@ -14,7 +14,7 @@ from dataloaders import create_datasets
 from torch.utils.data import ConcatDataset, DataLoader
 from parsing import parser
 
-BANDS= ['delta', 'theta', 'alpha', 'beta', 'gamma']]
+BANDS= ['delta', 'theta', 'alpha', 'beta', 'gamma']
 
 def run_classif(clf, X, y, groups, crossval, params, hypop):
     if hypop != 0 and params != {}:
