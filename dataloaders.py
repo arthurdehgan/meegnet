@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import os
+import random
 import logging
 import torch
 import psutil
@@ -81,6 +82,25 @@ def extract_bands(data):
     if add_axis:
         return data[0]
     return data
+
+
+def assert_params(band, domain, dattype):
+    if domain == "cosp":
+        if band == "":
+            logging.error(
+                "A frequency band must be specified when using co-spectrum matrices"
+            )
+        elif band not in BANDS:
+            logging.error(
+                f"{band} is not a correct band option. band must be in {BANDS}"
+            )
+    if dattype not in ["rest", "passive", "task"]:
+        logging.error(
+            f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
+        )
+    else:
+        logging.info(f"Loading data from the {dattype} data set")
+    return
 
 
 def create_datasets(
@@ -167,6 +187,96 @@ def create_datasets(
     return datasets
 
 
+def load_sets(
+    dpath,
+    max_subj=1000,
+    n_splits=5,
+    offset=30,
+    ch_type="ALL",
+    domain="temporal",
+    printmem=False,
+    dattype="rest",
+    seed=0,
+    band="",
+    testing=False,
+):
+    """Loading data subject per subject."""
+    assert_params(band, domain, dattype)
+
+    dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
+    subs_df = (
+        dataframe.drop(["begin", "end"], axis=1)
+        .drop_duplicates(subset=["subs"])
+        .reset_index(drop=True)
+    )[:max_subj]
+
+    n_sub = len(subs_df)
+    logging.debug(f"Loading {n_sub} subjects data")
+    if printmem:
+        totmem = psutil.virtual_memory().total / 10 ** 9
+        logging.info(f"Total Available memory: {totmem:.3f} Go")
+
+    npersplit = 0
+    X_sets = [[] for _ in range(n_splits)]
+    y_sets = [[] for _ in range(n_splits)]
+    for i, row in enumerate(subs_df.iterrows()):
+        random.seed(seed)
+        torch.manual_seed(seed)
+        if printmem:
+            usedmem = psutil.virtual_memory().used / 10 ** 9
+            memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
+            if n_sub > 10:
+                if i % (n_sub // 10) == 0:
+                    logging.debug(memstate)
+            else:
+                logging.debug(memstate)
+
+        sub = row[1]["subs"]
+        data = load_sub(
+            dpath,
+            sub,
+            band=band,
+            ch_type=ch_type,
+            dattype=dattype,
+            domain=domain,
+            printmem=printmem,
+            seed=seed,
+            offset=offset,
+        )
+        if data is None:
+            n_sub -= 1
+            continue
+
+        N = len(data)
+        fold_size = int(N / n_splits)
+        test_size = N - fold_size * (n_splits - 1)
+        indexes = random_split(
+            np.arange(N),
+            [*[fold_size] * (n_splits - 1), test_size],
+            generator=torch.Generator().manual_seed(seed),
+        )
+        random.shuffle(data)
+        labels = np.array([i for _ in range(N)])
+        for j, index in enumerate(indexes):
+            X_sets[j].append(torch.Tensor(data)[index])
+            y_sets[j].append(torch.Tensor(labels)[index])
+
+        npersplit += fold_size
+
+    if not testing:
+        n_splits -= 1
+    logging.info(
+        f"Loaded {n_splits} subsets of {npersplit} trials succesfully amongset {n_sub} subjects\n"
+    )
+
+    datasets = []
+    for i in range(n_splits):
+        datasets.append(TensorDataset(torch.cat(X_sets[i], 0), torch.cat(y_sets[i], 0)))
+
+    # WARNING: permute_labels fait pas exactement ce qu'on veut vu que il melangeais dans les subsets... on le vire ici en tk
+    return n_sub, datasets
+
+
 def create_loader(
     dataset,
     batch_size,
@@ -204,22 +314,7 @@ def load_data(
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
-    if domain == "cosp":
-        if band == "":
-            logging.error(
-                "A frequency band must be specified when using co-spectrum matrices"
-            )
-        elif band not in BANDS:
-            logging.error(
-                f"{band} is not a correct band option. band must be in {BANDS}"
-            )
-
-    if dattype not in ["rest", "passive", "task"]:
-        logging.error(
-            f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
-        )
-    else:
-        logging.info(f"Loading data from the {dattype} data set")
+    assert_params(band, domain, dattype)
 
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
@@ -227,101 +322,44 @@ def load_data(
         .reset_index(drop=True)
     )
 
-    n_subj = len(subs_df)
+    n_sub = len(subs_df)
     X = []
     y = []
     if load_groups:
         groups = []
-    logging.debug(f"Loading {n_subj} subjects data")
+    logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
         # subj_sizes = [] # assigned but never used ?
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
     for i, row in enumerate(subs_df.iterrows()):
         np.random.seed(seed)
+        random.seed(seed)
+        torch.manual_seed(seed)
         if printmem:
             usedmem = psutil.virtual_memory().used / 10 ** 9
             memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
-            if n_subj > 10:
-                if i % (n_subj // 10) == 0:
+            if n_sub > 10:
+                if i % (n_sub // 10) == 0:
                     logging.debug(memstate)
             else:
                 logging.debug(memstate)
 
         sub, lab = row[1]["subs"], row[1]["sex"]
-        try:
-            if domain in ("cov", "cosp"):
-                data = np.load(dpath + f"{sub}_{dattype}_{domain}.npy")[chan_index]
-                data = np.swapaxes(data, 0, 1)
-                if domain == "cosp":
-                    data = data[:, :, BANDS.index(band)]
-            else:
-                sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
-                    chan_index
-                ]
-        except:
-            logging.warning(f"Warning: There was a problem loading subject {sub}")
-            n_subj -= 1
+        data = load_sub(
+            dpath,
+            sub,
+            band=band,
+            ch_type=ch_type,
+            dattype=dattype,
+            domain=domain,
+            printmem=printmem,
+            seed=seed,
+            offset=offset,
+        )
+        if data is None:
+            n_sub -= 1
             continue
-
-        # TODO there must be a better way to code this.
-        sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
-        if domain == "both":
-            # TODO the welch code might be wrong, check if the transformation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
-            try:
-                data = [
-                    np.append(
-                        zscore(sub_data[:, :, begin:end], axis=1),
-                        welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1],
-                    )
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
-                ]
-            except:
-                logging.warning(f"Warning: There was a problem loading subject {sub}")
-                n_subj -= 1
-                continue
-
-        elif domain == "bands":
-            # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
-            try:
-                data = [
-                    np.append(welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1])
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
-                ]
-            except:
-                logging.warning(f"Warning: There was a problem loading subject {sub}")
-                n_subj -= 1
-
-        elif domain == "bins":
-            try:
-                data = [
-                    np.append(welch(sub_data, fs=SAMPLING_FREQ)[1])
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
-                ]
-            except:
-                logging.warning(f"Warning: There was a problem loading subject {sub}")
-                n_subj -= 1
-
-        elif domain == "temporal":
-            data = []
-            for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
-                seg = sub_data[:, :, begin:end]
-                if (
-                    seg.shape[-1] == end - begin
-                    and begin >= offset * SAMPLING_FREQ
-                    and not np.isnan(seg).any()
-                ):
-                    try:
-                        data.append(zscore(seg, axis=1))
-                    except:
-                        continue
-            if len(data) < 50:
-                logging.warning(f"Warning: There was a problem loading subject {sub}")
-                n_subj -= 1
-                continue
 
         if samples is not None:
             random_samples = np.random.choice(
@@ -333,16 +371,92 @@ def load_data(
         y += [lab] * len(data)
         if load_groups:
             groups += [int(sub[2:])] * len(data)
-    logging.info(f"Loaded {n_subj} subjects succesfully\n")
+    logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
     y = torch.as_tensor(y)
-    groups = torch.as_tensor(groups)
     X = torch.cat(X, 0)
     if permute_labels:
         y = y[np.random.permutation(list(range(len(y))))]
         logging.info("Labels shuffled for permutation test!")
 
     if load_groups:
+        groups = torch.as_tensor(groups)
         return X, y, groups
     else:
         return X, y
+
+
+def load_sub(
+    dpath,
+    sub,
+    band="",
+    ch_type="ALL",
+    dattype="rest",
+    domain="temporal",
+    printmem=False,
+    seed=0,
+    offset=30,
+):
+    SAMPLING_FREQ = 200
+    if ch_type == "MAG":
+        chan_index = [2]
+    elif ch_type == "GRAD":
+        chan_index = [0, 1]
+    elif ch_type == "ALL":
+        chan_index = [0, 1, 2]
+    dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
+
+    try:
+        if domain in ("cov", "cosp"):
+            data = np.load(dpath + f"{sub}_{dattype}_{domain}.npy")[chan_index]
+            data = np.swapaxes(data, 0, 1)
+            if domain == "cosp":
+                data = data[:, :, BANDS.index(band)]
+        else:
+            sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
+                chan_index
+            ]
+            sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
+            if domain == "both":
+                # TODO the welch code might be wrong, check if the transformation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
+                data = [
+                    np.append(
+                        zscore(sub_data[:, :, begin:end], axis=1),
+                        welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1],
+                    )
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+            elif domain == "bands":
+                # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
+                data = [
+                    np.append(welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1])
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+            elif domain == "bins":
+                data = [
+                    np.append(welch(sub_data, fs=SAMPLING_FREQ)[1])
+                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
+                    if begin >= offset * SAMPLING_FREQ
+                ]
+            elif domain == "temporal":
+                data = []
+                for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
+                    seg = sub_data[:, :, begin:end]
+                    if (
+                        seg.shape[-1] == end - begin
+                        and begin >= offset * SAMPLING_FREQ
+                        and not np.isnan(seg).any()
+                    ):
+                        try:
+                            data.append(zscore(seg, axis=1))
+                        except:
+                            continue
+                if len(data) < 50:
+                    return None
+    except:
+        logging.warning(f"Warning: There was a problem loading subject {sub}")
+        return None
+
+    return data

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loader, create_datasets
+from dataloaders import create_loader, create_datasets, load_sets
 from torch.utils.data import ConcatDataset
 from network import FullNet
 from utils import train, load_checkpoint
@@ -17,6 +17,11 @@ if __name__ == "__main__":
     # PARSING #
     ###########
 
+    parser.add_argument(
+        "--subclf",
+        action="store_true",
+        help="launches subject classification instead of gender classification.",
+    )
     parser.add_argument(
         "--dattype",
         default="rest",
@@ -56,6 +61,7 @@ if __name__ == "__main__":
     samples = args.samples
     dattype = args.dattype
     batchnorm = args.batchnorm
+    subclf = args.subclf
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -144,20 +150,31 @@ if __name__ == "__main__":
     input_size = (n_channels // 102, 102, trial_length)
 
     # We create loaders and datasets (see dataloaders.py)
-    datasets = create_datasets(
-        data_path,
-        train_size,
-        max_subj,
-        ch_type,
-        data_type,
-        seed=seed,
-        debug=debug,
-        printmem=printmem,
-        ages=ages,
-        permute_labels=permute_labels,
-        samples=samples,
-        dattype=dattype,
-    )
+    if subclf:
+        n_sub, datasets = load_sets(
+            data_path,
+            max_subj=max_subj,
+            ch_type=ch_type,
+            seed=seed,
+            printmem=printmem,
+            dattype=dattype,
+        )
+    else:
+        datasets = create_datasets(
+            data_path,
+            train_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            debug=debug,
+            printmem=printmem,
+            ages=ages,
+            permute_labels=permute_labels,
+            samples=samples,
+            dattype=dattype,
+        )
+        n_sub = None
 
     if mode == "overwrite":
         save = True
@@ -192,6 +209,8 @@ if __name__ == "__main__":
             dropout_option,
             batchnorm,
             maxpool,
+            sub=subclf,
+            n_sub=n_sub,
         ).to(device)
 
         model_filepath = save_path + net.name + ".pt"
