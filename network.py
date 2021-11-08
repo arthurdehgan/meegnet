@@ -41,6 +41,8 @@ class FullNet(CustomNet):
         dropout_option="same",
         batchnorm=False,
         maxpool=None,
+        sub=False,
+        n_sub=None,
     ):
         CustomNet.__init__(self, model_name, input_size)
         if dropout_option == "same":
@@ -160,14 +162,24 @@ class FullNet(CustomNet):
         # Previous version: unceomment this line and comment the next in order to use previous
         # state dicts Don't forget to remove unpacking (*)
         # layers.extend(
-        self.classif = nn.Sequential(
-            *nn.ModuleList(
-                [
-                    nn.Linear(lin_size, int(n_linear / 2)),
-                    nn.Linear(int(n_linear / 2), 2),
-                ]
+        if sub:
+            self.classif = nn.Sequential(
+                *nn.ModuleList(
+                    [
+                        nn.Linear(lin_size, int(n_linear / 2)),
+                        nn.Linear(int(n_linear / 2), n_sub),
+                    ]
+                )
             )
-        )
+        else:
+            self.classif = nn.Sequential(
+                *nn.ModuleList(
+                    [
+                        nn.Linear(lin_size, int(n_linear / 2)),
+                        nn.Linear(int(n_linear / 2), 2),
+                    ]
+                )
+            )
         # Previous version: uncomment this line and comment out forward method in order to use
         # previous state dicts
         # self.model = nn.Sequential(*layers)
