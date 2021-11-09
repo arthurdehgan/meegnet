@@ -116,7 +116,6 @@ def create_datasets(
     dattype="rest",
     band="",
     samples=None,
-    permute_labels=False,
     load_groups=False,
     testing=False,
 ):
@@ -177,7 +176,6 @@ def create_datasets(
                 dattype=dattype,
                 samples=samples,
                 seed=seed,
-                permute_labels=permute_labels,
                 load_groups=load_groups,
                 band=band,
             )
@@ -273,7 +271,6 @@ def load_sets(
     for i in range(n_splits):
         datasets.append(TensorDataset(torch.cat(X_sets[i], 0), torch.cat(y_sets[i], 0)))
 
-    # WARNING: permute_labels fait pas exactement ce qu'on veut vu que il melangeais dans les subsets... on le vire ici en tk
     return n_sub, datasets
 
 
@@ -301,7 +298,6 @@ def load_data(
     dattype="rest",
     samples=None,
     seed=0,
-    permute_labels=False,
     load_groups=False,
     band="",
 ):
@@ -375,9 +371,6 @@ def load_data(
 
     y = torch.as_tensor(y)
     X = torch.cat(X, 0)
-    if permute_labels:
-        y = y[np.random.permutation(list(range(len(y))))]
-        logging.info("Labels shuffled for permutation test!")
 
     if load_groups:
         groups = torch.as_tensor(groups)
