@@ -18,6 +18,11 @@ if __name__ == "__main__":
     ###########
 
     parser.add_argument(
+        "--notest",
+        action="store_true",
+        help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
+    )
+    parser.add_argument(
         "--subclf",
         action="store_true",
         help="launches subject classification instead of gender classification.",
@@ -37,6 +42,7 @@ if __name__ == "__main__":
         save_path += "/"
     data_type = args.feature
     crossval = args.crossval
+    notest = args.notest
     maxpool = args.maxpool
     batch_size = args.batch_size
     max_subj = args.max_subj
@@ -158,7 +164,9 @@ if __name__ == "__main__":
             seed=seed,
             printmem=printmem,
             dattype=dattype,
+            testing=notest,
         )
+        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
     else:
         datasets = create_datasets(
             data_path,
@@ -172,8 +180,10 @@ if __name__ == "__main__":
             ages=ages,
             samples=samples,
             dattype=dattype,
+            testing=notest,
         )
         n_sub = None
+        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
 
     if mode == "overwrite":
         save = True
@@ -188,6 +198,8 @@ if __name__ == "__main__":
     fold = 1
     if crossval:
         fold = 4
+        if notest:
+            fold = 5
         cv = []
 
     # Actual training (loading nework if existing and load option is True)
@@ -220,7 +232,7 @@ if __name__ == "__main__":
             logging.info(net)
 
         if crossval:
-            logging.info(f"Training model for fold {i+1}/4:")
+            logging.info(f"Training model for fold {i+1}/{fold}:")
         else:
             logging.info("Training model:")
 
