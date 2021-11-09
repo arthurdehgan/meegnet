@@ -6,7 +6,7 @@ import numpy as np
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loader, create_datasets, load_sets
-from torch.utils.data import ConcatDataset
+from torch.utils.data import ConcatDataset, TensorDataset
 from network import FullNet
 from utils import train, load_checkpoint
 from parsing import parser
@@ -170,7 +170,6 @@ if __name__ == "__main__":
             debug=debug,
             printmem=printmem,
             ages=ages,
-            permute_labels=permute_labels,
             samples=samples,
             dattype=dattype,
         )
@@ -224,16 +223,21 @@ if __name__ == "__main__":
             logging.info(f"Training model for fold {i+1}/4:")
         else:
             logging.info("Training model:")
+
+        n_lab = 612 if subclf else 2
+
         train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
         trainloader = create_loader(
             train_dataset,
             batch_size=batch_size,
             num_workers=num_workers,
+            shuffle=True,
         )
         validloader = create_loader(
             datasets[i],
             batch_size=int(len(datasets[i]) / 4),
             num_workers=num_workers,
+            shuffle=True,
         )
         # TODO update modes and check if we can add testing to this script or needs another one
         if mode != "evaluate":
@@ -249,6 +253,7 @@ if __name__ == "__main__":
                 lr=learning_rate,
                 mode=mode,
                 save_path=save_path,
+                permute_labels=permute_labels,
             )
         else:
             if os.path.exists(model_filepath):

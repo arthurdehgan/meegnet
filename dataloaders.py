@@ -237,8 +237,6 @@ def load_sets(
             ch_type=ch_type,
             dattype=dattype,
             domain=domain,
-            printmem=printmem,
-            seed=seed,
             offset=offset,
         )
         if data is None:
@@ -276,16 +274,15 @@ def load_sets(
 
 def create_loader(
     dataset,
-    batch_size,
     infinite=False,
-    num_workers=0,
+    **kwargs,
 ):
     if infinite:
         loader = InfiniteDataLoader
     else:
         loader = DataLoader
 
-    return loader(dataset, batch_size=batch_size, num_workers=num_workers)
+    return loader(dataset, **kwargs)
 
 
 def load_data(
@@ -302,14 +299,6 @@ def load_data(
     band="",
 ):
     """Loading data subject per subject."""
-    SAMPLING_FREQ = 200
-    if ch_type == "MAG":
-        chan_index = [2]
-    elif ch_type == "GRAD":
-        chan_index = [0, 1]
-    elif ch_type == "ALL":
-        chan_index = [0, 1, 2]
-
     assert_params(band, domain, dattype)
 
     subs_df = (
@@ -386,8 +375,6 @@ def load_sub(
     ch_type="ALL",
     dattype="rest",
     domain="temporal",
-    printmem=False,
-    seed=0,
     offset=30,
 ):
     SAMPLING_FREQ = 200

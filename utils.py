@@ -52,6 +52,7 @@ def train(
     p=20,
     lr=0.00001,
     save_path="./models",
+    permute_labels=False,
 ):
     # The train function trains and evaluates the network multiple times and prints the
     # loss and accuracy for each batch and each epoch. Everything is saved in a dictionnary
@@ -133,6 +134,10 @@ def train(
 
             y = y.view(-1).to(device)
             X = X.view(-1, *net.input_size).to(device)
+
+            if permute_labels:
+                idx = torch.randperm(y.nelement())
+                y = y.view(-1)[idx].view(y.size())
 
             net.train()
             out = net.forward(X)
