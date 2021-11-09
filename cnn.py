@@ -204,7 +204,7 @@ if __name__ == "__main__":
 
     # Actual training (loading nework if existing and load option is True)
     for i in range(fold):
-        name = f"{model_name}_{seed}_fold{i}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
+        name = f"{model_name}_{seed}_fold{i+1}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
         if batchnorm:
             name += "_BN"
         if maxpool != 0:
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
         # Evaluating
         if crossval:
-            logging.info(f"Evaluating model for fold {i}/4:")
+            logging.info(f"Evaluating model for fold {i+1}/{fold}:")
         else:
             logging.info("Evaluating model:")
         results = loadmat(model_filepath[:-2] + "mat")
