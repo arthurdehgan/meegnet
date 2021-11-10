@@ -28,6 +28,11 @@ if __name__ == "__main__":
         help="launches subject classification instead of gender classification.",
     )
     parser.add_argument(
+        "--fold",
+        default=None,
+        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
+    )
+    parser.add_argument(
         "--dattype",
         default="rest",
         choices=["rest", "task", "passive"],
@@ -49,6 +54,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     debug = args.debug
     hlayers = args.hlayers
+    fold = int(args.fold)
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -195,15 +201,17 @@ if __name__ == "__main__":
         save = False
         load = False
 
-    fold = 1
+    folds = 1
     if crossval:
-        fold = 4
+        folds = 4
         if notest:
-            fold = 5
+            folds = 5
         cv = []
 
     # Actual training (loading nework if existing and load option is True)
-    for i in range(fold):
+    for i in range(folds):
+        if fold is not None:
+            i = fold
         name = f"{model_name}_{seed}_fold{i+1}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
         if batchnorm:
             name += "_BN"
@@ -232,7 +240,7 @@ if __name__ == "__main__":
             logging.info(net)
 
         if crossval:
-            logging.info(f"Training model for fold {i+1}/{fold}:")
+            logging.info(f"Training model for fold {i+1}/{folds}:")
         else:
             logging.info("Training model:")
 
@@ -287,6 +295,8 @@ if __name__ == "__main__":
             cv.append(acc)
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
+        if fold is not None:
+            break
 
     if crossval:
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
