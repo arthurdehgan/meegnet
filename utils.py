@@ -132,12 +132,12 @@ def train(
             optimizer.zero_grad()
             X, y = batch
 
-            y = y.view(-1).to(device)
-            X = X.view(-1, *net.input_size).to(device)
-
             if permute_labels:
                 idx = torch.randperm(y.nelement())
                 y = y.view(-1)[idx].view(y.size())
+
+            y = y.view(-1).to(device)
+            X = X.view(-1, *net.input_size).to(device)
 
             net.train()
             out = net.forward(X)
