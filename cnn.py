@@ -5,8 +5,8 @@ import torch
 import numpy as np
 from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loader, create_datasets
-from torch.utils.data import ConcatDataset
+from dataloaders import create_loader, create_datasets, load_sets
+from torch.utils.data import ConcatDataset, TensorDataset
 from network import FullNet
 from utils import train, load_checkpoint
 from parsing import parser
@@ -17,6 +17,21 @@ if __name__ == "__main__":
     # PARSING #
     ###########
 
+    parser.add_argument(
+        "--notest",
+        action="store_true",
+        help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
+    )
+    parser.add_argument(
+        "--subclf",
+        action="store_true",
+        help="launches subject classification instead of gender classification.",
+    )
+    parser.add_argument(
+        "--fold",
+        default=None,
+        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
+    )
     parser.add_argument(
         "--dattype",
         default="rest",
@@ -32,12 +47,14 @@ if __name__ == "__main__":
         save_path += "/"
     data_type = args.feature
     crossval = args.crossval
+    notest = args.notest
     maxpool = args.maxpool
     batch_size = args.batch_size
     max_subj = args.max_subj
     ch_type = args.elec
     debug = args.debug
     hlayers = args.hlayers
+    fold = int(args.fold)
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
@@ -56,6 +73,7 @@ if __name__ == "__main__":
     samples = args.samples
     dattype = args.dattype
     batchnorm = args.batchnorm
+    subclf = args.subclf
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -144,20 +162,34 @@ if __name__ == "__main__":
     input_size = (n_channels // 102, 102, trial_length)
 
     # We create loaders and datasets (see dataloaders.py)
-    datasets = create_datasets(
-        data_path,
-        train_size,
-        max_subj,
-        ch_type,
-        data_type,
-        seed=seed,
-        debug=debug,
-        printmem=printmem,
-        ages=ages,
-        permute_labels=permute_labels,
-        samples=samples,
-        dattype=dattype,
-    )
+    if subclf:
+        n_sub, datasets = load_sets(
+            data_path,
+            max_subj=max_subj,
+            ch_type=ch_type,
+            seed=seed,
+            printmem=printmem,
+            dattype=dattype,
+            testing=notest,
+        )
+        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
+    else:
+        datasets = create_datasets(
+            data_path,
+            train_size,
+            max_subj,
+            ch_type,
+            data_type,
+            seed=seed,
+            debug=debug,
+            printmem=printmem,
+            ages=ages,
+            samples=samples,
+            dattype=dattype,
+            testing=notest,
+        )
+        n_sub = None
+        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
 
     if mode == "overwrite":
         save = True
@@ -169,14 +201,18 @@ if __name__ == "__main__":
         save = False
         load = False
 
-    fold = 1
+    folds = 1
     if crossval:
-        fold = 4
+        folds = 4
+        if notest:
+            folds = 5
         cv = []
 
     # Actual training (loading nework if existing and load option is True)
-    for i in range(fold):
-        name = f"{model_name}_{seed}_fold{i}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
+    for i in range(folds):
+        if fold is not None:
+            i = fold
+        name = f"{model_name}_{seed}_fold{i+1}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
         if batchnorm:
             name += "_BN"
         if maxpool != 0:
@@ -192,6 +228,8 @@ if __name__ == "__main__":
             dropout_option,
             batchnorm,
             maxpool,
+            sub=subclf,
+            n_sub=n_sub,
         ).to(device)
 
         model_filepath = save_path + net.name + ".pt"
@@ -202,19 +240,24 @@ if __name__ == "__main__":
             logging.info(net)
 
         if crossval:
-            logging.info(f"Training model for fold {i+1}/4:")
+            logging.info(f"Training model for fold {i+1}/{folds}:")
         else:
             logging.info("Training model:")
+
+        n_lab = 612 if subclf else 2
+
         train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
         trainloader = create_loader(
             train_dataset,
             batch_size=batch_size,
             num_workers=num_workers,
+            shuffle=True,
         )
         validloader = create_loader(
             datasets[i],
             batch_size=int(len(datasets[i]) / 4),
             num_workers=num_workers,
+            shuffle=True,
         )
         # TODO update modes and check if we can add testing to this script or needs another one
         if mode != "evaluate":
@@ -230,6 +273,7 @@ if __name__ == "__main__":
                 lr=learning_rate,
                 mode=mode,
                 save_path=save_path,
+                permute_labels=permute_labels,
             )
         else:
             if os.path.exists(model_filepath):
@@ -242,7 +286,7 @@ if __name__ == "__main__":
 
         # Evaluating
         if crossval:
-            logging.info(f"Evaluating model for fold {i}/4:")
+            logging.info(f"Evaluating model for fold {i+1}/{fold}:")
         else:
             logging.info("Evaluating model:")
         results = loadmat(model_filepath[:-2] + "mat")
@@ -251,6 +295,8 @@ if __name__ == "__main__":
             cv.append(acc)
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
+        if fold is not None:
+            break
 
     if crossval:
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")

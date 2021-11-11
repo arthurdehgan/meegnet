@@ -14,6 +14,7 @@ from dataloaders import create_datasets
 from torch.utils.data import ConcatDataset, DataLoader
 from parsing import parser
 
+
 def run_classif(clf, X, y, groups, crossval, params, hypop):
     if hypop != 0 and params != {}:
         clf = RandomizedSearchCV(
@@ -130,7 +131,7 @@ if __name__ == "__main__":
     elif classifier == "LR":
         clf = LR()
         params = {
-            "clf__penalty": ["none", "l1", "l2", "elasticnet"],
+            "clf__penalty": ["none", "l2"],
             "clf__C": scipy.stats.uniform(loc=0, scale=4),
         }
 
