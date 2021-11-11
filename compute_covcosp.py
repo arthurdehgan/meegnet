@@ -9,14 +9,6 @@ from pyriemann.estimation import CospCovariances
 from pyriemann.estimation import Covariances
 import argparse
 
-BANDS = {
-    "delta": (0, 4),
-    "theta": (4, 8),
-    "alpha": (8, 13),
-    "beta": (13, 25),
-    "gamma": (25, 50),
-}
-
 
 def split_data(dat, df, sf, offset=10):
     """By default we skip the first 10s of the data.
@@ -63,45 +55,44 @@ def load_and_compute(
     for some_file in os.listdir(data_path):
         sub = some_file.split("_")[0]
         if dattype in some_file and sub in subs:
-            if not os.path.exists(savename):
-                data = np.load(data_path + some_file)
-                data = split_data(data.T, sub_df[sub_df["subs"] == sub], sf, 10)
-                channels = []
-                if feature == "cosp":
-                    for bname, freqr in BANDS.items():
-                        for channel in data:
-                            fmin, fmax = freqr
-                            cov = CospCovariances(
-                                window=window,
-                                overlap=overlap,
-                                fmin=fmin,
-                                fmax=fmax,
-                                fs=sf,
-                            )
-                            mat = cov.fit_transform(channel)
-                            mat = np.swapaxes(mat, 0, 1)
-                            channels.append(mat)
-                        final = np.array(channels)
-                        savename = save_path + f"{sub}_{dattype}_{feature}_{bname}.npy"
-                        np.save(savename, final)
-                elif feature == "cov":
+            data = np.load(data_path + some_file)
+            data = split_data(data.T, sub_df[sub_df["subs"] == sub], sf, 10)
+            if feature == "cosp":
+                for bname, freqr in bands.items():
+                    channels = []
                     for channel in data:
-                        mat = Covariances(estimator="lwf").fit_transform(channel)
+                        fmin, fmax = freqr
+                        cov = CospCovariances(
+                            window=window,
+                            overlap=overlap,
+                            fmin=fmin,
+                            fmax=fmax,
+                            fs=sf,
+                        )
+                        mat = cov.fit_transform(channel)
+                        mat = np.swapaxes(mat, -1, 1)
                         channels.append(mat)
                     final = np.array(channels)
-                    savename = save_path + f"{sub}_{dattype}_{feature}.npy"
+                    savename = save_path + f"{sub}_{dattype}_{feature}_{bname}.npy"
                     np.save(savename, final)
+            elif feature == "cov":
+                channels = []
+                for channel in data:
+                    mat = Covariances(estimator="lwf").fit_transform(channel)
+                    channels.append(mat)
+                final = np.array(channels)
+                savename = save_path + f"{sub}_{dattype}_{feature}.npy"
+                np.save(savename, final)
 
 
 if __name__ == "__main__":
-    bands = {
+    BANDS = {
         "delta": (0, 4),
         "theta": (4, 8),
-        "alpha": (8, 15),
-        "beta": (15, 25),
+        "alpha": (8, 13),
+        "beta": (13, 25),
         "gamma": (25, 50),
     }
-
     ###########
     # PARSING #
     ###########
@@ -167,5 +158,5 @@ if __name__ == "__main__":
     dattype = args.dattype
 
     load_and_compute(
-        data_path, save_path, sub_inf, bands, window, overlap, sf, dattype, feature
+        data_path, save_path, sub_inf, BANDS, window, overlap, sf, dattype, feature
     )
