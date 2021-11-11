@@ -9,12 +9,14 @@ from pyriemann.estimation import CospCovariances
 from pyriemann.estimation import Covariances
 import argparse
 
-BANDS = {"delta": (0, 4),
-         "theta": (4, 8),
-         "alpha": (8, 13),
-         "beta": (13, 25),
-         "gamma": (25, 50),
-        }
+BANDS = {
+    "delta": (0, 4),
+    "theta": (4, 8),
+    "alpha": (8, 13),
+    "beta": (13, 25),
+    "gamma": (25, 50),
+}
+
 
 def split_data(dat, df, sf, offset=10):
     """By default we skip the first 10s of the data.
