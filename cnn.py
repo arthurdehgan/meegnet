@@ -54,7 +54,7 @@ if __name__ == "__main__":
     ch_type = args.elec
     debug = args.debug
     hlayers = args.hlayers
-    fold = int(args.fold)
+    fold = None if args.fold is None else int(args.fold)
     filters = args.filters
     nchan = args.nchan
     dropout = args.dropout
