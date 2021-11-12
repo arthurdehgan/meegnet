@@ -338,8 +338,6 @@ def load_data(
             ch_type=ch_type,
             dattype=dattype,
             domain=domain,
-            printmem=printmem,
-            seed=seed,
             offset=offset,
         )
         if data is None:

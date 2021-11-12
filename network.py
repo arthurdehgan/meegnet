@@ -1,6 +1,8 @@
 import logging
 import torch
 from torch import nn
+import torch.nn.functional as F
+import numpy as np
 
 
 class Flatten(nn.Module):
@@ -11,11 +13,11 @@ class Flatten(nn.Module):
 
 
 class CustomNet(nn.Module):
-    def __init__(self, model_name, input_size):
+    def __init__(self, name, input_size, n_outputs):
         nn.Module.__init__(self)
         self.input_size = input_size
-        self.name = model_name
-        logging.info(model_name)
+        self.name = name
+        logging.info(name)
 
     def _get_lin_size(self, layers):
         return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
@@ -28,11 +30,44 @@ class CustomNet(nn.Module):
             filepath += "/"
 
 
+class MLP(CustomNet):
+    """Just  an MLP"""
+
+    def __init__(self, name, input_size, n_outputs, hparams):
+        CustomNet.__init__(self, name, input_size, n_outputs)
+        self.name = name
+        n_inputs = np.prod(input_size)
+        self.flatten = Flatten()
+        self.input = nn.Linear(n_inputs, hparams["mlp_width"])
+        self.dropout = nn.Dropout(hparams["mlp_dropout"])
+        self.hiddens = nn.ModuleList(
+            [
+                nn.Linear(hparams["mlp_width"], hparams["mlp_width"])
+                for _ in range(hparams["mlp_depth"] - 2)
+            ]
+        )
+        self.output = nn.Linear(hparams["mlp_width"], n_outputs)
+        self.n_outputs = n_outputs
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.input(x)
+        x = self.dropout(x)
+        x = F.relu(x)
+        for hidden in self.hiddens:
+            x = hidden(x)
+            x = self.dropout(x)
+            x = F.relu(x)
+        x = self.output(x)
+        return x
+
+
 class FullNet(CustomNet):
     def __init__(
         self,
-        model_name,
+        name,
         input_size,
+        n_outputs,
         hlayers=2,
         filter_size=7,
         nchan=5,
@@ -42,9 +77,8 @@ class FullNet(CustomNet):
         batchnorm=False,
         maxpool=None,
         sub=False,
-        n_sub=None,
     ):
-        CustomNet.__init__(self, model_name, input_size)
+        CustomNet.__init__(self, name, input_size, n_outputs)
         if dropout_option == "same":
             dropout1 = dropout
             dropout2 = dropout
@@ -162,24 +196,14 @@ class FullNet(CustomNet):
         # Previous version: unceomment this line and comment the next in order to use previous
         # state dicts Don't forget to remove unpacking (*)
         # layers.extend(
-        if sub:
-            self.classif = nn.Sequential(
-                *nn.ModuleList(
-                    [
-                        nn.Linear(lin_size, int(n_linear / 2)),
-                        nn.Linear(int(n_linear / 2), n_sub),
-                    ]
-                )
+        self.classif = nn.Sequential(
+            *nn.ModuleList(
+                [
+                    nn.Linear(lin_size, int(n_linear / 2)),
+                    nn.Linear(int(n_linear / 2), n_outputs),
+                ]
             )
-        else:
-            self.classif = nn.Sequential(
-                *nn.ModuleList(
-                    [
-                        nn.Linear(lin_size, int(n_linear / 2)),
-                        nn.Linear(int(n_linear / 2), 2),
-                    ]
-                )
-            )
+        )
         # Previous version: uncomment this line and comment out forward method in order to use
         # previous state dicts
         # self.model = nn.Sequential(*layers)

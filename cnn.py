@@ -7,7 +7,7 @@ from scipy.io import loadmat
 from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loader, create_datasets, load_sets
 from torch.utils.data import ConcatDataset, TensorDataset
-from network import FullNet
+from network import FullNet, MLP
 from utils import train, load_checkpoint
 from parsing import parser
 
@@ -33,6 +33,12 @@ if __name__ == "__main__":
         help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
     )
     parser.add_argument(
+        "--net-option",
+        default="cNet",
+        choices=["cNet", "MLP"],
+        help="cNet is the custom net.",
+    )
+    parser.add_argument(
         "--dattype",
         default="rest",
         choices=["rest", "task", "passive"],
@@ -47,6 +53,7 @@ if __name__ == "__main__":
         save_path += "/"
     data_type = args.feature
     crossval = args.crossval
+    net_option = args.net_option
     notest = args.notest
     maxpool = args.maxpool
     batch_size = args.batch_size
@@ -163,7 +170,7 @@ if __name__ == "__main__":
 
     # We create loaders and datasets (see dataloaders.py)
     if subclf:
-        n_sub, datasets = load_sets(
+        n_outputs, datasets = load_sets(
             data_path,
             max_subj=max_subj,
             ch_type=ch_type,
@@ -188,7 +195,7 @@ if __name__ == "__main__":
             dattype=dattype,
             testing=notest,
         )
-        n_sub = None
+        n_outputs = 2
         # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
 
     if mode == "overwrite":
@@ -217,20 +224,32 @@ if __name__ == "__main__":
             name += "_BN"
         if maxpool != 0:
             name += f"_maxpool{maxpool}"
-        net = FullNet(
-            name,
-            input_size,
-            hlayers,
-            filters,
-            nchan,
-            linear,
-            dropout,
-            dropout_option,
-            batchnorm,
-            maxpool,
-            sub=subclf,
-            n_sub=n_sub,
-        ).to(device)
+        if net_option == "MLP":
+            net = MLP(
+                name=name,
+                input_size=input_size,
+                n_outputs=n_outputs,
+                hparams={
+                    "mlp_width": linear,
+                    "mlp_depth": hlayers,
+                    "mlp_dropout": dropout,
+                },
+            ).to(device)
+        else:
+            net = FullNet(
+                name,
+                input_size,
+                n_outputs,
+                hlayers,
+                filters,
+                nchan,
+                linear,
+                dropout,
+                dropout_option,
+                batchnorm,
+                maxpool,
+                sub=subclf,
+            ).to(device)
 
         model_filepath = save_path + net.name + ".pt"
         logging.info(net.name)
