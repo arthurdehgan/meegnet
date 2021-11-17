@@ -26,7 +26,12 @@ def run_classif(clf, X, y, groups, crossval, params, hypop):
             verbose=0,
             n_jobs=-1,
         )
-        scores = clf.fit(X=X, y=y, groups=groups)
+        clf.fit(X=X, y=y, groups=groups)
+        scores = {
+            "best": clf.best_params_,
+            "results": clf.cv_results_,
+            "score": clf.best_score_,
+        }
 
     else:
         scores = cross_val_score(
@@ -201,7 +206,6 @@ if __name__ == "__main__":
         debug=debug,
         printmem=printmem,
         ages=ages,
-        permute_labels=permute_labels,
         samples=samples,
         dattype=dattype,
         load_groups=True,
@@ -218,6 +222,7 @@ if __name__ == "__main__":
     logging.info(f"{clf}")
     logging.info("Training...")
     train_dataset = ConcatDataset(datasets[:4])
+    print(train_dataset)
     X, y, groups = next(iter(DataLoader(train_dataset, batch_size=len(train_dataset))))
     X = np.array(X.numpy())
     y = np.array(y.numpy())
