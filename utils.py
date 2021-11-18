@@ -140,7 +140,7 @@ def train(
             X = X.view(-1, *net.input_size).to(device)
 
             net.train()
-            out = net.forward(X)
+            out = net.forward(X.float())
             loss = criterion(out, Variable(y.long()))
             loss.backward()
             optimizer.step()
@@ -227,7 +227,7 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
             y = y.view(-1).to(device)
             X = X.view(-1, *net.input_size).to(device)
 
-            out = net.forward(X)
+            out = net.forward(X.float())
             loss = criterion(out, Variable(y.long()))
             acc = accuracy(out, y)
             n = y.size(0)
