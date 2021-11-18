@@ -222,7 +222,6 @@ if __name__ == "__main__":
     logging.info(f"{clf}")
     logging.info("Training...")
     train_dataset = ConcatDataset(datasets[:4])
-    print(train_dataset)
     X, y, groups = next(iter(DataLoader(train_dataset, batch_size=len(train_dataset))))
     X = np.array(X.numpy())
     y = np.array(y.numpy())
