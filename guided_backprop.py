@@ -3,7 +3,7 @@ import torch
 import logging
 from scipy.io import savemat
 from torch.nn import ReLU
-from parser import parser
+from parsing import parser
 from cnn import FullNet, load_checkpoint
 from dataloaders import create_loaders
 from params import TIME_TRIAL_LENGTH
@@ -15,10 +15,6 @@ if __name__ == "__main__":
     ###############
     ### PARSING ###
     ###############
-
-    parser.add_argument(
-        "-f", "--filters", default=8, type=int, help="The size of the first convolution"
-    )
 
     args = parser.parse_args()
     data_path = args.path
@@ -34,6 +30,7 @@ if __name__ == "__main__":
     dropout = args.dropout
     dropout_option = args.dropout_option
     linear = args.linear
+    hlayers = args.hlayers
     seed = args.seed
     mode = args.mode
     train_size = args.train_size
@@ -58,7 +55,7 @@ if __name__ == "__main__":
     ### Starting log ###
     ####################
 
-    net_name = f"{model_name}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}"
+    net_name = f"{model_name}_{seed}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
 
     if log:
         logging.basicConfig(

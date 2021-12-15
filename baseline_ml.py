@@ -23,7 +23,7 @@ def run_classif(clf, X, y, groups, crossval, params, hypop):
             random_state=seed,
             n_iter=hypop,
             cv=crossval,
-            verbose=0,
+            verbose=3,
             n_jobs=-1,
         )
         clf.fit(X=X, y=y, groups=groups)

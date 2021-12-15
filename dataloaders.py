@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import zscore
 from scipy.signal import welch
+from scipy.io import loadmat
 from torch.utils.data import DataLoader, random_split, TensorDataset
 
 BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
@@ -117,6 +118,7 @@ def create_datasets(
     band="",
     samples=None,
     load_groups=False,
+    load_events=False,
     testing=False,
 ):
     """create dataloaders iterators."""
@@ -177,6 +179,7 @@ def create_datasets(
                 samples=samples,
                 seed=seed,
                 load_groups=load_groups,
+                load_events=load_events,
                 band=band,
             )
         )
@@ -285,6 +288,14 @@ def create_loader(
     return loader(dataset, **kwargs)
 
 
+def create_loaders(**kwargs):
+    datasets = create_datasets(**kwargs)
+    loaders = []
+    for dataset in datasets:
+        loaders.append(create_loader(dataset, **kwargs))
+    return loaders
+
+
 def load_data(
     dataframe,
     dpath,
@@ -296,6 +307,7 @@ def load_data(
     samples=None,
     seed=0,
     load_groups=False,
+    load_events=False,
     band="",
 ):
     """Loading data subject per subject."""
@@ -308,8 +320,7 @@ def load_data(
     )
 
     n_sub = len(subs_df)
-    X = []
-    y = []
+    X, y, e_targets = [], [], []
     if load_groups:
         groups = []
     logging.debug(f"Loading {n_sub} subjects data")
@@ -331,15 +342,18 @@ def load_data(
                 logging.debug(memstate)
 
         sub, lab = row[1]["subs"], row[1]["sex"]
-        data = load_sub(
-            dpath,
-            sub,
-            band=band,
-            ch_type=ch_type,
-            dattype=dattype,
-            domain=domain,
-            offset=offset,
-        )
+        if dattype != "passive" and not load_events:
+            data = load_sub(
+                dpath,
+                sub,
+                band=band,
+                ch_type=ch_type,
+                dattype=dattype,
+                domain=domain,
+                offset=offset,
+            )
+        else:
+            data, targets = load_passive_sub_events(dpath, sub, ch_type=ch_type)
         if data is None:
             n_sub -= 1
             continue
@@ -352,18 +366,63 @@ def load_data(
 
         X.append(torch.as_tensor(data))
         y += [lab] * len(data)
+        if dattype == "passive":
+            e_targets += targets
         if load_groups:
             groups += [int(sub[2:])] * len(data)
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
-    y = torch.as_tensor(y)
     X = torch.cat(X, 0)
+    y = torch.as_tensor(y)
+    if dattype == "passive":
+        e_targets = torch.as_tensor(e_targets)
 
     if load_groups:
         groups = torch.as_tensor(groups)
         return X, y, groups
+    elif dattype == "passive" and load_events:
+        return X, e_targets
     else:
         return X, y
+
+
+def load_passive_sub_events(dpath, sub, ch_type="ALL"):
+    s_freq = 500
+    if ch_type == "MAG":
+        chan_index = [2]
+    elif ch_type == "GRAD":
+        chan_index = [0, 1]
+    elif ch_type == "ALL":
+        chan_index = [0, 1, 2]
+
+    data, targets = [], []
+    try:
+        sub_data = np.load(dpath + f"{sub}_passive_ICA_transdef_mfds500.npy")[
+            chan_index
+        ]
+        events = loadmat(dpath + f"{sub}_passive_events_timestamps.mat")["times"]
+        for e_type, e_time in events:
+            stim_timing = int(float(e_time) * s_freq)
+            # 75 and 325 to get 150ms before stim and 650ms after stim. total is the
+            # same size as previous examples for architecture: 400 time samples
+            # but the s_freq is different. reminder: we did this in order to get a full stim
+            # in the example but stims arrive every 1s
+            seg = sub_data[:, :, stim_timing - 75 : stim_timing + 325]
+            if seg.shape[-1] == 400 and not np.isnan(seg).any():
+                try:
+                    data.append(zscore(seg, axis=1))
+                    target = 0 if e_type.strip() == "image" else 1
+                    targets.append(target)
+                except:
+                    continue
+    except:
+        logging.warning(f"Warning: There was a problem loading subject {sub}")
+
+    assert len(data) == len(
+        targets
+    ), f"{sub} has a number of target and trials missmatch"
+
+    return data, targets
 
 
 def load_sub(

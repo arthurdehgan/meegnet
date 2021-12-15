@@ -23,6 +23,11 @@ if __name__ == "__main__":
         help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
     )
     parser.add_argument(
+        "--eventclf",
+        action="store_true",
+        help="launches event classification instead of gender classification.",
+    )
+    parser.add_argument(
         "--subclf",
         action="store_true",
         help="launches subject classification instead of gender classification.",
@@ -81,6 +86,11 @@ if __name__ == "__main__":
     dattype = args.dattype
     batchnorm = args.batchnorm
     subclf = args.subclf
+    eventclf = args.eventclf
+    if eventclf:
+        assert (
+            dattype == "passive"
+        ), "dattype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
 
     ##############
@@ -193,6 +203,7 @@ if __name__ == "__main__":
             ages=ages,
             samples=samples,
             dattype=dattype,
+            load_events=eventclf,
             testing=notest,
         )
         n_outputs = 2
@@ -248,7 +259,6 @@ if __name__ == "__main__":
                 dropout_option,
                 batchnorm,
                 maxpool,
-                sub=subclf,
             ).to(device)
 
         model_filepath = save_path + net.name + ".pt"

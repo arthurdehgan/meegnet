@@ -75,8 +75,7 @@ class FullNet(CustomNet):
         dropout=0.25,
         dropout_option="same",
         batchnorm=False,
-        maxpool=None,
-        sub=False,
+        maxpool=0,
     ):
         CustomNet.__init__(self, name, input_size, n_outputs)
         if dropout_option == "same":
