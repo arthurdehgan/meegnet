@@ -144,6 +144,16 @@ def create_datasets(
     idx = rng.permutation(range(len(subs)))
     subs = subs[idx]
     subs = subs[:max_subj]
+    # We noticed that specific subjects were the reason why we couldn't
+    # learn anything from the data:
+    if dattype == "passive":
+        forbidden_subs = ["CC220335", "CC320478", "CC410113", "CC620785"]
+        logging.info(
+            f"removed subjects {forbidden_subs}, they were causing problems..."
+        )
+        for sub in forbidden_subs:
+            if sub in subs:
+                subs = np.delete(subs, np.where(subs == sub)[0])
     N = len(subs)
     train_size = int(N * train_size)
 
@@ -401,22 +411,27 @@ def load_passive_sub_events(dpath, sub, ch_type="ALL"):
             chan_index
         ]
         events = loadmat(dpath + f"{sub}_passive_events_timestamps.mat")["times"]
-        for e_type, e_time in events:
-            stim_timing = int(float(e_time) * s_freq)
-            # 75 and 325 to get 150ms before stim and 650ms after stim. total is the
-            # same size as previous examples for architecture: 400 time samples
-            # but the s_freq is different. reminder: we did this in order to get a full stim
-            # in the example but stims arrive every 1s
-            seg = sub_data[:, :, stim_timing - 75 : stim_timing + 325]
-            if seg.shape[-1] == 400 and not np.isnan(seg).any():
-                try:
-                    data.append(zscore(seg, axis=1))
-                    target = 0 if e_type.strip() == "image" else 1
-                    targets.append(target)
-                except:
-                    continue
     except:
         logging.warning(f"Warning: There was a problem loading subject {sub}")
+        return None, None
+
+    for e_type, e_time in events:
+        stim_timing = int(float(e_time) * s_freq)
+        # 75 and 325 to get 150ms before stim and 650ms after stim. total is the
+        # same size as previous examples for architecture: 400 time samples
+        # but the s_freq is different. reminder: we did this in order to get a full stim
+        # in the example but stims arrive every 1s
+        seg = sub_data[:, :, stim_timing - 75 : stim_timing + 325]
+        if seg.shape[-1] == 400 and not np.isnan(seg).any():
+            try:
+                data.append(zscore(seg, axis=1))
+                target = 0 if e_type.strip() == "image" else 1
+                targets.append(target)
+            except:
+                continue
+
+    if len(targets) < 30:
+        return None, None
 
     assert len(data) == len(
         targets
