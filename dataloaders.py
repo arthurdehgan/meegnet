@@ -147,7 +147,7 @@ def create_datasets(
     # We noticed that specific subjects were the reason why we couldn't
     # learn anything from the data:
     if dattype == "passive":
-        forbidden_subs = ["CC220335", "CC320478", "CC410113", "CC620785"]
+        forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
         logging.info(
             f"removed subjects {forbidden_subs}, they were causing problems..."
         )
