@@ -254,7 +254,7 @@ if __name__ == "__main__":
         )
         validloader = create_loader(
             datasets[i],
-            batch_size=int(len(datasets[i]) / 4),
+            batch_size=int(len(datasets[i]) / folds),
             num_workers=args.num_workers,
             shuffle=True,
         )
