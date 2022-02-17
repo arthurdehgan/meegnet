@@ -56,40 +56,10 @@ if __name__ == "__main__":
     save_path = args.save
     if not save_path.endswith("/"):
         save_path += "/"
-    data_type = args.feature
-    crossval = args.crossval
-    net_option = args.net_option
-    notest = args.notest
-    maxpool = args.maxpool
-    batch_size = args.batch_size
-    max_subj = args.max_subj
-    ch_type = args.elec
-    debug = args.debug
-    hlayers = args.hlayers
     fold = None if args.fold is None else int(args.fold)
-    filters = args.filters
-    nchan = args.nchan
-    dropout = args.dropout
-    dropout_option = args.dropout_option
-    linear = args.linear
-    seed = args.seed
-    mode = args.mode
-    train_size = args.train_size
-    num_workers = args.num_workers
-    model_name = args.model_name
-    patience = args.patience
-    learning_rate = args.lr
-    log = args.log
-    printmem = args.printmem
-    permute_labels = args.permute_labels
-    samples = args.samples
-    dattype = args.dattype
-    batchnorm = args.batchnorm
-    subclf = args.subclf
-    eventclf = args.eventclf
-    if eventclf:
+    if args.eventclf:
         assert (
-            dattype == "passive"
+            args.dattype == "passive"
         ), "dattype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
 
@@ -107,9 +77,9 @@ if __name__ == "__main__":
     # Starting log #
     ################
 
-    if log:
+    if args.log:
         logging.basicConfig(
-            filename=save_path + model_name + ".log",
+            filename=save_path + args.model_name + ".log",
             filemode="a",
             level=logging.DEBUG,
             format="%(asctime)s %(message)s",
@@ -141,23 +111,23 @@ if __name__ == "__main__":
     # data types #
     ##############
 
-    if ch_type == "MAG":
+    if args.elec == "MAG":
         n_channels = 102
-    elif ch_type == "GRAD":
+    elif args.elec == "GRAD":
         n_channels = 204
-    elif ch_type == "ALL":
+    elif args.elec == "ALL":
         n_channels = 306
 
-    if data_type == "bins":
+    if args.feature == "bins":
         trial_length = 241
-    if data_type == "bands":
+    if args.feature == "bands":
         trial_length = 5
-    elif data_type == "temporal":
+    elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
-    elif data_type == "cov":
+    elif args.feature == "cov":
         # TODO
         pass
-    elif data_type == "cosp":
+    elif args.feature == "cosp":
         # TODO
         pass
 
@@ -165,12 +135,12 @@ if __name__ == "__main__":
     # learning parameters #
     #######################
 
-    if debug:
+    if args.debug:
         logging.debug("ENTERING DEBUG MODE")
-        max_subj = 20
-        dropout = 0.5
-        dropout_option = "same"
-        patience = 1
+        args.max_subj = 20
+        args.dropout = 0.5
+        args.dropout_option = "same"
+        args.patience = 1
 
     #####################
     # preparing network #
@@ -179,40 +149,40 @@ if __name__ == "__main__":
     input_size = (n_channels // 102, 102, trial_length)
 
     # We create loaders and datasets (see dataloaders.py)
-    if subclf:
+    if args.subclf:
         n_outputs, datasets = load_sets(
             data_path,
-            max_subj=max_subj,
-            ch_type=ch_type,
-            seed=seed,
-            printmem=printmem,
-            dattype=dattype,
-            testing=notest,
+            max_subj=args.max_subj,
+            ch_type=args.elec,
+            seed=args.seed,
+            printmem=args.printmem,
+            dattype=args.dattype,
+            testing=args.notest,
         )
         # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
     else:
         datasets = create_datasets(
             data_path,
-            train_size,
-            max_subj,
-            ch_type,
-            data_type,
-            seed=seed,
-            debug=debug,
-            printmem=printmem,
+            args.train_size,
+            args.max_subj,
+            args.elec,
+            args.feature,
+            seed=args.seed,
+            debug=args.debug,
+            printmem=args.printmem,
             ages=ages,
-            samples=samples,
-            dattype=dattype,
-            load_events=eventclf,
-            testing=notest,
+            samples=args.samples,
+            dattype=args.dattype,
+            load_events=args.eventclf,
+            testing=args.notest,
         )
         n_outputs = 2
         # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
 
-    if mode == "overwrite":
+    if args.mode == "overwrite":
         save = True
         load = False
-    elif mode in ("continue", "evaluate"):
+    elif args.mode in ("continue", "evaluate"):
         save = True
         load = True
     else:
@@ -220,9 +190,9 @@ if __name__ == "__main__":
         load = False
 
     folds = 1
-    if crossval:
+    if args.crossval:
         folds = 4
-        if notest:
+        if args.notest:
             folds = 5
         cv = []
 
@@ -230,20 +200,20 @@ if __name__ == "__main__":
     for i in range(folds):
         if fold is not None:
             i = fold
-        name = f"{model_name}_{seed}_fold{i+1}_{ch_type}_dropout{dropout}_filter{filters}_nchan{nchan}_lin{linear}_depth{hlayers}"
-        if batchnorm:
+        name = f"{args.model_name}_{args.seed}_fold{i+1}_{args.elec}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+        if args.batchnorm:
             name += "_BN"
-        if maxpool != 0:
-            name += f"_maxpool{maxpool}"
-        if net_option == "MLP":
+        if args.maxpool != 0:
+            name += f"_maxpool{args.maxpool}"
+        if args.net_option == "MLP":
             net = MLP(
                 name=name,
                 input_size=input_size,
                 n_outputs=n_outputs,
                 hparams={
-                    "mlp_width": linear,
-                    "mlp_depth": hlayers,
-                    "mlp_dropout": dropout,
+                    "mlp_width": args.linear,
+                    "mlp_depth": args.hlayers,
+                    "mlp_dropout": args.dropout,
                 },
             ).to(device)
         else:
@@ -251,14 +221,14 @@ if __name__ == "__main__":
                 name,
                 input_size,
                 n_outputs,
-                hlayers,
-                filters,
-                nchan,
-                linear,
-                dropout,
-                dropout_option,
-                batchnorm,
-                maxpool,
+                args.hlayers,
+                args.filters,
+                args.nchan,
+                args.linear,
+                args.dropout,
+                args.dropout_option,
+                args.batchnorm,
+                args.maxpool,
             ).to(device)
 
         model_filepath = save_path + net.name + ".pt"
@@ -268,28 +238,28 @@ if __name__ == "__main__":
         else:
             logging.info(net)
 
-        if crossval:
+        if args.crossval:
             logging.info(f"Training model for fold {i+1}/{folds}:")
         else:
             logging.info("Training model:")
 
-        n_lab = 612 if subclf else 2
+        n_lab = 612 if args.subclf else 2
 
         train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
         trainloader = create_loader(
             train_dataset,
-            batch_size=batch_size,
-            num_workers=num_workers,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
             shuffle=True,
         )
         validloader = create_loader(
             datasets[i],
             batch_size=int(len(datasets[i]) / 4),
-            num_workers=num_workers,
+            num_workers=args.num_workers,
             shuffle=True,
         )
         # TODO update modes and check if we can add testing to this script or needs another one
-        if mode != "evaluate":
+        if args.mode != "evaluate":
             train(
                 net,
                 trainloader,
@@ -297,12 +267,12 @@ if __name__ == "__main__":
                 model_filepath,
                 save_model=save,
                 load_model=load,
-                debug=debug,
-                p=patience,
-                lr=learning_rate,
-                mode=mode,
+                debug=args.debug,
+                p=args.patience,
+                lr=args.lr,
+                mode=args.mode,
                 save_path=save_path,
-                permute_labels=permute_labels,
+                permute_labels=args.permute_labels,
             )
         else:
             if os.path.exists(model_filepath):
@@ -314,20 +284,20 @@ if __name__ == "__main__":
                 )
 
         # Evaluating
-        if crossval:
+        if args.crossval:
             logging.info(f"Evaluating model for fold {i+1}/{fold}:")
         else:
             logging.info("Evaluating model:")
         results = loadmat(model_filepath[:-2] + "mat")
         acc = results["acc_score"]
-        if crossval:
+        if args.crossval:
             cv.append(acc)
         logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
         if fold is not None:
             break
 
-    if crossval:
+    if args.crossval:
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     # # Final testing
