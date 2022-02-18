@@ -116,7 +116,7 @@ def create_datasets(
     ages=(0, 100),
     dattype="rest",
     band="",
-    samples=None,
+    n_samples=None,
     load_groups=False,
     load_events=False,
     testing=None,
@@ -190,7 +190,7 @@ def create_datasets(
                 domain=domain,
                 printmem=printmem,
                 dattype=dattype,
-                samples=samples,
+                n_samples=n_samples,
                 seed=seed,
                 load_groups=load_groups,
                 load_events=load_events,
@@ -207,6 +207,7 @@ def load_sets(
     max_subj=1000,
     n_splits=5,
     offset=30,
+    n_samples=None,
     ch_type="ALL",
     domain="temporal",
     printmem=False,
@@ -231,9 +232,9 @@ def load_sets(
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
 
-    npersplit = 0
-    X_sets = [[] for _ in range(n_splits)]
-    y_sets = [[] for _ in range(n_splits)]
+    final_n_splits = n_splits - 1 if testing is not None else n_splits
+    X_sets = [[] for _ in range(final_n_splits)]
+    y_sets = [[] for _ in range(final_n_splits)]
     for i, row in enumerate(subs_df.iterrows()):
         random.seed(seed)
         torch.manual_seed(seed)
@@ -250,6 +251,7 @@ def load_sets(
         data = load_sub(
             dpath,
             sub,
+            n_samples=n_samples,
             band=band,
             ch_type=ch_type,
             dattype=dattype,
@@ -268,22 +270,20 @@ def load_sets(
             [*[fold_size] * (n_splits - 1), test_size],
             generator=torch.Generator().manual_seed(seed),
         )
+        if testing is not None:
+            indexes.pop(testing)
         random.shuffle(data)
         labels = np.array([i for _ in range(N)])
         for j, index in enumerate(indexes):
             X_sets[j].append(torch.Tensor(data)[index])
             y_sets[j].append(torch.Tensor(labels)[index])
 
-        npersplit += fold_size
-
     logging.info(
-        f"Loaded {n_splits} subsets of {npersplit} trials succesfully amongset {n_sub} subjects\n"
+        f"Loaded {final_n_splits} subsets of {fold_size} trials succesfully for {n_sub} subjects\n"
     )
 
     datasets = []
-    for i in range(n_splits):
-        if i == testing:
-            continue
+    for i in range(final_n_splits):
         datasets.append(TensorDataset(torch.cat(X_sets[i], 0), torch.cat(y_sets[i], 0)))
 
     return n_sub, datasets
@@ -318,7 +318,7 @@ def load_data(
     domain="temporal",
     printmem=False,
     dattype="rest",
-    samples=None,
+    n_samples=None,
     seed=0,
     load_groups=False,
     load_events=False,
@@ -360,6 +360,7 @@ def load_data(
             data = load_sub(
                 dpath,
                 sub,
+                n_samples=n_samples,
                 band=band,
                 ch_type=ch_type,
                 dattype=dattype,
@@ -372,9 +373,9 @@ def load_data(
             n_sub -= 1
             continue
 
-        if samples is not None:
+        if n_samples is not None:
             random_samples = np.random.choice(
-                np.arange(len(data)), samples, replace=False
+                np.arange(len(data)), n_samples, replace=False
             )
             data = torch.Tensor(data)[random_samples]
 
@@ -447,6 +448,7 @@ def load_passive_sub_events(dpath, sub, ch_type="ALL"):
 def load_sub(
     dpath,
     sub,
+    n_samples=None,
     band="",
     ch_type="ALL",
     dattype="rest",
@@ -500,19 +502,20 @@ def load_sub(
                 data = []
                 for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
                     seg = sub_data[:, :, begin:end]
-                    if (
-                        seg.shape[-1] == end - begin
-                        and begin >= offset * SAMPLING_FREQ
-                        and not np.isnan(seg).any()
-                    ):
-                        try:
-                            data.append(zscore(seg, axis=1))
-                        except:
-                            continue
+                    if seg.shape[-1] == end - begin:
+                        if begin >= offset * SAMPLING_FREQ:
+                            if not np.isnan(seg).any():
+                                data.append(zscore(seg, axis=1))
                 if len(data) < 50:
                     return None
-    except:
-        logging.warning(f"Warning: There was a problem loading subject {sub}")
+                if n_samples is not None and n_samples <= len(data):
+                    random_samples = np.random.choice(
+                        np.arange(len(data)), n_samples, replace=False
+                    )
+                    data = torch.Tensor(data)[random_samples]
+
+    except IOError as e:
+        logging.warning(f"Warning: There was a problem loading subject file for {sub}")
         return None
 
     return data
