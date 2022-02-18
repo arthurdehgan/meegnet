@@ -11,6 +11,140 @@ from network import FullNet, MLP
 from utils import train, load_checkpoint
 from parsing import parser
 
+
+def do_crossval(folds, args):
+    cv = []
+    for fold in range(folds):
+        logging.info(f"Training model for fold {fold+1}/{folds}:")
+        results = train_evaluate(fold=fold, args=args)
+        logging.info(f"Finished training for fold {fold+1}/{folds}:")
+        logging.info(
+            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
+        )
+        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
+        cv.append(results["acc_score"])
+    return cv
+
+
+def train_evaluate(fold, args):
+    suffixes = ""
+    if args.batchnorm:
+        suffixes += "_BN"
+    if args.maxpool != 0:
+        suffixes += f"_maxpool{args.maxpool}"
+
+    if args.mode == "overwrite":
+        save = True
+        load = False
+    elif args.mode in ("continue", "evaluate"):
+        save = True
+        load = True
+    else:
+        save = False
+        load = False
+
+    name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.elec}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+    name += suffixes
+
+    net = create_net(args.net_option, name, input_size, n_outputs, args)
+    model_filepath = save_path + net.name + ".pt"
+
+    logging.info(net.name)
+    if torchsum:
+        logging.info(summary(net, input_size))
+    else:
+        logging.info(net)
+
+    # Create dataset splits for the current fold of the cross-val
+    train_dataset = ConcatDataset(datasets[:fold] + datasets[fold + 1 :])
+    trainloader = create_loader(
+        train_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        shuffle=True,
+    )
+    validloader = create_loader(
+        datasets[fold],
+        batch_size=len(datasets[fold]),
+        num_workers=args.num_workers,
+        shuffle=True,
+    )
+
+    # TODO update modes and check if we can add testing to this script or needs another one
+    if args.mode != "evaluate":
+        train(
+            net,
+            trainloader,
+            validloader,
+            model_filepath,
+            save_model=save,
+            load_model=load,
+            debug=args.debug,
+            p=args.patience,
+            lr=args.lr,
+            mode=args.mode,
+            save_path=save_path,
+            permute_labels=args.permute_labels,
+        )
+    else:  # if we are in evaluate mode, we load the model if it exists, return warning if not
+        if os.path.exists(model_filepath):
+            _, net_state, _ = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+        else:
+            logging.warning(
+                f"Error: Can't evaluate model {model_filepath}, file not found."
+            )
+
+    results = loadmat(model_filepath[:-2] + "mat")
+    return results
+
+    # # Final testing
+    # if os.path.exists(model_filepath):
+    #     _, net_state, _ = load_checkpoint(model_filepath)
+    #     net.load_state_dict(net_state)
+    # else:
+    #     logging.warning(
+    #         f"Error: Can't evaluate model {model_filepath}, file not found."
+    #     )
+    # print("Evaluating on test set:")
+    # tloss, tacc = evaluate(net, testloader)
+    # print("loss: ", tloss, " // accuracy: ", tacc)
+    # if save:
+    #     results = loadmat(model_filepath[:-2] + "mat")
+    #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
+    #     results["test_acc"] = tacc
+    #     results["test_loss"] = tloss
+    #     savemat(save_path + net.name + ".mat", results)
+
+
+def create_net(net_option, name, input_size, n_outputs, args):
+    if net_option == "MLP":
+        return MLP(
+            name=name,
+            input_size=input_size,
+            n_outputs=n_outputs,
+            hparams={
+                "mlp_width": args.linear,
+                "mlp_depth": args.hlayers,
+                "mlp_dropout": args.dropout,
+            },
+        ).to(device)
+    else:
+        return FullNet(
+            name,
+            input_size,
+            n_outputs,
+            args.hlayers,
+            args.filters,
+            args.nchan,
+            args.linear,
+            args.dropout,
+            args.dropout_option,
+            args.batchnorm,
+            args.maxpool,
+        ).to(device)
+
+
 if __name__ == "__main__":
 
     ###########
@@ -19,8 +153,15 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--notest",
-        action="store_true",
+        type=int,
+        default=None,
+        choices=[0, 1, 2, 3, 4, None],
         help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
+    )
+    parser.add_argument(
+        "--randomsearch",
+        action="store_true",
+        help="Launches one cross-val on a subset of data or full random search depending on notest parameter",
     )
     parser.add_argument(
         "--eventclf",
@@ -73,6 +214,17 @@ if __name__ == "__main__":
         logging.warning("Warning: gpu device not available")
         device = "cpu"
 
+    #######################
+    # Torchsummary checks #
+    #######################
+
+    torchsum = True
+    try:
+        from torchsummary import summary
+    except:
+        logging.warning("Warning: Error loading torchsummary")
+        torchsum = False
+
     ################
     # Starting log #
     ################
@@ -91,32 +243,20 @@ if __name__ == "__main__":
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
-
     #######################
-    # Torchsummary checks #
+    # learning parameters #
     #######################
 
-    torchsum = True
-    try:
-        from torchsummary import summary
-    except:
-        logging.warning("Warning: Error loading torchsummary")
-        torchsum = False
+    if args.debug:
+        logging.debug("ENTERING DEBUG MODE")
+        args.max_subj = 20
+        args.dropout = 0.5
+        args.dropout_option = "same"
+        args.patience = 1
 
-    #################
-    # Parser checks #
-    #################
-
-    ##############
-    # data types #
-    ##############
-
-    if args.elec == "MAG":
-        n_channels = 102
-    elif args.elec == "GRAD":
-        n_channels = 204
-    elif args.elec == "ALL":
-        n_channels = 306
+    ################
+    # Loading data #
+    ################
 
     if args.feature == "bins":
         trial_length = 241
@@ -131,20 +271,12 @@ if __name__ == "__main__":
         # TODO
         pass
 
-    #######################
-    # learning parameters #
-    #######################
-
-    if args.debug:
-        logging.debug("ENTERING DEBUG MODE")
-        args.max_subj = 20
-        args.dropout = 0.5
-        args.dropout_option = "same"
-        args.patience = 1
-
-    #####################
-    # preparing network #
-    #####################
+    if args.elec == "MAG":
+        n_channels = 102
+    elif args.elec == "GRAD":
+        n_channels = 204
+    elif args.elec == "ALL":
+        n_channels = 306
 
     input_size = (n_channels // 102, 102, trial_length)
 
@@ -179,141 +311,27 @@ if __name__ == "__main__":
         n_outputs = 2
         # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
 
-    if args.mode == "overwrite":
-        save = True
-        load = False
-    elif args.mode in ("continue", "evaluate"):
-        save = True
-        load = True
-    else:
-        save = False
-        load = False
+    ############
+    # Training #
+    ############
 
-    folds = 1
-    if args.crossval:
-        folds = 4
-        if args.notest:
-            folds = 5
-        cv = []
-
-    # Actual training (loading nework if existing and load option is True)
-    for i in range(folds):
-        if fold is not None:
-            i = fold
-        name = f"{args.model_name}_{args.seed}_fold{i+1}_{args.elec}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
-        if args.batchnorm:
-            name += "_BN"
-        if args.maxpool != 0:
-            name += f"_maxpool{args.maxpool}"
-        if args.net_option == "MLP":
-            net = MLP(
-                name=name,
-                input_size=input_size,
-                n_outputs=n_outputs,
-                hparams={
-                    "mlp_width": args.linear,
-                    "mlp_depth": args.hlayers,
-                    "mlp_dropout": args.dropout,
-                },
-            ).to(device)
+    if args.randomsearch:
+        if args.notest is None:
+            for outer_fold in range(5):
+                args.notest = outer_fold
+                cv = do_crossval(folds=4, args=args)
+                logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
-            net = FullNet(
-                name,
-                input_size,
-                n_outputs,
-                args.hlayers,
-                args.filters,
-                args.nchan,
-                args.linear,
-                args.dropout,
-                args.dropout_option,
-                args.batchnorm,
-                args.maxpool,
-            ).to(device)
+            cv = do_crossval(folds=4, args=args)
+            logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
-        model_filepath = save_path + net.name + ".pt"
-        logging.info(net.name)
-        if torchsum:
-            logging.info(summary(net, input_size))
-        else:
-            logging.info(net)
-
-        if args.crossval:
-            logging.info(f"Training model for fold {i+1}/{folds}:")
-        else:
-            logging.info("Training model:")
-
-        n_lab = 612 if args.subclf else 2
-
-        train_dataset = ConcatDataset(datasets[:i] + datasets[i + 1 :])
-        trainloader = create_loader(
-            train_dataset,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            shuffle=True,
-        )
-        validloader = create_loader(
-            datasets[i],
-            batch_size=int(len(datasets[i]) / folds),
-            num_workers=args.num_workers,
-            shuffle=True,
-        )
-        # TODO update modes and check if we can add testing to this script or needs another one
-        if args.mode != "evaluate":
-            train(
-                net,
-                trainloader,
-                validloader,
-                model_filepath,
-                save_model=save,
-                load_model=load,
-                debug=args.debug,
-                p=args.patience,
-                lr=args.lr,
-                mode=args.mode,
-                save_path=save_path,
-                permute_labels=args.permute_labels,
-            )
-        else:
-            if os.path.exists(model_filepath):
-                _, net_state, _ = load_checkpoint(model_filepath)
-                net.load_state_dict(net_state)
-            else:
-                logging.warning(
-                    f"Error: Can't evaluate model {model_filepath}, file not found."
-                )
-
-        # Evaluating
-        if args.crossval:
-            logging.info(f"Evaluating model for fold {i+1}/{fold}:")
-        else:
-            logging.info("Evaluating model:")
-        results = loadmat(model_filepath[:-2] + "mat")
-        acc = results["acc_score"]
-        if args.crossval:
-            cv.append(acc)
-        logging.info(f"loss: {results['loss_score']} // accuracy: {acc}")
-        logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
-        if fold is not None:
-            break
-
-    if args.crossval:
+    elif args.crossval:
+        folds = 5 if args.notest is None else 4
+        cv = do_crossval(folds, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
-    # # Final testing
-    # if os.path.exists(model_filepath):
-    #     _, net_state, _ = load_checkpoint(model_filepath)
-    #     net.load_state_dict(net_state)
-    # else:
-    #     logging.warning(
-    #         f"Error: Can't evaluate model {model_filepath}, file not found."
-    #     )
-    # print("Evaluating on test set:")
-    # tloss, tacc = evaluate(net, testloader)
-    # print("loss: ", tloss, " // accuracy: ", tacc)
-    # if save:
-    #     results = loadmat(model_filepath[:-2] + "mat")
-    #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
-    #     results["test_acc"] = tacc
-    #     results["test_loss"] = tloss
-    #     savemat(save_path + net.name + ".mat", results)
+    else:
+        fold = 0 if fold is None else fold
+        logging.info("Training model:")
+        train_evaluate(fold=fold, args=args)
+        logging.info("Evaluating model:")

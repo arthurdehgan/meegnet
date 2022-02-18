@@ -119,9 +119,13 @@ def create_datasets(
     samples=None,
     load_groups=False,
     load_events=False,
-    testing=False,
+    testing=None,
 ):
-    """create dataloaders iterators."""
+    """create dataloaders iterators.
+
+    testing: if set to an integer between 0 and 4 will leave out a part of the dataset.
+             Useful for random search.
+    """
     rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
@@ -173,8 +177,8 @@ def create_datasets(
         for i, index in enumerate(indexes)
     ]
 
-    if not testing:
-        dataframes = dataframes[:-1]
+    if testing is not None:
+        dataframes = dataframes[:testing] + dataframes[testing + 1 :]
 
     logging.info("Loading Train Set")
     datasets = [
@@ -209,7 +213,7 @@ def load_sets(
     dattype="rest",
     seed=0,
     band="",
-    testing=False,
+    testing=None,
 ):
     """Loading data subject per subject."""
     assert_params(band, domain, dattype)
@@ -272,7 +276,7 @@ def load_sets(
 
         npersplit += fold_size
 
-    if not testing:
+    if testing is None:
         n_splits -= 1
     logging.info(
         f"Loaded {n_splits} subsets of {npersplit} trials succesfully amongset {n_sub} subjects\n"
