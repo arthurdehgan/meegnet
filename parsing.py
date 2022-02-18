@@ -8,7 +8,8 @@ parser.add_argument(
 )
 parser.add_argument(
     "-s",
-    "--samples",
+    "--n_samples",
+    type=int,
     default=None,
     help="limit of number of samples per subjects",
 )
