@@ -276,14 +276,14 @@ def load_sets(
 
         npersplit += fold_size
 
-    if testing is None:
-        n_splits -= 1
     logging.info(
         f"Loaded {n_splits} subsets of {npersplit} trials succesfully amongset {n_sub} subjects\n"
     )
 
     datasets = []
     for i in range(n_splits):
+        if i == testing:
+            continue
         datasets.append(TensorDataset(torch.cat(X_sets[i], 0), torch.cat(y_sets[i], 0)))
 
     return n_sub, datasets
