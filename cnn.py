@@ -152,7 +152,7 @@ if __name__ == "__main__":
     ###########
 
     parser.add_argument(
-        "--notest",
+        "--testsplit",
         type=int,
         default=None,
         choices=[0, 1, 2, 3, 4, None],
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--randomsearch",
         action="store_true",
-        help="Launches one cross-val on a subset of data or full random search depending on notest parameter",
+        help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
     )
     parser.add_argument(
         "--eventclf",
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fold",
         default=None,
-        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
+        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",
     )
     parser.add_argument(
         "--net-option",
@@ -198,6 +198,9 @@ if __name__ == "__main__":
     if not save_path.endswith("/"):
         save_path += "/"
     fold = None if args.fold is None else int(args.fold)
+    assert not (
+        args.eventclf and args.subclf
+    ), "Please choose only one type of classification"
     if args.eventclf:
         assert (
             args.dattype == "passive"
@@ -284,14 +287,15 @@ if __name__ == "__main__":
     if args.subclf:
         n_outputs, datasets = load_sets(
             data_path,
+            n_samples=args.n_samples,
             max_subj=args.max_subj,
             ch_type=args.elec,
             seed=args.seed,
             printmem=args.printmem,
             dattype=args.dattype,
-            testing=args.notest,
+            testing=args.testsplit,
         )
-        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
+        # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
     else:
         datasets = create_datasets(
             data_path,
@@ -303,22 +307,22 @@ if __name__ == "__main__":
             debug=args.debug,
             printmem=args.printmem,
             ages=ages,
-            samples=args.samples,
+            n_samples=args.n_samples,
             dattype=args.dattype,
             load_events=args.eventclf,
-            testing=args.notest,
+            testing=args.testsplit,
         )
         n_outputs = 2
-        # Note: replace testing = notest or testing when we add the option to load test set and use it for a test pass.
+        # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
 
     ############
     # Training #
     ############
 
     if args.randomsearch:
-        if args.notest is None:
+        if args.testsplit is None:
             for outer_fold in range(5):
-                args.notest = outer_fold
+                args.testsplit = outer_fold
                 cv = do_crossval(folds=4, args=args)
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
@@ -326,7 +330,7 @@ if __name__ == "__main__":
             logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     elif args.crossval:
-        folds = 5 if args.notest is None else 4
+        folds = 5 if args.testsplit is None else 4
         cv = do_crossval(folds, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
