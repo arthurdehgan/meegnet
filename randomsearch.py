@@ -1,15 +1,18 @@
 from subprocess import call
 import argparse
 import random
+import pandas as pd
 
 N_TESTS = 100
 
 tests = {
-    "f": (6, 12, 18, 24, 48),
-    "linear": (200, 400, 800, 1600),
+    "f": (6, 9, 12, 18, 24),
+    "linear": (250, 500, 1000, 1500, 2000),
     "d": (0.5, 0.5),
     "nchan": (25, 50, 100, 200),
     "batchnorm": (True, False),
+    "maxpool": (0, 10, 20),
+    "hlayers": (1, 3, 5, 7),
 }
 
 parser = argparse.ArgumentParser()
@@ -60,31 +63,41 @@ if debug:
 
 if not save_path.endswith("/"):
     save_path += "/"
-script_path = args.script
+script_path = args.script if args.script is not None else "cnn.py"
 chunkload = args.chunkload
 options = args.options
 
 params_set = set()
 n_test = 0
+tested = pd.DataFrame()
+seed = 42
 while n_test < N_TESTS:
-    for seed in range(10):
-        params = {
-            "f": random.choice(tests["f"]),
-            "linear": random.choice(tests["linear"]),
-            "d": random.choice(tests["d"]),
-            "nchan": random.choice(tests["nchan"]),
-            "batchnorm": random.choice(tests["batchnorm"]),
-        }
-        if tuple(params.values()) not in params_set:
-            arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=randomsearchANN_{n_test}_{seed} -e=ALL -b=32 -f={params['f']} --patience=20 --seed={seed} --lr=0.00002 --linear={params['linear']} -d={params['d']} --nchan={params['nchan']} {options}"
-            if params["batchnorm"]:
-                arguments += " --batchnorm"
-            if debug:
-                arguments += " --debug"
-            if local:
-                to_run = f"python cnn.py " + arguments
-            else:
-                to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
-            call(to_run, shell=True)
-            params_set.add(tuple(params.values()))
-            n_test += 1
+    params = {
+        "f": random.choice(tests["f"]),
+        "linear": random.choice(tests["linear"]),
+        "d": random.choice(tests["d"]),
+        "hlayers": random.choice(tests["hlayers"]),
+        "nchan": random.choice(tests["nchan"]),
+        "batchnorm": random.choice(tests["batchnorm"]),
+        "maxpool": random.choice(tests["maxpool"]),
+    }
+    if tuple(params.values()) not in params_set:
+        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=sub_RS_{n_test} -e=ALL -b=2048 -f={params['f']} --patience=20 --seed={seed} --hlayers={params['hlayers']} --lr=0.00002 --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf "
+        if params["batchnorm"]:
+            arguments += " --batchnorm"
+        if options is not None:
+            arguments += f" {options}"
+        if debug:
+            arguments += " --debug"
+        if local:
+            to_run = f"python {script_path} {arguments}"
+        else:
+            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
+        print(to_run)
+        call(to_run, shell=True)
+        params_set.add(tuple(params.values()))
+        n_test += 1
+        tested = tested.append(params, ignore_index=True)
+        break
+
+tested.to_csv(f"tested_params_seed{seed}.csv")
