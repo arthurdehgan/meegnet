@@ -80,7 +80,7 @@ def train_evaluate(fold, args):
             save_model=save,
             load_model=load,
             debug=args.debug,
-            p=args.patience,
+            patience=args.patience,
             lr=args.lr,
             mode=args.mode,
             save_path=save_path,
