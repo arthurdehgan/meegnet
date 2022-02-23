@@ -8,7 +8,7 @@ from params import TIME_TRIAL_LENGTH
 from dataloaders import create_loader, create_datasets, load_sets
 from torch.utils.data import ConcatDataset, TensorDataset
 from network import FullNet, MLP
-from utils import train, load_checkpoint
+from utils import train, load_checkpoint, cuda_check
 from parsing import parser
 
 
@@ -223,11 +223,7 @@ if __name__ == "__main__":
     # CUDA CHECK #
     ##############
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        logging.warning("Warning: gpu device not available")
-        device = "cpu"
+    device = cuda_check()
 
     #######################
     # Torchsummary checks #

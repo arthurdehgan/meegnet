@@ -11,6 +11,14 @@ import pandas as pd
 from path import Path as path
 
 
+def cuda_check():
+    if torch.cuda.is_available():
+        return "cuda"
+    else:
+        logging.warning("Warning: gpu device not available")
+        return "cpu"
+
+
 def check_PD(mat):
     if len(mat.shape) > 2:
         out = []
