@@ -65,7 +65,7 @@ def train_evaluate(fold, args):
     )
     validloader = create_loader(
         datasets[fold],
-        batch_size=len(datasets[fold]),
+        batch_size=int(len(datasets[fold]) / 4),
         num_workers=args.num_workers,
         shuffle=True,
     )
