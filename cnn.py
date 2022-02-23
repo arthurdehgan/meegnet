@@ -186,16 +186,6 @@ if __name__ == "__main__":
         help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
     )
     parser.add_argument(
-        "--eventclf",
-        action="store_true",
-        help="launches event classification instead of gender classification.",
-    )
-    parser.add_argument(
-        "--subclf",
-        action="store_true",
-        help="launches subject classification instead of gender classification.",
-    )
-    parser.add_argument(
         "--fold",
         default=None,
         help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",

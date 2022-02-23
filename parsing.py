@@ -2,6 +2,16 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--eventclf",
+    action="store_true",
+    help="launches event classification instead of gender classification.",
+)
+parser.add_argument(
+    "--subclf",
+    action="store_true",
+    help="launches subject classification instead of gender classification.",
+)
+parser.add_argument(
     "--crossval",
     action="store_true",
     help="wether to do a 4-FOLD cross-validation on the train+valid set.",
