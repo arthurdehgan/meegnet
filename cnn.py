@@ -151,7 +151,7 @@ def create_net(net_option, name, input_size, n_outputs, args):
                 "mlp_dropout": args.dropout,
             },
         ).to(device)
-    else:
+    elif net_option == "custom_net":
         return FullNet(
             name,
             input_size,

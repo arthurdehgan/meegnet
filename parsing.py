@@ -166,6 +166,12 @@ parser.add_argument(
     help="loads dummy data in the net to ensure everything is working fine",
 )
 parser.add_argument(
+    "--net_option",
+    default="custom_net",
+    choices=["custom_net", "MLP"],
+    help="sets the network to use.",
+)
+parser.add_argument(
     "--dropout_option",
     default="same",
     choices=["same", "double", "inverted"],
