@@ -11,6 +11,12 @@ from network import FullNet, MLP
 from utils import train, load_checkpoint, cuda_check
 from parsing import parser
 
+##############
+# CUDA CHECK #
+##############
+
+DEVICE = cuda_check()
+
 
 def do_crossval(folds, args):
     cv = []
@@ -150,7 +156,7 @@ def create_net(net_option, name, input_size, n_outputs, args):
                 "mlp_depth": args.hlayers,
                 "mlp_dropout": args.dropout,
             },
-        ).to(device)
+        ).to(DEVICE)
     elif net_option == "custom_net":
         return FullNet(
             name,
@@ -164,7 +170,7 @@ def create_net(net_option, name, input_size, n_outputs, args):
             args.dropout_option,
             args.batchnorm,
             args.maxpool,
-        ).to(device)
+        ).to(DEVICE)
 
 
 if __name__ == "__main__":
@@ -218,12 +224,6 @@ if __name__ == "__main__":
             args.dattype == "passive"
         ), "dattype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
-
-    ##############
-    # CUDA CHECK #
-    ##############
-
-    device = cuda_check()
 
     #######################
     # Torchsummary checks #
