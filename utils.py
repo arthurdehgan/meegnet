@@ -49,7 +49,7 @@ def train(
     debug=False,
     timing=False,
     mode="overwrite",
-    p=20,
+    patience=20,
     lr=0.00001,
     save_path="./models",
     permute_labels=False,
@@ -71,46 +71,43 @@ def train(
 
     # Load if asked and if the checkpoint exists in the specified path
     epoch = 0
-    if load_model and os.path.exists(model_filepath):
-        epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
-        net.load_state_dict(net_state)
-        optimizer.load_state_dict(optimizer_state)
-        results = loadmat(model_filepath[:-2] + "mat")
-        best_vacc = results["acc_score"]
-        best_vloss = results["loss_score"]
-        valid_accs = results["acc"]
-        train_accs = results["train_acc"]
-        valid_losses = results["valid_loss"]
-        train_losses = results["train_loss"]
-        best_epoch = results["best_epoch"]
-        epoch = results["n_epochs"]
-        if mode == "continue":
-            j = 0
-            lp = p
-        else:
-            j = results["current_patience"]
-            lp = results["patience"]
+    if load_model:
+        if os.path.exists(model_filepath):
+            epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+            optimizer.load_state_dict(optimizer_state)
+            results = loadmat(model_filepath[:-2] + "mat")
+            best_vacc = results["acc_score"]
+            best_vloss = results["loss_score"]
+            valid_accs = results["acc"]
+            train_accs = results["train_acc"]
+            valid_losses = results["valid_loss"]
+            train_losses = results["train_loss"]
+            best_epoch = results["best_epoch"]
+            epoch = results["n_epochs"]
+            if mode == "continue":
+                patience_state = 0
+                loaded_patience = patience
+            else:
+                patience_state = results["current_patience"]
+                loaded_patience = results["patience"]
 
-        if lp != p:
-            logging.warning(
-                f"Warning: current patience ({p}) is different from loaded patience ({lp})."
-            )
-            answer = input("Would you like to continue anyway ? (y/n)")
-            while answer not in ["y", "n"]:
+            if loaded_patience != patience:
+                logging.warning(
+                    f"Warning: current patience ({patience}) is different from loaded patience ({loaded_patience})."
+                )
                 answer = input("Would you like to continue anyway ? (y/n)")
-            if answer == "n":
-                sys.exit()
-
-    elif load_model:
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        logging.warning(
-            f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
-        )
-        j = 0
-
+                while answer not in ["y", "n"]:
+                    answer = input("Would you like to continue anyway ? (y/n)")
+                if answer == "n":
+                    sys.exit()
+        else:
+            logging.warning(
+                f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
+            )
+            patience_state = 0
     else:
-        j = 0
+        patience_state = 0
 
     train_accs = []
     valid_accs = []
@@ -122,8 +119,8 @@ def train(
     best_epoch = 0
     net.train()
 
-    # The training and evaluation loop with patience early stop. j tracks the patience state.
-    while j < p:
+    # The training and evaluation loop with patience early stop. patience_state tracks the patience state.
+    while patience_state < patience:
         epoch += 1
         n_batches = len(trainloader)
         if timing:
@@ -176,7 +173,7 @@ def train(
             best_vloss = valid_loss
             best_net = net
             best_epoch = epoch
-            j = 0
+            patience_state = 0
             if save_model:
                 checkpoint = {
                     "epoch": epoch + 1,
@@ -186,7 +183,7 @@ def train(
                 torch.save(checkpoint, model_filepath)
                 net.save_model(save_path)
         else:
-            j += 1
+            patience_state += 1
 
         logging.info("Epoch: {}".format(epoch))
         logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
@@ -201,8 +198,8 @@ def train(
                 "train_loss": train_losses,
                 "best_epoch": best_epoch,
                 "n_epochs": epoch,
-                "patience": p,
-                "current_patience": j,
+                "patience": patience,
+                "current_patience": patience_state,
             }
             savemat(save_path + net.name + ".mat", results)
 
