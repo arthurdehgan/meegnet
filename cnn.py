@@ -33,6 +33,28 @@ def train_evaluate(fold, args):
     if args.maxpool != 0:
         suffixes += f"_maxpool{args.maxpool}"
 
+    if args.feature == "bins":
+        trial_length = 241
+    if args.feature == "bands":
+        trial_length = 5
+    elif args.feature == "temporal":
+        trial_length = TIME_TRIAL_LENGTH
+    elif args.feature == "cov":
+        # TODO
+        pass
+    elif args.feature == "cosp":
+        # TODO
+        pass
+
+    if args.elec == "MAG":
+        n_channels = 102
+    elif args.elec == "GRAD":
+        n_channels = 204
+    elif args.elec == "ALL":
+        n_channels = 306
+
+    input_size = (n_channels // 102, 102, trial_length)
+
     if args.mode == "overwrite":
         save = True
         load = False
@@ -260,28 +282,6 @@ if __name__ == "__main__":
     ################
     # Loading data #
     ################
-
-    if args.feature == "bins":
-        trial_length = 241
-    if args.feature == "bands":
-        trial_length = 5
-    elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
-    elif args.feature == "cov":
-        # TODO
-        pass
-    elif args.feature == "cosp":
-        # TODO
-        pass
-
-    if args.elec == "MAG":
-        n_channels = 102
-    elif args.elec == "GRAD":
-        n_channels = 204
-    elif args.elec == "ALL":
-        n_channels = 306
-
-    input_size = (n_channels // 102, 102, trial_length)
 
     # We create loaders and datasets (see dataloaders.py)
     if args.subclf:
