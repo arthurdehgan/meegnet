@@ -82,7 +82,7 @@ while n_test < N_TESTS:
         "maxpool": random.choice(tests["maxpool"]),
     }
     if tuple(params.values()) not in params_set:
-        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=sub_RS_{n_test} -e=ALL -b=2048 -f={params['f']} --patience=20 --seed={seed} --hlayers={params['hlayers']} --lr=0.00002 --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf "
+        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=sub_RS_{n_test} -e=ALL -b=2048 -f={params['f']} --patience=20 --seed={seed} --hlayers={params['hlayers']} --lr=0.00002 --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf --log "
         if params["batchnorm"]:
             arguments += " --batchnorm"
         if options is not None:
