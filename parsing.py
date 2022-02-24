@@ -2,6 +2,12 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--dattype",
+    default="rest",
+    choices=["rest", "task", "passive"],
+    help="the type of data to be loaded",
+)
+parser.add_argument(
     "--eventclf",
     action="store_true",
     help="launches event classification instead of gender classification.",

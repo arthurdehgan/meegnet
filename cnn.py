@@ -202,12 +202,6 @@ if __name__ == "__main__":
         choices=["cNet", "MLP"],
         help="cNet is the custom net.",
     )
-    parser.add_argument(
-        "--dattype",
-        default="rest",
-        choices=["rest", "task", "passive"],
-        help="the type of data to be loaded",
-    )
     args = parser.parse_args()
     data_path = args.path
     if not data_path.endswith("/"):
