@@ -1,15 +1,81 @@
+"""In this script, we load a network and a camcan dataset example.
+
+- We extract all the conv layers and their weights.
+- We then generate a figure of topomaps for all the weights of layer 0 projected on the head using mne viz package
+
+Next this script will also generate all the output of filters for a given input.
+We will also perform spectral analysis on those.
+
+"""
 import matplotlib.pyplot as plt
+import numpy as np
+from torch import nn
 from parsing import parser
 from params import TIME_TRIAL_LENGTH
 from cnn import create_net
 from utils import load_checkpoint
-from torch import nn
-from viz import generate_topomap, load_info
+from dataloaders import create_datasets, create_loader
+from viz import generate_topomap, load_info, GuidedBackprop
+from misc_functions import (
+    save_gradient_images,
+    convert_to_grayscale,
+    get_positive_negative_saliency,
+)
 
 DEVICE = "cpu"
 
 
+def load_data(args):
+    # change path depending on the data type. TODO Hard coded
+    # Add an option to change this
+    data_path = args.path
+    if args.dattype == "passive":
+        data_path += "downsampled_500/"
+    else:
+        data_path += "downsamlped_200"
+
+    # Using dataloaders in order to load data the same way
+    # we did during training and testing
+    datasets = create_datasets(
+        data_path,
+        args.train_size,
+        args.max_subj,
+        args.elec,
+        args.feature,
+        seed=args.seed,
+        printmem=args.printmem,
+        n_samples=args.n_samples,
+        dattype=args.dattype,
+        load_events=args.eventclf,
+    )
+    dataloader = create_loader(
+        datasets[0],
+        batch_size=1,
+        num_workers=args.num_workers,
+        shuffle=True,
+    )
+    for X, y in dataloader:
+        break
+
+    return X, y
+
+
 if __name__ == "__main__":
+    parser.add_argument(
+        "--topomaps",
+        action="store_true",
+        help="wether or not to generate topomaps for the spatial layer.",
+    )
+    parser.add_argument(
+        "--backprop",
+        action="store_true",
+        help="wether or not to generate the backprop filter.",
+    )
+    parser.add_argument(
+        "--outputs",
+        action="store_true",
+        help="wether or not to generate the outputs of the conv layers.",
+    )
     parser.add_argument(
         "--fold",
         default=None,
@@ -76,12 +142,81 @@ if __name__ == "__main__":
                 model_weights.append(layer.weight)
                 conv_layers.append(layer)
 
-    plt.figure(figsize=(20, 17))
-    for i, filter in enumerate(model_weights[0]):
-        plt.subplot(10, 10, i + 1)
-        _ = generate_topomap(filter[0, :, :].detach(), info)
-        plt.axis("off")
-    plt.savefig("figures/filter.png")
+    ##########################
+    ### Genrating topomaps ###
+    ##########################
 
-    # TODO implement https://debuggercafe.com/visualizing-filters-and-feature-maps-in-convolutional-neural-networks-using-pytorch/
-    # We need to see data after each filter
+    if args.topomaps:
+        plt.figure(figsize=(20, 17))
+        for i, filtr in enumerate(model_weights[0]):
+            plt.subplot(10, 10, i + 1)
+            _ = generate_topomap(filtr[0, :, :].detach(), info)
+            plt.axis("off")
+        plt.savefig("figures/filter.png")
+
+    #######################################################
+    ### Generating visualization after each conv layer ####
+    #######################################################
+
+    if args.outputs:
+        X, _ = load_data(args)
+
+        # Generating outputs after forward pass of each conv layer
+        # TODO check if we should add maxpooling to this, since it
+        # is usually done during forward pass
+        results = [conv_layers[0](X)]
+        for i in range(1, len(conv_layers)):
+            results.append(conv_layers[i](results[-1]))
+        outputs = results
+
+        # Generating the visualization of those inputs
+        for num_layer in range(len(outputs)):
+            plt.figure(figsize=(30, 30))
+            layer_viz = outputs[num_layer][0, :, :, :]
+            layer_viz = layer_viz.data
+            print(layer_viz.size())
+            for i, filt in enumerate(layer_viz):
+                if i == 100:  # we will visualize only 10x10 blocks from each layer
+                    break
+                plt.subplot(10, 10, i + 1)
+                plt.plot(np.arange(len(filt[0])), filt[0])
+            print(f"Saving layer {num_layer} feature maps...")
+            plt.savefig(f"figures/layer_{num_layer}.png")
+            # plt.show()
+            plt.close()
+
+    ########################
+    ### Backprop filters ###
+    ########################
+
+    if args.backprop:
+        label_set = []
+        args.seed += 27
+        while len(label_set) < 2:
+            X, y = load_data(args)
+            args.seed += 1
+            if y not in label_set:
+                label_set.append(y)
+                print(y)  # for eventclf 0 is image, audio is 1
+                X.requires_grad_(True)
+
+                GBP = GuidedBackprop(net)
+                # Get gradients
+                guided_grads = GBP.generate_gradients(X, y)
+                target_name = "image" if y == 0 else "sound"
+                file_name_to_export = f"figures/{target_name}"
+                # Save colored gradients
+                save_gradient_images(
+                    guided_grads, file_name_to_export + "_Guided_BP_color"
+                )
+                # Convert to grayscale
+                grayscale_guided_grads = convert_to_grayscale(guided_grads)
+                # Save grayscale gradients
+                save_gradient_images(
+                    grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray"
+                )
+                # Positive and negative saliency maps
+                pos_sal, neg_sal = get_positive_negative_saliency(guided_grads)
+                save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
+                save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
+                print("Guided backprop completed")
