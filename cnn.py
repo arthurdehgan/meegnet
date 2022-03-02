@@ -39,9 +39,10 @@ def train_evaluate(fold, args):
     if args.maxpool != 0:
         suffixes += f"_maxpool{args.maxpool}"
 
+    # TODO maybe use a dictionnary in order to store these values or use switch case
     if args.feature == "bins":
         trial_length = 241
-    if args.feature == "bands":
+    elif args.feature == "bands":
         trial_length = 5
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
@@ -52,11 +53,11 @@ def train_evaluate(fold, args):
         # TODO
         pass
 
-    if args.elec == "MAG":
+    if args.sensors == "MAG":
         n_channels = 102
-    elif args.elec == "GRAD":
+    elif args.sensors == "GRAD":
         n_channels = 204
-    elif args.elec == "ALL":
+    elif args.sensors == "ALL":
         n_channels = 306
 
     input_size = (n_channels // 102, 102, trial_length)
@@ -71,7 +72,8 @@ def train_evaluate(fold, args):
         save = False
         load = False
 
-    name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.elec}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+    # TODO change dropout to be different than a float value maybe use a , or just convert .5 to 50%
+    name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.sensors}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
     name += suffixes
 
     net = create_net(args.net_option, name, input_size, n_outputs, args)
@@ -219,17 +221,6 @@ if __name__ == "__main__":
         ), "dattype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
 
-    #######################
-    # Torchsummary checks #
-    #######################
-
-    torchsum = True
-    try:
-        from torchsummary import summary
-    except:
-        logging.warning("Warning: Error loading torchsummary")
-        torchsum = False
-
     ################
     # Starting log #
     ################
@@ -248,6 +239,18 @@ if __name__ == "__main__":
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
+
+    #######################
+    # Torchsummary checks #
+    #######################
+
+    torchsum = True
+    try:
+        from torchsummary import summary
+    except:
+        logging.warning("Warning: Error loading torchsummary")
+        torchsum = False
+
     #######################
     # learning parameters #
     #######################
@@ -269,7 +272,7 @@ if __name__ == "__main__":
             data_path,
             n_samples=args.n_samples,
             max_subj=args.max_subj,
-            ch_type=args.elec,
+            ch_type=args.sensors,
             seed=args.seed,
             printmem=args.printmem,
             dattype=args.dattype,
@@ -281,7 +284,7 @@ if __name__ == "__main__":
             data_path,
             args.train_size,
             args.max_subj,
-            args.elec,
+            args.sensors,
             args.feature,
             seed=args.seed,
             debug=args.debug,

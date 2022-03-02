@@ -23,7 +23,6 @@ parser.add_argument(
     help="wether to do a 4-FOLD cross-validation on the train+valid set.",
 )
 parser.add_argument(
-    "-s",
     "--n_samples",
     type=int,
     default=None,
@@ -130,11 +129,11 @@ parser.add_argument(
     help="The maximum age of the subjects to be included in the learning and testing process",
 )
 parser.add_argument(
-    "-e",
-    "--elec",
+    "-s",
+    "--sensors",
     default="MAG",
     choices=["GRAD", "MAG", "ALL"],
-    help="The type of electrodes to keep, default=MAG",
+    help="The type of sensors to keep, default=MAG",
 )
 parser.add_argument(
     "--feature",
