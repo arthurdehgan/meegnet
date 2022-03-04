@@ -40,7 +40,7 @@ def load_data(args):
         data_path,
         args.train_size,
         args.max_subj,
-        args.elec,
+        args.sensors,
         args.feature,
         seed=args.seed,
         printmem=args.printmem,
@@ -102,17 +102,17 @@ if __name__ == "__main__":
         # TODO
         pass
 
-    if args.elec == "MAG":
+    if args.sensors == "MAG":
         n_channels = 102
-    elif args.elec == "GRAD":
+    elif args.sensors == "GRAD":
         n_channels = 204
-    elif args.elec == "ALL":
+    elif args.sensors == "ALL":
         n_channels = 306
 
     input_size = (n_channels // 102, 102, trial_length)
 
     # WARNING: using an older version of networks: fold was saved from 0 to 4 instead of 1 to 5 !! TODO
-    name = f"{args.model_name}_{args.seed}_fold{args.fold}_{args.elec}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+    name = f"{args.model_name}_{args.seed}_fold{args.fold}_{args.sensors}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
     name += suffixes
 
     if args.subclf:

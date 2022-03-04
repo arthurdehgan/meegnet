@@ -77,6 +77,7 @@ def train_evaluate(fold, args):
     name += suffixes
 
     net = create_net(args.net_option, name, input_size, n_outputs, args)
+    # TODO put net option in args if i dont use it elsewhere
     model_filepath = save_path + net.name + ".pt"
 
     logging.info(net.name)
@@ -86,6 +87,7 @@ def train_evaluate(fold, args):
         logging.info(net)
 
     # Create dataset splits for the current fold of the cross-val
+    # TODO add datasets to the arguments of the function
     train_dataset = ConcatDataset(datasets[:fold] + datasets[fold + 1 :])
     trainloader = create_loader(
         train_dataset,
@@ -180,6 +182,7 @@ if __name__ == "__main__":
     ###########
     # PARSING #
     ###########
+    # TODO add those to parsing.py
 
     parser.add_argument(
         "--testsplit",
@@ -247,7 +250,7 @@ if __name__ == "__main__":
     torchsum = True
     try:
         from torchsummary import summary
-    except:
+    except:  # TODO catch importError
         logging.warning("Warning: Error loading torchsummary")
         torchsum = False
 
