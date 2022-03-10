@@ -10,12 +10,13 @@ We will also perform spectral analysis on those.
 import matplotlib.pyplot as plt
 import numpy as np
 from torch import nn
+from scipy.signal import welch
 from parsing import parser
 from params import TIME_TRIAL_LENGTH
 from cnn import create_net
 from utils import load_checkpoint
-from dataloaders import create_datasets, create_loader
-from viz import generate_topomap, load_info, GuidedBackprop
+from dataloaders import create_datasets, create_loader, extract_bands
+from viz import generate_topomap, load_info, GuidedBackprop, make_gif
 from misc_functions import (
     save_gradient_images,
     convert_to_grayscale,
@@ -23,6 +24,7 @@ from misc_functions import (
 )
 
 DEVICE = "cpu"
+BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
 
 
 def load_data(args):
@@ -67,9 +69,19 @@ if __name__ == "__main__":
         help="wether or not to generate topomaps for the spatial layer.",
     )
     parser.add_argument(
+        "--spectral",
+        action="store_true",
+        help="for topograd and backprop, if set will do everything in spectral domain after welch transform. if not set, temporal.",
+    )
+    parser.add_argument(
         "--backprop",
         action="store_true",
         help="wether or not to generate the backprop filter.",
+    )
+    parser.add_argument(
+        "--topograd",
+        action="store_true",
+        help="wether or not to generate the topomaps of the guided backprop.",
     )
     parser.add_argument(
         "--outputs",
@@ -220,3 +232,38 @@ if __name__ == "__main__":
                 save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
                 save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
                 print("Guided backprop completed")
+
+            if args.topograd:
+                for i, chan in enumerate(("GRAD", "GRAD2", "MAG")):
+                    imlist = []
+                    data = guided_grads[i]
+                    if args.spectral:
+                        # TODO Dont hardcode sampling freq !
+                        f, data = welch(data, fs=500)
+                        data = extract_bands(data, f)
+                    vmin, vmax = data.min(), data.max()
+                    for timestamp in range(data.shape[-1]):
+                        _ = generate_topomap(
+                            data[:, timestamp], info, vmin=vmin, vmax=vmax
+                        )
+                        imname = (
+                            f"figures/t{timestamp}_topograd_{target_name}_{chan}.png"
+                        )
+                        # we took data at 500Hz fr0m 150ms before stim to 650 after
+                        if args.spectral:
+                            text = BANDS[timestamp]
+                        else:
+                            text = "t=" + str(-150 + (timestamp * 2))
+                        plt.text(
+                            0.12,
+                            0.13,
+                            text,
+                            fontsize=20,
+                            color="black",
+                        )
+                        imlist.append(imname)
+                        plt.axis("off")
+                        plt.savefig(imname)
+                        plt.close()
+                    if not args.spectral:
+                        make_gif(imlist)

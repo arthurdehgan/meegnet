@@ -66,11 +66,12 @@ class InfiniteDataLoader:
 # End of domainBed code
 
 
-def extract_bands(data):
+def extract_bands(data, f=None):
     if len(data.shape) < 3:
         data = data[np.newaxis, :, :]
         add_axis = True
-    f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
+    if f is None:
+        f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
     # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
     data = [
         data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
