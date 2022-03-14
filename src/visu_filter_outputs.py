@@ -7,15 +7,23 @@ Next this script will also generate all the output of filters for a given input.
 We will also perform spectral analysis on those.
 
 """
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from torch import nn
 from scipy.signal import welch
 from parsing import parser
 from params import TIME_TRIAL_LENGTH
 from cnn import create_net
 from utils import load_checkpoint
-from dataloaders import create_datasets, create_loader, extract_bands
+from dataloaders import (
+    create_datasets,
+    create_loader,
+    extract_bands,
+    load_passive_sub_events,
+    load_sub,
+)
 from viz import generate_topomap, load_info, GuidedBackprop, make_gif
 from misc_functions import (
     save_gradient_images,
@@ -27,37 +35,18 @@ DEVICE = "cpu"
 BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
 
 
-def load_data(args):
+def load_data(args, sub="CC321464"):
     # change path depending on the data type. TODO Hard coded
     # Add an option to change this
     data_path = args.path
     if args.dattype == "passive":
         data_path += "downsampled_500/"
+        return load_passive_sub_events(data_path, sub)
     else:
+        dataframe = pd.read_csv(f"{data_path}trials_df_clean.csv", index_col=0)
         data_path += "downsamlped_200"
-
-    # Using dataloaders in order to load data the same way
-    # we did during training and testing
-    datasets = create_datasets(
-        data_path,
-        args.train_size,
-        args.max_subj,
-        args.sensors,
-        args.feature,
-        seed=args.seed,
-        printmem=args.printmem,
-        n_samples=args.n_samples,
-        dattype=args.dattype,
-        load_events=args.eventclf,
-    )
-    dataloader = create_loader(
-        datasets[0],
-        batch_size=1,
-        num_workers=args.num_workers,
-        shuffle=True,
-    )
-    for X, y in dataloader:
-        break
+        X = load_sub(data_path, sub)
+        y = dataframe[dataframe["subs"] == sub]["sex"].iloc(0)
 
     return X, y
 
@@ -67,6 +56,11 @@ if __name__ == "__main__":
         "--topomaps",
         action="store_true",
         help="wether or not to generate topomaps for the spatial layer.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Will generate all programmed visualizations.",
     )
     parser.add_argument(
         "--spectral",
@@ -94,6 +88,11 @@ if __name__ == "__main__":
         help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
     )
     args = parser.parse_args()
+    if args.all:
+        args.topograd = True
+        args.backprop = True
+        args.outputs = True
+        args.spectral = True
 
     suffixes = ""
     if args.batchnorm:
@@ -135,7 +134,7 @@ if __name__ == "__main__":
 
     info = load_info(args.path)
 
-    model_filepath = "models/" + name + ".pt"
+    model_filepath = "../models/" + name + ".pt"
     net = create_net(args.net_option, name, input_size, n_outputs, args)
     epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
@@ -164,14 +163,14 @@ if __name__ == "__main__":
             plt.subplot(10, 10, i + 1)
             _ = generate_topomap(filtr[0, :, :].detach(), info)
             plt.axis("off")
-        plt.savefig("figures/filter.png")
+        plt.savefig("../figures/filter.png")
 
     #######################################################
     ### Generating visualization after each conv layer ####
     #######################################################
 
     if args.outputs:
-        X, _ = load_data(args)
+        X = torch.Tensor(load_data(args)[0])
 
         # Generating outputs after forward pass of each conv layer
         # TODO check if we should add maxpooling to this, since it
@@ -193,7 +192,7 @@ if __name__ == "__main__":
                 plt.subplot(10, 10, i + 1)
                 plt.plot(np.arange(len(filt[0])), filt[0])
             print(f"Saving layer {num_layer} feature maps...")
-            plt.savefig(f"figures/layer_{num_layer}.png")
+            plt.savefig(f"../figures/layer_{num_layer}.png")
             # plt.show()
             plt.close()
 
@@ -204,9 +203,12 @@ if __name__ == "__main__":
     if args.backprop:
         label_set = []
         args.seed += 27
+        examples, targets = load_data(args)
+        i = 0
         while len(label_set) < 2:
-            X, y = load_data(args)
-            args.seed += 1
+            y = targets[i]
+            X = torch.Tensor(examples[i][np.newaxis])
+            i += 1
             if y not in label_set:
                 label_set.append(y)
                 print(y)  # for eventclf 0 is image, audio is 1
@@ -216,7 +218,7 @@ if __name__ == "__main__":
                 # Get gradients
                 guided_grads = GBP.generate_gradients(X, y)
                 target_name = "image" if y == 0 else "sound"
-                file_name_to_export = f"figures/{target_name}"
+                file_name_to_export = f"../figures/{target_name}"
                 # Save colored gradients
                 save_gradient_images(
                     guided_grads, file_name_to_export + "_Guided_BP_color"
@@ -247,7 +249,7 @@ if __name__ == "__main__":
                             data[:, timestamp], info, vmin=vmin, vmax=vmax
                         )
                         imname = (
-                            f"figures/t{timestamp}_topograd_{target_name}_{chan}.png"
+                            f"../figures/t{timestamp}_topograd_{target_name}_{chan}.png"
                         )
                         # we took data at 500Hz fr0m 150ms before stim to 650 after
                         if args.spectral:
