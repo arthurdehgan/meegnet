@@ -11,7 +11,7 @@ from scipy.signal import welch
 from scipy.io import loadmat
 from torch.utils.data import DataLoader, random_split, TensorDataset
 
-BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
+BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
@@ -78,7 +78,9 @@ def extract_bands(data, f=None):
         data[:, :, (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
         data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
         data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 30) * (f <= 120)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 30) * (f <= 60)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 60) * (f <= 90)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 90) * (f <= 120)].mean(axis=-1)[..., None],
     ]
     data = np.concatenate(data, axis=2)
     if add_axis:
@@ -221,6 +223,11 @@ def load_sets(
     assert_params(band, domain, dattype)
 
     dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
+    # For some reason this subject makes un unable to learn
+    forbidden = ["CC220901"]
+
+    for sub in forbidden:
+        dataframe = dataframe.loc[dataframe["subs"] != sub]
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
         .drop_duplicates(subset=["subs"])
@@ -236,6 +243,7 @@ def load_sets(
     final_n_splits = n_splits - 1 if testing is not None else n_splits
     X_sets = [[] for _ in range(final_n_splits)]
     y_sets = [[] for _ in range(final_n_splits)]
+    logging.info(list(subs_df["subs"]))
     for i, row in enumerate(subs_df.iterrows()):
         random.seed(seed)
         torch.manual_seed(seed)
