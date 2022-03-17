@@ -13,11 +13,10 @@ import numpy as np
 import pandas as pd
 from torch import nn
 from scipy.signal import welch
-from parsing import parser
-from params import TIME_TRIAL_LENGTH
-from cnn import create_net
-from utils import load_checkpoint
-from dataloaders import (
+from camcan.parsing import parser
+from camcan.params import TIME_TRIAL_LENGTH
+from camcan.utils import load_checkpoint
+from camcan.dataloaders import (
     create_datasets,
     create_loader,
     extract_bands,
@@ -25,12 +24,13 @@ from dataloaders import (
     load_sub,
     BANDS,
 )
-from viz import generate_topomap, load_info, GuidedBackprop, make_gif
-from misc_functions import (
+from camcan.viz import generate_topomap, load_info, GuidedBackprop, make_gif
+from camcan.misc_functions import (
     save_gradient_images,
     convert_to_grayscale,
     get_positive_negative_saliency,
 )
+from cnn import create_net
 
 DEVICE = "cpu"
 

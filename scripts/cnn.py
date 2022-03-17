@@ -4,12 +4,12 @@ import logging
 import torch
 import numpy as np
 from scipy.io import loadmat
-from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loader, create_datasets, load_sets
 from torch.utils.data import ConcatDataset, TensorDataset
-from network import FullNet, MLP
-from utils import train, load_checkpoint, cuda_check
-from parsing import parser
+from camcan.params import TIME_TRIAL_LENGTH
+from camcan.dataloaders import create_loader, create_datasets, load_sets
+from camcan.network import FullNet, MLP
+from camcan.utils import train, load_checkpoint, cuda_check
+from camcan.parsing import parser
 
 ##############
 # CUDA CHECK #
