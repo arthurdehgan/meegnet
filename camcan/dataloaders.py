@@ -224,9 +224,10 @@ def load_sets(
 
     dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
     # For some reason this subject makes un unable to learn
-    forbidden = ["CC220901"]
+    forbidden_subs = ["CC220901"]
+    logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
 
-    for sub in forbidden:
+    for sub in forbidden_subs:
         dataframe = dataframe.loc[dataframe["subs"] != sub]
     subs_df = (
         dataframe.drop(["begin", "end"], axis=1)
@@ -243,7 +244,7 @@ def load_sets(
     final_n_splits = n_splits - 1 if testing is not None else n_splits
     X_sets = [[] for _ in range(final_n_splits)]
     y_sets = [[] for _ in range(final_n_splits)]
-    logging.info(list(subs_df["subs"]))
+    logging.debug(list(subs_df["subs"]))
     for i, row in enumerate(subs_df.iterrows()):
         random.seed(seed)
         torch.manual_seed(seed)

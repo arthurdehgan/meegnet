@@ -232,13 +232,13 @@ if __name__ == "__main__":
         logging.basicConfig(
             filename=save_path + args.model_name + ".log",
             filemode="a",
-            level=logging.DEBUG,
+            level=logging.INFO,
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
     else:
         logging.basicConfig(
-            level=logging.DEBUG,
+            level=logging.INFO,
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
@@ -259,6 +259,7 @@ if __name__ == "__main__":
     #######################
 
     if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("ENTERING DEBUG MODE")
         # args.max_subj = 20
         args.dropout = 0.5
