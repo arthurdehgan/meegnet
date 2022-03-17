@@ -254,7 +254,7 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
         try:
             psd.append(loadmat(file_path)["data"].ravel())
         except IOError:
-            print(sub, "Not Found")
+            logging.info(sub, "Not Found")
     return np.array(psd), np.array(labels)
 
 
