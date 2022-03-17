@@ -3,7 +3,7 @@ import argparse
 import random
 import pandas as pd
 
-N_TESTS = 100
+N_TESTS = 300
 
 tests = {
     "f": (6, 9, 12, 18, 24),
@@ -13,6 +13,8 @@ tests = {
     "batchnorm": (True, False),
     "maxpool": (0, 10, 20),
     "hlayers": (1, 3, 5, 7),
+    "lr": (0.0001, 0.00005, 0.00001, 0.0005),
+    "bs": (128, 256, 512, 1024),
 }
 
 parser = argparse.ArgumentParser()
@@ -80,9 +82,11 @@ while n_test < N_TESTS:
         "nchan": random.choice(tests["nchan"]),
         "batchnorm": random.choice(tests["batchnorm"]),
         "maxpool": random.choice(tests["maxpool"]),
+        "bs": random.choice(tests["bs"]),
+        "lr": random.choice(tests["lr"]),
     }
     if tuple(params.values()) not in params_set:
-        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=sub_RS_{n_test} -e=ALL -b=2048 -f={params['f']} --patience=20 --seed={seed} --hlayers={params['hlayers']} --lr=0.00002 --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf --log "
+        arguments = f"--feature=temporal --path={data_path} --save={save_path} --model-name=sub_RS_{n_test} -s=ALL -b={params['bs']} -f={params['f']} --patience=20 --seed={seed} --hlayers={params['hlayers']} --lr={params['lr']} --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf --log "
         if params["batchnorm"]:
             arguments += " --batchnorm"
         if options is not None:
@@ -92,12 +96,11 @@ while n_test < N_TESTS:
         if local:
             to_run = f"python {script_path} {arguments}"
         else:
-            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} randomsearch.sh '{arguments}'"
+            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} ../randomsearch.sh '{arguments}'"
         print(to_run)
         call(to_run, shell=True)
         params_set.add(tuple(params.values()))
         n_test += 1
         tested = tested.append(params, ignore_index=True)
-        break
 
 tested.to_csv(f"tested_params_seed{seed}.csv")
