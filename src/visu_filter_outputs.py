@@ -23,6 +23,7 @@ from dataloaders import (
     extract_bands,
     load_passive_sub_events,
     load_sub,
+    BANDS,
 )
 from viz import generate_topomap, load_info, GuidedBackprop, make_gif
 from misc_functions import (
@@ -32,7 +33,64 @@ from misc_functions import (
 )
 
 DEVICE = "cpu"
-BANDS = ["delta", "theta", "alpha", "beta", "gamma"]
+
+
+def compute_guided_bprop(net, X, y):
+    label_set.append(y)
+    print(y)  # for eventclf 0 is image, audio is 1
+    X.requires_grad_(True)
+
+    GBP = GuidedBackprop(net)
+    # Get gradients
+    guided_grads = GBP.generate_gradients(X, y)
+    target_name = "image" if y == 0 else "sound"
+    file_name_to_export = f"../figures/{target_name}"
+    # Save colored gradients
+    save_gradient_images(guided_grads, file_name_to_export + "_Guided_BP_color")
+    # Convert to grayscale
+    grayscale_guided_grads = convert_to_grayscale(guided_grads)
+    # Save grayscale gradients
+    save_gradient_images(
+        grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray"
+    )
+    # Positive and negative saliency maps
+    pos_sal, neg_sal = get_positive_negative_saliency(guided_grads)
+    save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
+    save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
+    print("Guided backprop completed")
+    return guided_grads, target_name
+
+
+def compute_topograd_map(guided_grads, target_name):
+    for i, chan in enumerate(("GRAD", "GRAD2", "MAG")):
+        imlist = []
+        data = guided_grads[i]
+        if args.spectral:
+            # TODO Dont hardcode sampling freq !
+            f, data = welch(data, fs=500)
+            data = extract_bands(data, f)
+        vmin, vmax = data.min(), data.max()
+        for timestamp in range(data.shape[-1]):
+            _ = generate_topomap(data[:, timestamp], info, vmin=vmin, vmax=vmax)
+            imname = f"../figures/t{timestamp}_topograd_{target_name}_{chan}.png"
+            # we took data at 500Hz fr0m 150ms before stim to 650 after
+            if args.spectral:
+                text = BANDS[timestamp]
+            else:
+                text = "t=" + str(-150 + (timestamp * 2))
+            plt.text(
+                0.12,
+                0.13,
+                text,
+                fontsize=20,
+                color="black",
+            )
+            imlist.append(imname)
+            plt.axis("off")
+            plt.savefig(imname)
+            plt.close()
+        if not args.spectral:
+            make_gif(imlist)
 
 
 def load_data(args, sub="CC321464"):
@@ -76,6 +134,11 @@ if __name__ == "__main__":
         "--topograd",
         action="store_true",
         help="wether or not to generate the topomaps of the guided backprop.",
+    )
+    parser.add_argument(
+        "--all-subj",
+        action="store_true",
+        help="compute for all subjs instead of just one",
     )
     parser.add_argument(
         "--outputs",
@@ -201,71 +264,27 @@ if __name__ == "__main__":
     ########################
 
     if args.backprop:
-        label_set = []
-        args.seed += 27
-        examples, targets = load_data(args)
-        i = 0
-        while len(label_set) < 2:
-            y = targets[i]
-            X = torch.Tensor(examples[i][np.newaxis])
-            i += 1
-            if y not in label_set:
-                label_set.append(y)
-                print(y)  # for eventclf 0 is image, audio is 1
-                X.requires_grad_(True)
-
-                GBP = GuidedBackprop(net)
-                # Get gradients
-                guided_grads = GBP.generate_gradients(X, y)
-                target_name = "image" if y == 0 else "sound"
-                file_name_to_export = f"../figures/{target_name}"
-                # Save colored gradients
-                save_gradient_images(
-                    guided_grads, file_name_to_export + "_Guided_BP_color"
-                )
-                # Convert to grayscale
-                grayscale_guided_grads = convert_to_grayscale(guided_grads)
-                # Save grayscale gradients
-                save_gradient_images(
-                    grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray"
-                )
-                # Positive and negative saliency maps
-                pos_sal, neg_sal = get_positive_negative_saliency(guided_grads)
-                save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
-                save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
-                print("Guided backprop completed")
-
-            if args.topograd:
-                for i, chan in enumerate(("GRAD", "GRAD2", "MAG")):
-                    imlist = []
-                    data = guided_grads[i]
-                    if args.spectral:
-                        # TODO Dont hardcode sampling freq !
-                        f, data = welch(data, fs=500)
-                        data = extract_bands(data, f)
-                    vmin, vmax = data.min(), data.max()
-                    for timestamp in range(data.shape[-1]):
-                        _ = generate_topomap(
-                            data[:, timestamp], info, vmin=vmin, vmax=vmax
-                        )
-                        imname = (
-                            f"../figures/t{timestamp}_topograd_{target_name}_{chan}.png"
-                        )
-                        # we took data at 500Hz fr0m 150ms before stim to 650 after
-                        if args.spectral:
-                            text = BANDS[timestamp]
-                        else:
-                            text = "t=" + str(-150 + (timestamp * 2))
-                        plt.text(
-                            0.12,
-                            0.13,
-                            text,
-                            fontsize=20,
-                            color="black",
-                        )
-                        imlist.append(imname)
-                        plt.axis("off")
-                        plt.savefig(imname)
-                        plt.close()
-                    if not args.spectral:
-                        make_gif(imlist)
+        if args.all_subj:
+            dataframe = pd.read_csv(
+                f"{args.path}clean_participant_new.csv", index_col=0
+            )
+            subj_list = dataframe["participant_id"]
+        else:
+            subj_list = ["CC321464"]
+        for sub in subj_list:
+            label_set = []
+            examples, targets = load_data(args, sub)
+            if targets is None:
+                print(sub, "did not load correctly")
+                continue
+            i = 0
+            while len(label_set) < 2:
+                y = targets[i]
+                X = torch.Tensor(examples[i][np.newaxis])
+                i += 1
+                if y not in label_set:
+                    guided_grads, target_name = compute_guided_bprop(net, X, y)
+                    if args.topograd:
+                        if args.all_subj:
+                            target_name += f"_{sub}"
+                        compute_topograd_map(guided_grads, target_name)
