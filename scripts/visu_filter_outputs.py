@@ -7,6 +7,8 @@ Next this script will also generate all the output of filters for a given input.
 We will also perform spectral analysis on those.
 
 """
+import os
+from collections.abc import Iterable
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,6 +26,7 @@ from camcan.dataloaders import (
     load_sub,
     BANDS,
 )
+from joblib import Parallel, delayed, parallel_backend
 from camcan.viz import generate_topomap, load_info, GuidedBackprop, make_gif
 from camcan.misc_functions import (
     save_gradient_images,
@@ -33,51 +36,109 @@ from camcan.misc_functions import (
 from cnn import create_net
 
 DEVICE = "cpu"
+LABELS = ["image", "sound"]  # image is label 0 and sound label 1
 
 
-def compute_guided_bprop(net, X, y):
-    label_set.append(y)
-    print(y)  # for eventclf 0 is image, audio is 1
+def compute_the_good_stuff(net, trial, y, w_size, fs):
+    X = torch.Tensor(trial[np.newaxis])
     X.requires_grad_(True)
+    # If confidence is good enough we use the trial for visualization
+    chan_data = None
+    if torch.nn.Softmax(dim=1)(net(X)).max() >= 0.95:
+        GBP = GuidedBackprop(net)
+        guided_grads = GBP.generate_gradients(X, y)
+        chan_data = []
+        for data in guided_grads:
+            windows_idx = choose_best_window(data)
+            transformed_data = []
+            for j, index in enumerate(windows_idx):
+                if isinstance(index, Iterable):
+                    tmp = []
+                    for idx in index:
+                        tmp.append(
+                            compute_psd(
+                                data[j, idx : idx + w_size].reshape(1, w_size),
+                                fs=fs,
+                            )
+                        )
+                    bands = np.mean(tmp, axis=0)
+                else:
+                    bands = compute_psd(
+                        data[j, index : index + w_size].reshape(1, w_size),
+                        fs=fs,
+                    )
+                transformed_data.append(bands)
+            chan_data.append(np.array(transformed_data).squeeze())
+    return chan_data
 
+
+def choose_best_window(data, fs=500, w_size=300):
+    """
+    data: array
+        Must be of size k x n_samples. k can be sensor dimension or trial dimension.
+    w_size: int
+        The size of the window in ms
+    """
+    masks = [dat >= (np.mean(dat) + np.std(dat) / 2) for dat in data]
+    w_size = int(w_size * fs / 1000)
+    best_window_idx = []
+    for mask in masks:
+        windows = np.array([mask[i : i + w_size] for i in range(len(mask) - w_size)])
+        values = [sum(window) for window in windows]
+        best_window_index = np.where(values == max(values))[0]
+        if len(best_window_index) > 1:
+            idx_range = best_window_index[-1] - best_window_index[0]
+            if idx_range <= 150 * fs / 1000:  # 150ms betweeen first and last window
+                # Then best would be in the middle of all this
+                best = int(len(best_window_index) / 2)
+                best_window_idx.append(best_window_index[best])
+            elif idx_range <= 300 * fs / 1000:  # 300ms
+                best_window_idx.append((best_window_index[0], best_window_index[-1]))
+            else:
+                best = int(len(best_window_index) / 2)
+                best_window_idx.append(
+                    (best_window_index[0], best, best_window_index[-1])
+                )
+        else:
+            best_window_idx.append(best_window_index[0])
+    return best_window_idx
+
+
+def compute_save_guided_bprop(net, X, y):
     GBP = GuidedBackprop(net)
-    # Get gradients
     guided_grads = GBP.generate_gradients(X, y)
     target_name = "image" if y == 0 else "sound"
     file_name_to_export = f"../figures/{target_name}"
-    # Save colored gradients
     save_gradient_images(guided_grads, file_name_to_export + "_Guided_BP_color")
-    # Convert to grayscale
     grayscale_guided_grads = convert_to_grayscale(guided_grads)
-    # Save grayscale gradients
     save_gradient_images(
         grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray"
     )
-    # Positive and negative saliency maps
     pos_sal, neg_sal = get_positive_negative_saliency(guided_grads)
     save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
     save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
-    print("Guided backprop completed")
     return guided_grads, target_name
 
 
-def compute_topograd_map(guided_grads, target_name):
-    for i, chan in enumerate(("GRAD", "GRAD2", "MAG")):
+def compute_psd(data, fs):
+    f, psd = welch(data, fs=fs)
+    return extract_bands(psd, f)
+
+
+def generate_topograd_map(guided_grads, target_name, fs, w_size=300, spectral=False):
+    for k, chan in enumerate(("GRAD", "GRAD2", "MAG")):
         imlist = []
-        data = guided_grads[i]
-        if args.spectral:
-            # TODO Dont hardcode sampling freq !
-            f, data = welch(data, fs=500)
-            data = extract_bands(data, f)
-        vmin, vmax = data.min(), data.max()
-        for timestamp in range(data.shape[-1]):
-            _ = generate_topomap(data[:, timestamp], info, vmin=vmin, vmax=vmax)
-            imname = f"../figures/t{timestamp}_topograd_{target_name}_{chan}.png"
-            # we took data at 500Hz fr0m 150ms before stim to 650 after
-            if args.spectral:
-                text = BANDS[timestamp]
+        data = guided_grads[k]
+        for step in range(data.shape[-1]):
+            if spectral:
+                text = BANDS[step]
+                vmin, vmax = data[:, step].min(), data[:, step].max()
+                pre = text
             else:
-                text = "t=" + str(-150 + (timestamp * 2))
+                text = "t=" + str(-150 + (step * 2))
+                vmin, vmax = data.min(), data.max()
+                pre = f"t{step}"
+
             plt.text(
                 0.12,
                 0.13,
@@ -85,11 +146,16 @@ def compute_topograd_map(guided_grads, target_name):
                 fontsize=20,
                 color="black",
             )
+            _ = generate_topomap(data[:, step], info, vmin=vmin, vmax=vmax)
+            dpath = "../figures/topograds/{chan}/{target_name}"
+            if not os.path.exists(dpath):
+                os.makedirs(dpath)
+            imname = dpath + f"{pre}_topograd_{target_name}_{chan}.png"
             imlist.append(imname)
             plt.axis("off")
             plt.savefig(imname)
             plt.close()
-        if not args.spectral:
+        if not spectral:
             make_gif(imlist)
 
 
@@ -153,8 +219,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.all:
         args.topograd = True
-        args.backprop = True
         args.outputs = True
+
+    if args.topograd:
+        args.backprop = True
         args.spectral = True
 
     suffixes = ""
@@ -248,7 +316,6 @@ if __name__ == "__main__":
             plt.figure(figsize=(30, 30))
             layer_viz = outputs[num_layer][0, :, :, :]
             layer_viz = layer_viz.data
-            print(layer_viz.size())
             for i, filt in enumerate(layer_viz):
                 if i == 100:  # we will visualize only 10x10 blocks from each layer
                     break
@@ -263,28 +330,43 @@ if __name__ == "__main__":
     ### Backprop filters ###
     ########################
 
-    if args.backprop:
+    if args.topograd:
         if args.all_subj:
             dataframe = pd.read_csv(
                 f"{args.path}clean_participant_new.csv", index_col=0
             )
             subj_list = dataframe["participant_id"]
+            subj_list = subj_list.sample(frac=1).reset_index(drop=True)
+            if args.max_subj is not None:
+                subj_list = subj_list.loc[: args.max_subj]
         else:
-            subj_list = ["CC321464"]
+            subj_list = ["CC510433"]
+        bands_values = [[], []]
+        w_size = 300  # Parameter TODO put somewhere else when factoring in fucntions
+        fs = 500  # Parameter TODO put somewhere else when factoring in fucntions
+        w_size = int(w_size * fs / 1000)
         for sub in subj_list:
-            label_set = []
             examples, targets = load_data(args, sub)
             if targets is None:
-                print(sub, "did not load correctly")
                 continue
-            i = 0
-            while len(label_set) < 2:
-                y = targets[i]
-                X = torch.Tensor(examples[i][np.newaxis])
-                i += 1
-                if y not in label_set:
-                    guided_grads, target_name = compute_guided_bprop(net, X, y)
-                    if args.topograd:
-                        if args.all_subj:
-                            target_name += f"_{sub}"
-                        compute_topograd_map(guided_grads, target_name)
+            print(sub)
+            targets = np.array(targets)
+            examples = np.array(examples)
+            for targ in np.unique(targets):
+                with parallel_backend("loky", inner_max_num_threads=2):
+                    chan_data = Parallel(n_jobs=-1)(
+                        delayed(compute_the_good_stuff)(net, trial, y, w_size, fs)
+                        for trial, y in zip(
+                            examples[targets == targ], targets[targets == targ]
+                        )
+                    )
+                bands_values[targ] += chan_data
+        print(
+            f"used {len(bands_values[0])} image trials, and {len(bands_values[1])} sound trials."
+        )
+        bands_values = [
+            np.array(bv)[np.array(bv) != np.array(None)].mean(axis=0)
+            for bv in bands_values
+        ]
+        for i, bv in enumerate(bands_values):
+            generate_topograd_map(bv, LABELS[i], fs, spectral=args.spectral)
