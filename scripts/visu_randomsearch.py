@@ -3,7 +3,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.io import loadmat
-from parsing import parser
+from camcan.parsing import parser
 
 if __name__ == "__main__":
     """
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     found = []
     not_computed = []
     dico = {}
-    for file in os.listdir("models/"):
+    for file in os.listdir("../models/"):
         if file.startswith("sub_RS") and file.endswith(".mat") and "fold1" in file:
             try:
                 sc = 0
@@ -31,7 +31,10 @@ if __name__ == "__main__":
                         + f"_fold{i+1}_"
                         + "_".join(file.split("_")[5:])
                     )
-                    sc += loadmat("models/" + name)["acc_score"] / (N_FOLDS)
+                    try:
+                        sc += loadmat("../models/" + name)["acc_score"] / (N_FOLDS)
+                    except:
+                        print("got some problem with " + name)
                 found.append("_".join(file.split("_")[:4]))
                 dico[file] = sc
             except OSError:
@@ -43,7 +46,7 @@ if __name__ == "__main__":
     print()
 
     seed_archi_list = defaultdict(int)
-    for file in os.listdir("models/"):
+    for file in os.listdir("../models/"):
         if file.startswith("sub_RDS") and "fold1" in file and file.endswith(".mat"):
             for i in range(N_FOLDS):
                 name = (
@@ -53,7 +56,7 @@ if __name__ == "__main__":
                 )
                 try:
                     seed_archi_list[file] += (
-                        loadmat("models/" + name)["acc_score"] / N_FOLDS
+                        loadmat("../models/" + name)["acc_score"] / N_FOLDS
                     )
                 except OSError:
                     continue
