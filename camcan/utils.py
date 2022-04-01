@@ -3,12 +3,43 @@ import sys
 import logging
 from time import time
 import torch
+import mne
+import numpy as np
+import pandas as pd
 from torch import nn, optim
 from torch.autograd import Variable
-import numpy as np
+from mne.time_frequency.multitaper import psd_array_multitaper
 from scipy.io import savemat, loadmat
-import pandas as pd
 from path import Path as path
+
+
+def extract_bands(data, f=None):
+    if len(data.shape) < 3:
+        data = data[np.newaxis, :, :]
+        add_axis = True
+    if f is None:
+        f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
+    # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
+    data = [
+        data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 30) * (f <= 60)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 60) * (f <= 90)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 90) * (f <= 120)].mean(axis=-1)[..., None],
+    ]
+    data = np.concatenate(data, axis=2)
+    if add_axis:
+        return data[0]
+    return data
+
+
+def compute_psd(data, fs):
+    # f, psd = welch(data, fs=fs)
+    mne.set_log_level(verbose=False)
+    psd, f = psd_array_multitaper(data, sfreq=fs, fmax=150)
+    return extract_bands(psd, f)[0]
 
 
 def cuda_check():

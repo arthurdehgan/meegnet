@@ -10,6 +10,7 @@ from scipy.stats import zscore
 from scipy.signal import welch
 from scipy.io import loadmat
 from torch.utils.data import DataLoader, random_split, TensorDataset
+from camcan.utils import extract_bands
 
 BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
@@ -64,28 +65,6 @@ class InfiniteDataLoader:
 
 
 # End of domainBed code
-
-
-def extract_bands(data, f=None):
-    if len(data.shape) < 3:
-        data = data[np.newaxis, :, :]
-        add_axis = True
-    if f is None:
-        f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
-    # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
-    data = [
-        data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 30) * (f <= 60)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 60) * (f <= 90)].mean(axis=-1)[..., None],
-        data[:, :, (f >= 90) * (f <= 120)].mean(axis=-1)[..., None],
-    ]
-    data = np.concatenate(data, axis=2)
-    if add_axis:
-        return data[0]
-    return data
 
 
 def assert_params(band, domain, dattype):
