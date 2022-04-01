@@ -14,20 +14,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from torch import nn
-from scipy.signal import welch
+
+# from scipy.signal import welch
+import mne
+from mne.time_frequency.multitaper import psd_array_multitaper
 from camcan.parsing import parser
 from camcan.params import TIME_TRIAL_LENGTH
-from camcan.utils import load_checkpoint
+from camcan.utils import load_checkpoint, compute_psd
 from camcan.dataloaders import (
     create_datasets,
     create_loader,
-    extract_bands,
     load_passive_sub_events,
     load_sub,
     BANDS,
 )
 from joblib import Parallel, delayed, parallel_backend
 from camcan.viz import generate_topomap, load_info, GuidedBackprop, make_gif
+from camcan.utils import compute_psd
 from camcan.misc_functions import (
     save_gradient_images,
     convert_to_grayscale,
@@ -43,8 +46,9 @@ def compute_the_good_stuff(net, trial, y, w_size, fs):
     X = torch.Tensor(trial[np.newaxis])
     X.requires_grad_(True)
     # If confidence is good enough we use the trial for visualization
+    confidence = torch.nn.Softmax(dim=1)(net(X)).max()
     chan_data = None
-    if torch.nn.Softmax(dim=1)(net(X)).max() >= 0.95:
+    if confidence >= 0.95:
         GBP = GuidedBackprop(net)
         guided_grads = GBP.generate_gradients(X, y)
         chan_data = []
@@ -68,7 +72,8 @@ def compute_the_good_stuff(net, trial, y, w_size, fs):
                         fs=fs,
                     )
                 transformed_data.append(bands)
-            chan_data.append(np.array(transformed_data).squeeze())
+            chan_data.append(np.array(transformed_data))
+        chan_data = np.array(chan_data)
     return chan_data
 
 
@@ -120,11 +125,6 @@ def compute_save_guided_bprop(net, X, y):
     return guided_grads, target_name
 
 
-def compute_psd(data, fs):
-    f, psd = welch(data, fs=fs)
-    return extract_bands(psd, f)
-
-
 def generate_topograd_map(guided_grads, target_name, fs, w_size=300, spectral=False):
     for k, chan in enumerate(("GRAD", "GRAD2", "MAG")):
         imlist = []
@@ -147,7 +147,7 @@ def generate_topograd_map(guided_grads, target_name, fs, w_size=300, spectral=Fa
                 color="black",
             )
             _ = generate_topomap(data[:, step], info, vmin=vmin, vmax=vmax)
-            dpath = "../figures/topograds/{chan}/{target_name}"
+            dpath = f"../figures/topograds/{chan}/{target_name}/"
             if not os.path.exists(dpath):
                 os.makedirs(dpath)
             imname = dpath + f"{pre}_topograd_{target_name}_{chan}.png"
@@ -353,20 +353,18 @@ if __name__ == "__main__":
             targets = np.array(targets)
             examples = np.array(examples)
             for targ in np.unique(targets):
-                with parallel_backend("loky", inner_max_num_threads=2):
+                with parallel_backend("loky", inner_max_num_threads=4):
                     chan_data = Parallel(n_jobs=-1)(
                         delayed(compute_the_good_stuff)(net, trial, y, w_size, fs)
                         for trial, y in zip(
                             examples[targets == targ], targets[targets == targ]
                         )
                     )
+                    chan_data = [e for e in chan_data if e is not None]
                 bands_values[targ] += chan_data
         print(
             f"used {len(bands_values[0])} image trials, and {len(bands_values[1])} sound trials."
         )
-        bands_values = [
-            np.array(bv)[np.array(bv) != np.array(None)].mean(axis=0)
-            for bv in bands_values
-        ]
+        bands_values = [np.array(bv).mean(axis=0) for bv in bands_values]
         for i, bv in enumerate(bands_values):
             generate_topograd_map(bv, LABELS[i], fs, spectral=args.spectral)
