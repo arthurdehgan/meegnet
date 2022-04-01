@@ -14,6 +14,7 @@ from path import Path as path
 
 
 def extract_bands(data, f=None):
+    add_axis = False
     if len(data.shape) < 3:
         data = data[np.newaxis, :, :]
         add_axis = True
