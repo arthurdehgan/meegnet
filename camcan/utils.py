@@ -40,7 +40,7 @@ def compute_psd(data, fs):
     # f, psd = welch(data, fs=fs)
     mne.set_log_level(verbose=False)
     psd, f = psd_array_multitaper(data, sfreq=fs, fmax=150)
-    return extract_bands(psd, f)[0]
+    return extract_bands(psd, f)
 
 
 def cuda_check():
