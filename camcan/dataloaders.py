@@ -406,7 +406,7 @@ def load_passive_sub_events(dpath, sub, ch_type="ALL"):
         ]
         events = loadmat(dpath + f"{sub}_passive_events_timestamps.mat")["times"]
     except:
-        logging.warning(f"Warning: There was a problem loading subject {sub}")
+        logging.warning(f"There was a problem loading subject {sub}")
         return None, None
 
     for e_type, e_time in events:
