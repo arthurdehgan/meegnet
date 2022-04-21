@@ -22,7 +22,7 @@ from camcan.misc_functions import (
     convert_to_grayscale,
     get_positive_negative_saliency,
 )
-from cnn import create_net
+from run import create_net
 
 DEVICE = "cpu"
 LABELS = ["image", "sound"]  # image is label 0 and sound label 1
