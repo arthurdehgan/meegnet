@@ -334,9 +334,8 @@ class FullNet(CustomNet):
 
 
 class vanPutNet(CustomNet):
-    def __init__(self, model_name, input_size, dropout=0.25):
-
-        CustomNet.__init__(self, model_name, input_size)
+    def __init__(self, model_name, input_size, n_output, dropout=0.25):
+        CustomNet.__init__(self, model_name, input_size, n_output)
         layers = nn.ModuleList(
             [
                 nn.Conv2d(1, 100, 3),
@@ -361,6 +360,9 @@ class vanPutNet(CustomNet):
         lin_size = self._get_lin_size(layers)
         layers.append(nn.Linear(lin_size, 2))
         self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
 
 
 class AutoEncoder(CustomNet):

@@ -2,6 +2,29 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
+    "--testsplit",
+    type=int,
+    default=None,
+    choices=[0, 1, 2, 3, 4, None],
+    help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
+)
+parser.add_argument(
+    "--randomsearch",
+    action="store_true",
+    help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
+)
+parser.add_argument(
+    "--fold",
+    default=None,
+    help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",
+)
+parser.add_argument(
+    "--net-option",
+    default="cNet",
+    choices=["cNet", "MLP"],
+    help="cNet is the custom net.",
+)
+parser.add_argument(
     "--dattype",
     default="rest",
     choices=["rest", "smt", "passive"],
