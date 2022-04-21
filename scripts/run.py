@@ -18,7 +18,7 @@ from camcan.parsing import parser
 DEVICE = cuda_check()
 
 
-def do_crossval(folds, args):
+def do_crossval(folds, datasets, net_option, args):
     cv = []
     for fold in range(folds):
         logging.info(f"Training model for fold {fold+1}/{folds}:")
@@ -32,7 +32,7 @@ def do_crossval(folds, args):
     return cv
 
 
-def train_evaluate(fold, args):
+def train_evaluate(fold, datasets, net_option, args):
     suffixes = ""
     if args.batchnorm:
         suffixes += "_BN"
@@ -77,7 +77,6 @@ def train_evaluate(fold, args):
     name += suffixes
 
     net = create_net(args.net_option, name, input_size, n_outputs, args)
-    # TODO put net option in args if i dont use it elsewhere
     model_filepath = save_path + net.name + ".pt"
 
     logging.info(net.name)
@@ -87,7 +86,6 @@ def train_evaluate(fold, args):
         logging.info(net)
 
     # Create dataset splits for the current fold of the cross-val
-    # TODO add datasets to the arguments of the function
     train_dataset = ConcatDataset(datasets[:fold] + datasets[fold + 1 :])
     trainloader = create_loader(
         train_dataset,
@@ -130,24 +128,6 @@ def train_evaluate(fold, args):
     results = loadmat(model_filepath[:-2] + "mat")
     return results
 
-    # # Final testing
-    # if os.path.exists(model_filepath):
-    #     _, net_state, _ = load_checkpoint(model_filepath)
-    #     net.load_state_dict(net_state)
-    # else:
-    #     logging.warning(
-    #         f"Error: Can't evaluate model {model_filepath}, file not found."
-    #     )
-    # print("Evaluating on test set:")
-    # tloss, tacc = evaluate(net, testloader)
-    # print("loss: ", tloss, " // accuracy: ", tacc)
-    # if save:
-    #     results = loadmat(model_filepath[:-2] + "mat")
-    #     print("best epoch: ", f"{results['best_epoch']}/{results['n_epochs']}")
-    #     results["test_acc"] = tacc
-    #     results["test_loss"] = tloss
-    #     savemat(save_path + net.name + ".mat", results)
-
 
 def create_net(net_option, name, input_size, n_outputs, args):
     if net_option == "MLP":
@@ -174,6 +154,24 @@ def create_net(net_option, name, input_size, n_outputs, args):
             args.dropout_option,
             args.batchnorm,
             args.maxpool,
+        ).to(DEVICE)
+    elif net_option == "VGG":
+        return VGG16_NET(
+            name,
+            input_size,
+            n_outputs,
+        ).to(DEVICE)
+    elif net_option == "EEGNet":
+        return EEGNet(
+            name,
+            input_size,
+            n_outputs,
+        ).to(DEVICE)
+    elif net_option == "vanPutNet":
+        return vanPutNet(
+            name,
+            input_size,
+            n_outputs,
         ).to(DEVICE)
 
 
@@ -310,7 +308,7 @@ if __name__ == "__main__":
         if args.testsplit is None:
             for outer_fold in range(5):
                 args.testsplit = outer_fold
-                cv = do_crossval(folds=4, args=args)
+                cv = do_crossval(folds=4, datasets, args.net_option, args=args)
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
             cv = do_crossval(folds=4, args=args)
@@ -318,11 +316,11 @@ if __name__ == "__main__":
 
     elif args.crossval:
         folds = 5 if args.testsplit is None else 4
-        cv = do_crossval(folds, args)
+        cv = do_crossval(folds, datasets, args.net_option, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     else:
         fold = 0 if fold is None else fold
         logging.info("Training model:")
-        train_evaluate(fold=fold, args=args)
+        train_evaluate(fold=fold, datasets, args.net_option, args=args)
         logging.info("Evaluating model:")
