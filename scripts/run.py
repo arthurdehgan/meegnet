@@ -322,5 +322,5 @@ if __name__ == "__main__":
     else:
         fold = 0 if fold is None else fold
         logging.info("Training model:")
-        train_evaluate(fold=fold, datasets, args.net_option, args=args)
+        train_evaluate(fold, datasets, args.net_option, args=args)
         logging.info("Evaluating model:")
