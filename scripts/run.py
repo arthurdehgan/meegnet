@@ -308,7 +308,7 @@ if __name__ == "__main__":
         if args.testsplit is None:
             for outer_fold in range(5):
                 args.testsplit = outer_fold
-                cv = do_crossval(folds=4, datasets, args.net_option, args=args)
+                cv = do_crossval(4, datasets, args.net_option, args=args)
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
             cv = do_crossval(folds=4, args=args)
