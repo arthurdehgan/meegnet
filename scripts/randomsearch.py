@@ -96,7 +96,7 @@ while n_test < N_TESTS:
         if local:
             to_run = f"python {script_path} {arguments}"
         else:
-            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} ../randomsearch.sh '{arguments}'"
+            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} ../../randomsearch.sh '{arguments}'"
         print(to_run)
         call(to_run, shell=True)
         params_set.add(tuple(params.values()))
