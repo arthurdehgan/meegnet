@@ -7,7 +7,7 @@ from scipy.io import loadmat
 from torch.utils.data import ConcatDataset, TensorDataset
 from camcan.params import TIME_TRIAL_LENGTH
 from camcan.dataloaders import create_loader, create_datasets, load_sets
-from camcan.network import FullNet, MLP
+from camcan.network import FullNet, MLP, VGG16_NET, vanPutNet, EEGNet
 from camcan.utils import train, load_checkpoint, cuda_check
 from camcan.parsing import parser
 
