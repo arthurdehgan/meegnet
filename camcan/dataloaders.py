@@ -14,6 +14,7 @@ from camcan.utils import extract_bands
 
 BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
+
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
     """Wraps another Sampler to yield an infinite stream."""
@@ -92,6 +93,8 @@ def create_datasets(
     max_subj,
     ch_type,
     domain,
+    sf=200,
+    seg=2,
     debug=False,
     seed=0,
     printmem=False,
@@ -108,32 +111,30 @@ def create_datasets(
     testing: if set to an integer between 0 and 4 will leave out a part of the dataset.
              Useful for random search.
     """
-    rng = np.random.RandomState(seed)
     torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    samples_df = pd.read_csv(f"{data_folder}trials_df_clean.csv", index_col=0)
-    ages_df = (
-        pd.read_csv(f"{data_folder}clean_participant_new.csv", index_col=0)
-        .rename(columns={"participant_id": "subs"})
-        .drop(["hand", "sex_text", "sex"], axis=1)
-    )
-    subs = (
-        samples_df.drop(["begin", "end", "sex"], axis=1)
-        .drop_duplicates(subset=["subs"])
+    csv_filepath = os.path.join(data_folder, "participants_info.csv")
+    participants_df = (
+        pd.read_csv(csv_filepath, index_col=0)
+        .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
     )
 
-    subs = subs.merge(ages_df[ages_df["subs"].isin(subs["subs"])].dropna(), "left")
-    subs = np.array(subs[subs["age"].between(*ages)].drop(["age"], axis=1).subs)
-    idx = rng.permutation(range(len(subs)))
-    subs = subs[idx]
+    subs = np.array(
+        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)[
+            "sub"
+        ]
+    )
+
     subs = subs[:max_subj]
+
     # We noticed that specific subjects were the reason why we couldn't
-    # learn anything from the data:
+    # learn anything from the data: TODO we might remove those now that we updated dataset
     if dattype == "passive":
-        forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
+        # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
+        forbidden_subs = []
         logging.info(
             f"removed subjects {forbidden_subs}, they were causing problems..."
         )
@@ -153,7 +154,7 @@ def create_datasets(
     )
 
     dataframes = [
-        samples_df.loc[samples_df["subs"].isin(subs[index])]
+        participants_df.loc[participants_df["sub"].isin(subs[index])]
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
         for i, index in enumerate(indexes)
@@ -177,6 +178,8 @@ def create_datasets(
                 load_groups=load_groups,
                 load_events=load_events,
                 band=band,
+                sf=sf,
+                seg=seg,
             )
         )
         for i, df in enumerate(dataframes)
@@ -188,7 +191,9 @@ def load_sets(
     dpath,
     max_subj=1000,
     n_splits=5,
-    offset=30,
+    offset=0,
+    seg=2,
+    sf=200,
     n_samples=None,
     ch_type="ALL",
     domain="temporal",
@@ -201,20 +206,21 @@ def load_sets(
     """Loading data subject per subject."""
     assert_params(band, domain, dattype)
 
-    dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
-    # For some reason this subject makes un unable to learn
-    forbidden_subs = ["CC220901"]
+    csv_file = os.path.join(dpath, "participants_info.csv")
+    dataframe = pd.read_csv(csv_file, index_col=0)
+    # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
+    # forbidden_subs = ["CC220901"]
+    forbidden_subs = []
     logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
 
     for sub in forbidden_subs:
-        dataframe = dataframe.loc[dataframe["subs"] != sub]
-    subs_df = (
-        dataframe.drop(["begin", "end"], axis=1)
-        .drop_duplicates(subset=["subs"])
-        .reset_index(drop=True)
-    )[:max_subj]
+        dataframe = dataframe.loc[dataframe["sub"] != sub]
 
-    n_sub = len(subs_df)
+    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[
+        :max_subj
+    ]
+
+    n_sub = len(dataframe)
     logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
         totmem = psutil.virtual_memory().total / 10 ** 9
@@ -223,8 +229,8 @@ def load_sets(
     final_n_splits = n_splits - 1 if testing is not None else n_splits
     X_sets = [[] for _ in range(final_n_splits)]
     y_sets = [[] for _ in range(final_n_splits)]
-    logging.debug(list(subs_df["subs"]))
-    for i, row in enumerate(subs_df.iterrows()):
+    logging.debug(list(dataframe["sub"]))
+    for i, row in enumerate(dataframe.iterrows()):
         random.seed(seed)
         torch.manual_seed(seed)
         if printmem:
@@ -236,7 +242,7 @@ def load_sets(
             else:
                 logging.debug(memstate)
 
-        sub = row[1]["subs"]
+        sub = row[1]["sub"]
         data = load_sub(
             dpath,
             sub,
@@ -246,6 +252,8 @@ def load_sets(
             dattype=dattype,
             domain=domain,
             offset=offset,
+            sf=sf,
+            seg=seg,
         )
         if data is None:
             n_sub -= 1
@@ -303,6 +311,8 @@ def load_data(
     dataframe,
     dpath,
     offset=30,
+    seg=2,
+    sf=200,
     ch_type="MAG",
     domain="temporal",
     printmem=False,
@@ -316,13 +326,7 @@ def load_data(
     """Loading data subject per subject."""
     assert_params(band, domain, dattype)
 
-    subs_df = (
-        dataframe.drop(["begin", "end"], axis=1)
-        .drop_duplicates(subset=["subs"])
-        .reset_index(drop=True)
-    )
-
-    n_sub = len(subs_df)
+    n_sub = len(dataframe)
     X, y, e_targets = [], [], []
     if load_groups:
         groups = []
@@ -331,7 +335,7 @@ def load_data(
         # subj_sizes = [] # assigned but never used ?
         totmem = psutil.virtual_memory().total / 10 ** 9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
-    for i, row in enumerate(subs_df.iterrows()):
+    for i, row in enumerate(dataframe.iterrows()):
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
@@ -344,7 +348,7 @@ def load_data(
             else:
                 logging.debug(memstate)
 
-        sub, lab = row[1]["subs"], row[1]["sex"]
+        sub, lab = row[1]["sub"], row[1]["sex"]
         if dattype != "passive" and not load_events:
             data = load_sub(
                 dpath,
@@ -355,6 +359,8 @@ def load_data(
                 dattype=dattype,
                 domain=domain,
                 offset=offset,
+                sf=sf,
+                seg=seg,
             )
         else:
             data, targets = load_passive_sub_events(dpath, sub, ch_type=ch_type)
@@ -443,58 +449,61 @@ def load_sub(
     dattype="rest",
     domain="temporal",
     offset=30,
+    sf=200,
+    seg=2,
 ):
-    SAMPLING_FREQ = 200
+    # TODO doc
+    """seg is the size of the segments in seconds"""
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
         chan_index = [0, 1]
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
-    dataframe = pd.read_csv(f"{dpath}trials_df_clean.csv", index_col=0)
 
     try:
-        if domain in ("cov", "cosp"):
-            data = np.load(dpath + f"{sub}_{dattype}_{domain}.npy")[chan_index]
+        if domain in ("cov", "cosp"):  # TODO Deprecated
+            file_path = os.path.join(
+                dpath, "covariances", f"{sub}_{dattype}_{domain}.npy"
+            )
+            data = np.load(file_path)[chan_index]
             data = np.swapaxes(data, 0, 1)
             if domain == "cosp":
                 data = data[:, :, BANDS.index(band)]
         else:
-            sub_data = np.load(dpath + f"{sub}_{dattype}_ICA_transdef_mfds200.npy")[
-                chan_index
-            ]
-            sub_segments = dataframe.loc[dataframe["subs"] == sub].drop(["sex"], axis=1)
+            file_path = os.path.join(dpath, f"downsampled_{sf}", f"{dattype}_{sub}.npy")
+            sub_data = np.load(file_path)[chan_index]
+            step = int(seg * sf)
+            start = int(offset * sf)
             if domain == "both":
                 # TODO the welch code might be wrong, check if the transformation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
+                # Deprecated
                 data = [
                     np.append(
-                        zscore(sub_data[:, :, begin:end], axis=1),
-                        welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1],
+                        zscore(sub_data[:, :, i : i + step], axis=1),
+                        welch(sub_data[:, :, i : i + step], fs=sf)[1],
                     )
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
+                    for i in range(start, sub_data.shape[-1], step)
                 ]
             elif domain == "bands":
                 # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
+                # We can use a function that should be in utils also, start using multitaper instead of welch
                 data = [
-                    np.append(welch(sub_data[:, :, begin:end], fs=SAMPLING_FREQ)[1])
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
+                    np.append(welch(sub_data[:, :, i : i + step], fs=sf)[1])
+                    for i in range(start, sub_data.shape[-1], step)
                 ]
             elif domain == "bins":
                 data = [
-                    np.append(welch(sub_data, fs=SAMPLING_FREQ)[1])
-                    for begin, end in zip(sub_segments["begin"], sub_segments["end"])
-                    if begin >= offset * SAMPLING_FREQ
+                    np.append(welch(sub_data[:, :, i : i + step], fs=sf)[1])
+                    for i in range(start, sub_data.shape[-1], step)
                 ]
             elif domain == "temporal":
                 data = []
-                for begin, end in zip(sub_segments["begin"], sub_segments["end"]):
-                    seg = sub_data[:, :, begin:end]
-                    if seg.shape[-1] == end - begin:
-                        if begin >= offset * SAMPLING_FREQ:
-                            if not np.isnan(seg).any():
-                                data.append(zscore(seg, axis=1))
+                for i in range(start, sub_data.shape[-1], step):
+                    trial = sub_data[:, :, i : i + step]
+                    if trial.shape[-1] == step:
+                        if not np.isnan(trial).any():
+                            data.append(zscore(trial, axis=1))
                 if len(data) < 50:
                     return None
                 if n_samples is not None and n_samples <= len(data):
@@ -503,8 +512,8 @@ def load_sub(
                     )
                     data = torch.Tensor(data)[random_samples]
 
-    except IOError as e:
-        logging.warning(f"Warning: There was a problem loading subject file for {sub}")
+    except IOError:
+        logging.warning(f"There was a problem loading subject file for {sub}")
         return None
 
     return data

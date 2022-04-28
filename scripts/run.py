@@ -22,7 +22,7 @@ def do_crossval(folds, datasets, net_option, args):
     cv = []
     for fold in range(folds):
         logging.info(f"Training model for fold {fold+1}/{folds}:")
-        results = train_evaluate(fold=fold, args=args)
+        results = train_evaluate(fold, datasets, net_option, args=args)
         logging.info(f"Finished training for fold {fold+1}/{folds}:")
         logging.info(
             f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
@@ -180,31 +180,7 @@ if __name__ == "__main__":
     ###########
     # PARSING #
     ###########
-    # TODO add those to parsing.py
 
-    parser.add_argument(
-        "--testsplit",
-        type=int,
-        default=None,
-        choices=[0, 1, 2, 3, 4, None],
-        help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
-    )
-    parser.add_argument(
-        "--randomsearch",
-        action="store_true",
-        help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
-    )
-    parser.add_argument(
-        "--fold",
-        default=None,
-        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",
-    )
-    parser.add_argument(
-        "--net-option",
-        default="cNet",
-        choices=["cNet", "MLP"],
-        help="cNet is the custom net.",
-    )
     args = parser.parse_args()
     data_path = args.path
     if not data_path.endswith("/"):
