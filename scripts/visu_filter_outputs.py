@@ -221,11 +221,6 @@ if __name__ == "__main__":
         type=str,
         help="chooses whether to use positive saliency, negative saliency or the sum of them",
     )
-    parser.add_argument(
-        "--fold",
-        default=None,
-        help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if notest option is true",
-    )
     args = parser.parse_args()
     if args.all:
         args.topograd = True
@@ -389,7 +384,11 @@ if __name__ == "__main__":
                 f"used {len(bands_values[0])} image trials, and {len(bands_values[1])} sound trials."
             )
             name = "../data/psd"
-            name = name + "_saliency_windows" if args.use_windows else name
+            name = (
+                name + f"_{args.saliency}_saliency_windows"
+                if args.use_windows
+                else name
+            )
             for i, bv in enumerate(bands_values):
                 np.save(name + f"_{LABELS[i]}.npy", bv)
             bands_values = [np.array(bv).mean(axis=0) for bv in bands_values]
