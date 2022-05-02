@@ -241,7 +241,7 @@ def train(
                 "patience": patience,
                 "current_patience": patience_state,
             }
-            savemat(save_path + net.name + ".mat", results)
+            savemat(os.path.join(save_path, net.name + ".mat"), results)
 
     return net
 

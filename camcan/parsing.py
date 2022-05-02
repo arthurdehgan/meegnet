@@ -46,7 +46,7 @@ parser.add_argument(
     help="wether to do a 4-FOLD cross-validation on the train+valid set.",
 )
 parser.add_argument(
-    "--n_samples",
+    "--n-samples",
     type=int,
     default=None,
     help="limit of number of samples per subjects",
@@ -111,19 +111,18 @@ parser.add_argument(
     help="number of workers to load data while gpu is processing",
 )
 parser.add_argument(
-    "--train_size",
+    "--train-size",
     type=float,
     default=0.8,
     help="The proportion of data to use in the train set",
 )
 parser.add_argument(
-    "--save",
+    "--save-path",
     type=str,
     help="The path where the model will be saved.",
 )
 parser.add_argument(
-    "-p",
-    "--path",
+    "--data-path",
     type=str,
     help="The path where the data samples can be found.",
 )
@@ -194,13 +193,7 @@ parser.add_argument(
     help="loads dummy data in the net to ensure everything is working fine",
 )
 parser.add_argument(
-    "--net_option",
-    default="custom_net",
-    choices=["custom_net", "MLP"],
-    help="sets the network to use.",
-)
-parser.add_argument(
-    "--dropout_option",
+    "--dropout-option",
     default="same",
     choices=["same", "double", "inverted"],
     help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",

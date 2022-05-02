@@ -168,7 +168,7 @@ def create_datasets(
         TensorDataset(
             *load_data(
                 df,
-                dpath=data_folder,
+                data_path=data_folder,
                 ch_type=ch_type,
                 domain=domain,
                 printmem=printmem,
@@ -188,7 +188,7 @@ def create_datasets(
 
 
 def load_sets(
-    dpath,
+    data_path,
     max_subj=1000,
     n_splits=5,
     offset=0,
@@ -206,7 +206,7 @@ def load_sets(
     """Loading data subject per subject."""
     assert_params(band, domain, dattype)
 
-    csv_file = os.path.join(dpath, "participants_info.csv")
+    csv_file = os.path.join(data_path, "participants_info.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
@@ -244,7 +244,7 @@ def load_sets(
 
         sub = row[1]["sub"]
         data = load_sub(
-            dpath,
+            data_path,
             sub,
             n_samples=n_samples,
             band=band,
@@ -309,7 +309,7 @@ def create_loaders(**kwargs):
 
 def load_data(
     dataframe,
-    dpath,
+    data_path,
     offset=30,
     seg=2,
     sf=200,
@@ -351,7 +351,7 @@ def load_data(
         sub, lab = row[1]["sub"], row[1]["sex"]
         if dattype != "passive" and not load_events:
             data = load_sub(
-                dpath,
+                data_path,
                 sub,
                 n_samples=n_samples,
                 band=band,
@@ -363,7 +363,7 @@ def load_data(
                 seg=seg,
             )
         else:
-            data, targets = load_passive_sub_events(dpath, sub, ch_type=ch_type)
+            data, targets = load_passive_sub_events(data_path, sub, ch_type=ch_type)
         if data is None:
             n_sub -= 1
             continue
@@ -396,7 +396,7 @@ def load_data(
         return X, y
 
 
-def load_passive_sub_events(dpath, sub, ch_type="ALL"):
+def load_passive_sub_events(data_path, sub, ch_type="ALL"):
     s_freq = 500
     if ch_type == "MAG":
         chan_index = [2]
@@ -407,10 +407,12 @@ def load_passive_sub_events(dpath, sub, ch_type="ALL"):
 
     data, targets = [], []
     try:
-        sub_data = np.load(dpath + f"{sub}_passive_ICA_transdef_mfds500.npy")[
-            chan_index
-        ]
-        events = loadmat(dpath + f"{sub}_passive_events_timestamps.mat")["times"]
+        sub_data = np.load(
+            os.path.join(data_path, f"{sub}_passive_ICA_transdef_mfds500.npy")
+        )[chan_index]
+        events = loadmat(
+            os.path.join(data_path + f"{sub}_passive_events_timestamps.mat")
+        )["times"]
     except:
         logging.warning(f"There was a problem loading subject {sub}")
         return None, None
@@ -441,7 +443,7 @@ def load_passive_sub_events(dpath, sub, ch_type="ALL"):
 
 
 def load_sub(
-    dpath,
+    data_path,
     sub,
     n_samples=None,
     band="",
@@ -464,14 +466,16 @@ def load_sub(
     try:
         if domain in ("cov", "cosp"):  # TODO Deprecated
             file_path = os.path.join(
-                dpath, "covariances", f"{sub}_{dattype}_{domain}.npy"
+                data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
             )
             data = np.load(file_path)[chan_index]
             data = np.swapaxes(data, 0, 1)
             if domain == "cosp":
                 data = data[:, :, BANDS.index(band)]
         else:
-            file_path = os.path.join(dpath, f"downsampled_{sf}", f"{dattype}_{sub}.npy")
+            file_path = os.path.join(
+                data_path, f"downsampled_{sf}", f"{dattype}_{sub}.npy"
+            )
             sub_data = np.load(file_path)[chan_index]
             step = int(seg * sf)
             start = int(offset * sf)
