@@ -104,4 +104,4 @@ if __name__ == "__main__":
         for sub in os.listdir(data_path)
     )
     dataframe = pd.DataFrame(a, columns=["sub", "age", "sex", "hand", "Coil", "MT_TR"])
-    dataframe.to_csv(os.path.join(args.save, "partifipants_info.csv")
+    dataframe.to_csv(os.path.join(args.save, "participants_info.csv")
