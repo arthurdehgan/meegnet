@@ -3,6 +3,7 @@ import os
 import logging
 import torch
 import numpy as np
+import pandas as pd
 from scipy.io import loadmat
 from torch.utils.data import ConcatDataset, TensorDataset
 from camcan.params import TIME_TRIAL_LENGTH
@@ -77,7 +78,7 @@ def train_evaluate(fold, datasets, net_option, args):
     name += suffixes
 
     net = create_net(args.net_option, name, input_size, n_outputs, args)
-    model_filepath = save_path + net.name + ".pt"
+    model_filepath = os.path.join(args.save_path, net.name + ".pt")
 
     logging.info(net.name)
     if torchsum:
@@ -113,7 +114,7 @@ def train_evaluate(fold, datasets, net_option, args):
             patience=args.patience,
             lr=args.lr,
             mode=args.mode,
-            save_path=save_path,
+            save_path=args.save_path,
             permute_labels=args.permute_labels,
         )
     else:  # if we are in evaluate mode, we load the model if it exists, return warning if not
@@ -126,6 +127,22 @@ def train_evaluate(fold, datasets, net_option, args):
             )
 
     results = loadmat(model_filepath[:-2] + "mat")
+    rs_csv_path = os.path.join(args.save_path, f"tested_params_seed{args.seed}.csv")
+    if os.path.exists(rs_csv_path):
+        df = pd.read_csv(rs_csv_path, index_col=0)
+        df.loc[
+            (df["f"] == float(args.filters))
+            & (df["linear"] == float(args.linear))
+            & (df["d"] == float(args.dropout))
+            & (df["hlayers"] == float(args.hlayers))
+            & (df["nchan"] == float(args.nchan))
+            & (df["batchnorm"] == float(args.batchnorm))
+            & (df["maxpool"] == float(args.maxpool))
+            & (df["bs"] == float(args.batch_size))
+            & (df["lr"] == float(args.lr)),
+            f"fold{fold}",
+        ] = results["acc_score"]
+        df.to_csv(rs_csv_path)
     return results
 
 
@@ -182,12 +199,6 @@ if __name__ == "__main__":
     ###########
 
     args = parser.parse_args()
-    data_path = args.path
-    if not data_path.endswith("/"):
-        data_path += "/"
-    save_path = args.save
-    if not save_path.endswith("/"):
-        save_path += "/"
     fold = None if args.fold is None else int(args.fold)
     assert not (
         args.eventclf and args.subclf
@@ -204,7 +215,7 @@ if __name__ == "__main__":
 
     if args.log:
         logging.basicConfig(
-            filename=save_path + args.model_name + ".log",
+            filename=os.path.join(args.save_path, args.model_name + ".log"),
             filemode="a",
             level=logging.INFO,
             format="%(asctime)s %(message)s",
@@ -247,7 +258,7 @@ if __name__ == "__main__":
     # We create loaders and datasets (see dataloaders.py)
     if args.subclf:
         n_outputs, datasets = load_sets(
-            data_path,
+            args.data_path,
             n_samples=args.n_samples,
             max_subj=args.max_subj,
             ch_type=args.sensors,
@@ -259,7 +270,7 @@ if __name__ == "__main__":
         # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
     else:
         datasets = create_datasets(
-            data_path,
+            args.data_path,
             args.train_size,
             args.max_subj,
             args.sensors,
