@@ -20,8 +20,8 @@ parser.add_argument(
 )
 parser.add_argument(
     "--net-option",
-    default="cNet",
-    choices=["cNet", "MLP"],
+    default="custom_net",
+    choices=["custom_net", "EEGNet", "VGG", "vanPutNet", "MLP"],
     help="cNet is the custom net.",
 )
 parser.add_argument(
