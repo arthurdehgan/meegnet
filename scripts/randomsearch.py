@@ -54,7 +54,7 @@ parser.add_argument(
     help="the seed to use",
 )
 parser.add_argument(
-    "--n_tests",
+    "--n-tests",
     type=int,
     default=300,
     help="number of random searches to perform",

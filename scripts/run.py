@@ -1,8 +1,8 @@
 from itertools import product
 import os
 import logging
-import torch
 import numpy as np
+import torch
 import pandas as pd
 from scipy.io import loadmat
 from torch.utils.data import ConcatDataset, TensorDataset
