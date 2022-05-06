@@ -8,7 +8,7 @@ from scipy.io import loadmat
 from torch.utils.data import ConcatDataset, TensorDataset
 from camcan.params import TIME_TRIAL_LENGTH
 from camcan.dataloaders import create_loader, create_datasets, load_sets
-from camcan.network import FullNet, MLP, VGG16_NET, vanPutNet, EEGNet
+from camcan.network import create_net
 from camcan.utils import train, load_checkpoint, cuda_check
 from camcan.parsing import parser
 
@@ -19,7 +19,27 @@ from camcan.parsing import parser
 DEVICE = cuda_check()
 
 
-def do_crossval(folds, datasets, net_option, args):
+def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
+    """Will call train_evaluate function a folds amount of times and return a list of
+    each fold accuracies.
+
+    Parameters
+    ----------
+    folds : int
+        The number of folds for the K-Fold Cross-validatation that will be done.
+    datasets : list
+        A list of Datasets objects, each one will be used for a different Fold of the cross-val.
+    net_option : str
+        A network option for the prepare_net function to return a network object. Must be in
+        ['MLP', 'custom_net', 'VGG', 'EEGNet', 'vanPutNet']
+    args :
+        Args should be args = parser.parse_args() when using parser from the parsing file.
+
+    Returns
+    -------
+    cv : list
+        A list containing the best network validation accuracy for each fold.
+    """
     cv = []
     for fold in range(folds):
         logging.info(f"Training model for fold {fold+1}/{folds}:")
@@ -33,7 +53,42 @@ def do_crossval(folds, datasets, net_option, args):
     return cv
 
 
-def train_evaluate(fold, datasets, net_option, args):
+def train_evaluate(fold: int, datasets: list, net_option: str, args) -> dict:
+    """Trains and evaluate a specified network based on the selected network option.
+    This function will also update the randomsearch.py generated csv if one exists with the
+    accuracy scores for each fold. It returns a dictionnary containing all relevent information
+    for the current training. This function is also capable of picking up where it left off
+    in case of interrupted training.
+
+    Parameters
+    ----------
+    fold : int
+        then number of the fold to use if we run only one fold of the datasets.
+    datasets : list
+        A list of Datasets objects, each one will be used for a different Fold of the cross-val.
+    net_option : str
+        A network option for the prepare_net function to return a network object. Must be in
+        ['MLP', 'custom_net', 'VGG', 'EEGNet', 'vanPutNet']
+    args :
+        Args should be args = parser.parse_args() when using parser from the parsing file.
+
+    Returns
+    -------
+    results : dict
+        A dictionnary containing the information for the training and evaluation of the network.
+        results contains the follwing keys and values
+            "acc_score": [best_vacc], # The validation accuracy of the best network at early stop.
+            "loss_score": [best_vloss], # The validation loss of the best network at early stop.
+            "acc": valid_accs, # list of validation accuracies at each epoch
+            "train_acc": train_accs, # list of train accuracies at each epoch
+            "valid_loss": valid_losses, # list of validation losses at each epoch
+            "train_loss": train_losses, # list of train losses at each epoch
+            "best_epoch": best_epoch, # the epoch for early stop
+            "n_epochs": epoch, # The total number of epochs ran before coming back to early stop.
+            "patience": patience, # The patience parameter used.
+            "current_patience": patience_state, # The current patience step,
+                only useful if the network training was interrupted.
+    """
     suffixes = ""
     if args.batchnorm:
         suffixes += "_BN"
@@ -77,7 +132,7 @@ def train_evaluate(fold, datasets, net_option, args):
     name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.sensors}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
     name += suffixes
 
-    net = create_net(args.net_option, name, input_size, n_outputs, args)
+    net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     model_filepath = os.path.join(args.save_path, net.name + ".pt")
 
     logging.info(net.name)
@@ -144,52 +199,6 @@ def train_evaluate(fold, datasets, net_option, args):
         ] = results["acc_score"]
         df.to_csv(rs_csv_path)
     return results
-
-
-def create_net(net_option, name, input_size, n_outputs, args):
-    if net_option == "MLP":
-        return MLP(
-            name=name,
-            input_size=input_size,
-            n_outputs=n_outputs,
-            hparams={
-                "mlp_width": args.linear,
-                "mlp_depth": args.hlayers,
-                "mlp_dropout": args.dropout,
-            },
-        ).to(DEVICE)
-    elif net_option == "custom_net":
-        return FullNet(
-            name,
-            input_size,
-            n_outputs,
-            args.hlayers,
-            args.filters,
-            args.nchan,
-            args.linear,
-            args.dropout,
-            args.dropout_option,
-            args.batchnorm,
-            args.maxpool,
-        ).to(DEVICE)
-    elif net_option == "VGG":
-        return VGG16_NET(
-            name,
-            input_size,
-            n_outputs,
-        ).to(DEVICE)
-    elif net_option == "EEGNet":
-        return EEGNet(
-            name,
-            input_size,
-            n_outputs,
-        ).to(DEVICE)
-    elif net_option == "vanPutNet":
-        return vanPutNet(
-            name,
-            input_size,
-            n_outputs,
-        ).to(DEVICE)
 
 
 if __name__ == "__main__":
