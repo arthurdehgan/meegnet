@@ -111,6 +111,11 @@ def create_datasets(
     testing: if set to an integer between 0 and 4 will leave out a part of the dataset.
              Useful for random search.
     """
+    if eventclf and not epoched:
+        logging.warning(
+            "Event classification can only be performed with epoched data. And epoched has bot been set to True. Setting epoched to True."
+        )
+        epoched = True
     torch.manual_seed(seed)
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
@@ -199,7 +204,7 @@ def load_sets(
     domain="temporal",
     printmem=False,
     dattype="rest",
-    event_classif=False,
+    epoched=False,
     seed=0,
     band="",
     testing=None,
@@ -251,7 +256,7 @@ def load_sets(
             band=band,
             ch_type=ch_type,
             dattype=dattype,
-            epoched=event_classif,
+            epoched=epoched,
             domain=domain,
             offset=offset,
             s_freq=s_freq,
