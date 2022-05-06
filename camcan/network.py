@@ -5,6 +5,52 @@ import torch.nn.functional as F
 import numpy as np
 
 
+def create_net(net_option, name, input_size, n_outputs, device, args):
+    if net_option == "MLP":
+        return MLP(
+            name=name,
+            input_size=input_size,
+            n_outputs=n_outputs,
+            hparams={
+                "mlp_width": args.linear,
+                "mlp_depth": args.hlayers,
+                "mlp_dropout": args.dropout,
+            },
+        ).to(device)
+    elif net_option == "custom_net":
+        return FullNet(
+            name,
+            input_size,
+            n_outputs,
+            args.hlayers,
+            args.filters,
+            args.nchan,
+            args.linear,
+            args.dropout,
+            args.dropout_option,
+            args.batchnorm,
+            args.maxpool,
+        ).to(device)
+    elif net_option == "VGG":
+        return VGG16_NET(
+            name,
+            input_size,
+            n_outputs,
+        ).to(device)
+    elif net_option == "EEGNet":
+        return EEGNet(
+            name,
+            input_size,
+            n_outputs,
+        ).to(device)
+    elif net_option == "vanPutNet":
+        return vanPutNet(
+            name,
+            input_size,
+            n_outputs,
+        ).to(device)
+
+
 class Flatten(nn.Module):
     # Flatten layer used to connect between feature extraction and classif parts of a net.
     def forward(self, x):
