@@ -16,11 +16,10 @@ import numpy as np
 from joblib import Parallel, delayed
 from camcan.parsing import parser
 
-# "Arthur_Dehgan_1160"
 parser.add_argument(
     "--user",
     type=str,
-    help="name of the camcan user folder for loading csv data. Usually of the form forename_name_1234",
+    help="name of the camcan user folder for loading csv data. Usually of the form firstname_name_ID",
 )
 parser.add_argument(
     "--sfreq",
@@ -47,14 +46,38 @@ else:
 
 
 def prepare_data(
-    sub,
-    source_path,
-    save_path,
-    camcan_user,
-    s_freq=200,
-    dattype="rest",
-    epoched=False,
+    sub_folder: str,
+    source_path: str,
+    save_path: str,
+    camcan_user: str,
+    s_freq: int = 200,
+    dattype: str = "rest",
+    epoched: bool = False,
 ):
+    """prepare_data.
+
+    Parameters
+    ----------
+    sub_folder : str
+        the subject folder in BIDS format of the form: "sub-[SUB_ID]".
+    source_path : str
+        the path to the folder containing the Cam-CAN dataset (with cc700 folder in it) as copied from the CC servers.
+    save_path : str
+        the path where all the data will be saved in subfolder "downsampled_{s_freq}" and the csv file will be saved.
+    camcan_user : str
+        your camcan user in order to find metadata about the subjects. Should be firstname_name_ID.
+    s_freq : int
+        the frequency to downsample the data to.
+    dattype : str
+        the type of data to prepare. Must be in ['rest', 'passive', 'smt'].
+    epoched : bool
+        epoch the data based on events found in it or not. Epoching the data will apply baseline correction (mode: mean).
+
+    Returns
+    -------
+    row : list
+        a list of values from the camcan metadata csv file. The row will be added to the participants_info_{dattype}.csv file.
+    """
     if dattype == "rest":
         assert (
             not epoched
@@ -73,16 +96,17 @@ def prepare_data(
         "standard_data.csv",
     )
     df = pd.read_csv(csv_path)
-    for file in os.listdir(os.path.join(data_path, sub)):
+    for file in os.listdir(os.path.join(data_path, sub_folder)):
         if file.endswith("fif"):
-            fif_file = os.path.join(data_path, sub, file)
+            fif_file = os.path.join(data_path, sub_folder, file)
             break
 
     raw = mne.io.read_raw_fif(fif_file).resample(sfreq=s_freq)
     bads = raw.info["bads"]
     if bads == []:
+        sub = sub_folder.split("-")[1]
         channels = []
-        logging.info(sub)
+        logging.info(sub_folder)
         logging.info(raw.info)
         if epoched and dattype != "rest":  # dattype in ("passive","smt"):
             events = mne.find_events(raw)
@@ -103,7 +127,6 @@ def prepare_data(
         save_path = os.path.join(save_path, f"downsampled_{args.sfreq}")
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        sub = sub.split("-")[1]
         np.save(os.path.join(save_path, filename), data)
         row = df[df["CCID"] == sub].values.tolist()[0]
         if dattype in ("passive", "smt"):
