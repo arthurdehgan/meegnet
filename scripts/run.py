@@ -205,7 +205,7 @@ if __name__ == "__main__":
     ), "Please choose only one type of classification"
     if args.eventclf:
         assert (
-            args.dattype == "passive"
+            args.dattype != "rest"
         ), "dattype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
 
@@ -264,6 +264,7 @@ if __name__ == "__main__":
             ch_type=args.sensors,
             seed=args.seed,
             printmem=args.printmem,
+            epoched=args.epoched,
             dattype=args.dattype,
             testing=args.testsplit,
         )
@@ -281,7 +282,8 @@ if __name__ == "__main__":
             ages=ages,
             n_samples=args.n_samples,
             dattype=args.dattype,
-            load_events=args.eventclf,
+            eventclf=args.eventclf,
+            epoched=args.epoched,
             testing=args.testsplit,
         )
         n_outputs = 2
