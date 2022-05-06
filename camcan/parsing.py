@@ -9,6 +9,11 @@ parser.add_argument(
     help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
 )
 parser.add_argument(
+    "--epoched",
+    action="store_true",
+    help="will load epoched data instead of the whole signal for each subject. This option only works for passive and smt data in which there are events that we use to generate epochs.",
+)
+parser.add_argument(
     "--randomsearch",
     action="store_true",
     help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
