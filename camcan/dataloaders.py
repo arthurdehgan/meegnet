@@ -93,7 +93,7 @@ def create_datasets(
     max_subj,
     ch_type,
     domain,
-    sf=200,
+    s_freq=200,
     seg=2,
     debug=False,
     seed=0,
@@ -102,8 +102,8 @@ def create_datasets(
     dattype="rest",
     band="",
     n_samples=None,
-    load_groups=False,
-    load_events=False,
+    eventclf=False,
+    epoched=False,
     testing=None,
 ):
     """create dataloaders iterators.
@@ -115,7 +115,7 @@ def create_datasets(
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    csv_filepath = os.path.join(data_folder, "participants_info.csv")
+    csv_filepath = os.path.join(data_folder, f"participants_info_{dattype}.csv")
     participants_df = (
         pd.read_csv(csv_filepath, index_col=0)
         .sample(frac=1, random_state=seed)
@@ -175,10 +175,10 @@ def create_datasets(
                 dattype=dattype,
                 n_samples=n_samples,
                 seed=seed,
-                load_groups=load_groups,
-                load_events=load_events,
+                epoched=epoched,
+                eventclf=eventclf,
                 band=band,
-                sf=sf,
+                s_freq=s_freq,
                 seg=seg,
             )
         )
@@ -193,12 +193,13 @@ def load_sets(
     n_splits=5,
     offset=0,
     seg=2,
-    sf=200,
+    s_freq=200,
     n_samples=None,
     ch_type="ALL",
     domain="temporal",
     printmem=False,
     dattype="rest",
+    event_classif=False,
     seed=0,
     band="",
     testing=None,
@@ -206,7 +207,7 @@ def load_sets(
     """Loading data subject per subject."""
     assert_params(band, domain, dattype)
 
-    csv_file = os.path.join(data_path, "participants_info.csv")
+    csv_file = os.path.join(data_path, f"participants_info_{dattype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
@@ -250,9 +251,10 @@ def load_sets(
             band=band,
             ch_type=ch_type,
             dattype=dattype,
+            epoched=event_classif,
             domain=domain,
             offset=offset,
-            sf=sf,
+            s_freq=s_freq,
             seg=seg,
         )
         if data is None:
@@ -312,24 +314,30 @@ def load_data(
     data_path,
     offset=30,
     seg=2,
-    sf=200,
+    s_freq=200,
     ch_type="MAG",
     domain="temporal",
     printmem=False,
     dattype="rest",
     n_samples=None,
     seed=0,
-    load_groups=False,
-    load_events=False,
+    epoched=False,
+    eventclf=False,
     band="",
 ):
-    """Loading data subject per subject."""
+    """Loading data subject per subject and returns labels according to the task.
+    Currently if epoched is set to True, we will load the event labels from epoched data.
+    id eventclf is set to True, we will used labels from the events, if not,
+    sex is used as the default label but can be easily changed to hand or age for example.
+    """
     assert_params(band, domain, dattype)
+    if eventclf:
+        assert (
+            dattype != "rest"
+        ), "We can not perform event classification on resting state data as it contains no events and therefore can not be epoched."
 
     n_sub = len(dataframe)
-    X, y, e_targets = [], [], []
-    if load_groups:
-        groups = []
+    X, y = [], []
     logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
         # subj_sizes = [] # assigned but never used ?
@@ -348,22 +356,21 @@ def load_data(
             else:
                 logging.debug(memstate)
 
+        # TODO Add option to change the label from sex to some other column of the dataframe
         sub, lab = row[1]["sub"], row[1]["sex"]
-        if dattype != "passive" and not load_events:
-            data = load_sub(
-                data_path,
-                sub,
-                n_samples=n_samples,
-                band=band,
-                ch_type=ch_type,
-                dattype=dattype,
-                domain=domain,
-                offset=offset,
-                sf=sf,
-                seg=seg,
-            )
-        else:
-            data, targets = load_passive_sub_events(data_path, sub, ch_type=ch_type)
+        data = load_sub(
+            data_path,
+            sub,
+            n_samples=n_samples,
+            band=band,
+            ch_type=ch_type,
+            dattype=dattype,
+            epoched=epoched,
+            domain=domain,
+            offset=offset,
+            s_freq=s_freq,
+            seg=seg,
+        )
         if data is None:
             n_sub -= 1
             continue
@@ -375,71 +382,32 @@ def load_data(
             data = torch.Tensor(data)[random_samples]
 
         X.append(torch.as_tensor(data))
-        y += [lab] * len(data)
-        if dattype == "passive":
-            e_targets += targets
-        if load_groups:
-            groups += [int(sub[2:])] * len(data)
+        if eventclf:
+            y += dataframe.loc[dataframe["sub"] == sub]["event_labels"].tolist()[0]
+        else:
+            y += [lab] * len(data)
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
     X = torch.cat(X, 0)
     y = torch.as_tensor(y)
-    if dattype == "passive":
-        e_targets = torch.as_tensor(e_targets)
 
-    if load_groups:
-        groups = torch.as_tensor(groups)
-        return X, y, groups
-    elif dattype == "passive" and load_events:
-        return X, e_targets
-    else:
-        return X, y
+    return X, y
 
 
-def load_passive_sub_events(data_path, sub, ch_type="ALL"):
-    s_freq = 500
-    if ch_type == "MAG":
-        chan_index = [2]
-    elif ch_type == "GRAD":
-        chan_index = [0, 1]
-    elif ch_type == "ALL":
-        chan_index = [0, 1, 2]
-
-    data, targets = [], []
+def load_epoched_sub(data_path, sub, chan_index, s_freq=500):
     try:
         sub_data = np.load(
-            os.path.join(data_path, f"{sub}_passive_ICA_transdef_mfds500.npy")
+            os.path.join(
+                data_path,
+                f"downsampled_{s_freq}",
+                f"passive_{sub}_epoched",
+            )
         )[chan_index]
-        events = loadmat(
-            os.path.join(data_path + f"{sub}_passive_events_timestamps.mat")
-        )["times"]
-    except:
+    except IOError:
         logging.warning(f"There was a problem loading subject {sub}")
-        return None, None
+        return None
 
-    for e_type, e_time in events:
-        stim_timing = int(float(e_time) * s_freq)
-        # 75 and 325 to get 150ms before stim and 650ms after stim. total is the
-        # same size as previous examples for architecture: 400 time samples
-        # but the s_freq is different. reminder: we did this in order to get a full stim
-        # in the example but stims arrive every 1s
-        seg = sub_data[:, :, stim_timing - 75 : stim_timing + 325]
-        if seg.shape[-1] == 400 and not np.isnan(seg).any():
-            try:
-                data.append(zscore(seg, axis=1))
-                target = 0 if e_type.strip() == "image" else 1
-                targets.append(target)
-            except:
-                continue
-
-    if len(targets) < 30:
-        return None, None
-
-    assert len(data) == len(
-        targets
-    ), f"{sub} has a number of target and trials missmatch"
-
-    return data, targets
+    return sub_data
 
 
 def load_sub(
@@ -449,9 +417,10 @@ def load_sub(
     band="",
     ch_type="ALL",
     dattype="rest",
+    epoched=False,
     domain="temporal",
     offset=30,
-    sf=200,
+    s_freq=200,
     seg=2,
 ):
     # TODO doc
@@ -463,61 +432,63 @@ def load_sub(
     elif ch_type == "ALL":
         chan_index = [0, 1, 2]
 
-    try:
-        if domain in ("cov", "cosp"):  # TODO Deprecated
-            file_path = os.path.join(
-                data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
-            )
-            data = np.load(file_path)[chan_index]
-            data = np.swapaxes(data, 0, 1)
-            if domain == "cosp":
-                data = data[:, :, BANDS.index(band)]
-        else:
-            file_path = os.path.join(
-                data_path, f"downsampled_{sf}", f"{dattype}_{sub}.npy"
-            )
-            sub_data = np.load(file_path)[chan_index]
-            step = int(seg * sf)
-            start = int(offset * sf)
-            if domain == "both":
-                # TODO the welch code might be wrong, check if the transformation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
-                # Deprecated
-                data = [
-                    np.append(
-                        zscore(sub_data[:, :, i : i + step], axis=1),
-                        welch(sub_data[:, :, i : i + step], fs=sf)[1],
-                    )
-                    for i in range(start, sub_data.shape[-1], step)
-                ]
-            elif domain == "bands":
-                # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
-                # We can use a function that should be in utils also, start using multitaper instead of welch
-                data = [
-                    np.append(welch(sub_data[:, :, i : i + step], fs=sf)[1])
-                    for i in range(start, sub_data.shape[-1], step)
-                ]
-            elif domain == "bins":
-                data = [
-                    np.append(welch(sub_data[:, :, i : i + step], fs=sf)[1])
-                    for i in range(start, sub_data.shape[-1], step)
-                ]
-            elif domain == "temporal":
-                data = []
-                for i in range(start, sub_data.shape[-1], step):
-                    trial = sub_data[:, :, i : i + step]
-                    if trial.shape[-1] == step:
-                        if not np.isnan(trial).any():
-                            data.append(zscore(trial, axis=1))
-                if len(data) < 50:
-                    return None
-                if n_samples is not None and n_samples <= len(data):
-                    random_samples = np.random.choice(
-                        np.arange(len(data)), n_samples, replace=False
-                    )
-                    data = torch.Tensor(data)[random_samples]
+    if epoched:
+        data = load_epoched_sub(data_path, sub, chan_index, s_freq=s_freq)
+    else:
+        try:
+            if domain in ("cov", "cosp"):  # TODO Deprecated
+                file_path = os.path.join(
+                    data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
+                )
+                data = np.load(file_path)[chan_index]
+                data = np.swapaxes(data, 0, 1)
+                if domain == "cosp":
+                    data = data[:, :, BANDS.index(band)]
+            else:
+                file_path = os.path.join(
+                    data_path, f"downsampled_{s_freq}", f"{dattype}_{sub}.npy"
+                )
+                sub_data = np.load(file_path)[chan_index]
+                step = int(seg * s_freq)
+                start = int(offset * s_freq)
+                if domain == "both":
+                    # TODO the welch code might be wrong, check if the trans_freqormation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
+                    # Deprecated
+                    data = [
+                        np.append(
+                            zscore(sub_data[:, :, i : i + step], axis=1),
+                            welch(sub_data[:, :, i : i + step], fs=s_freq)[1],
+                        )
+                        for i in range(start, sub_data.shape[-1], step)
+                    ]
+                elif domain == "bands":
+                    # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
+                    # We can use a function that should be in utils also, start using multitaper instead of welch
+                    data = [
+                        np.append(welch(sub_data[:, :, i : i + step], fs=s_freq)[1])
+                        for i in range(start, sub_data.shape[-1], step)
+                    ]
+                elif domain == "bins":
+                    data = [
+                        np.append(welch(sub_data[:, :, i : i + step], fs=s_freq)[1])
+                        for i in range(start, sub_data.shape[-1], step)
+                    ]
+                elif domain == "temporal":
+                    data = []
+                    for i in range(start, sub_data.shape[-1], step):
+                        trial = sub_data[:, :, i : i + step]
+                        if trial.shape[-1] == step:
+                            if not np.isnan(trial).any():
+                                data.append(zscore(trial, axis=1))
+                    if len(data) < 50:
+                        return None
+                    if n_samples is not None and n_samples <= len(data):
+                        random_samples = np.random.choice(
+                            np.arange(len(data)), n_samples, replace=False
+                        )
+                        data = torch.Tensor(data)[random_samples]
 
-    except IOError:
-        logging.warning(f"There was a problem loading subject file for {sub}")
-        return None
-
+        except IOError:
+            logging.warning(f"There was a problem loading subject file for {sub}")
+            return None
     return data
