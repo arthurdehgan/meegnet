@@ -135,7 +135,9 @@ class EEGNet(CustomNet):
                 padding="valid",
                 bias=False,
             ),
-            nn.BatchNorm2d(n_filters),
+            # Changed n_filters to *2 becaus of dimension error,
+            # TODO check if it was originally a typo in our code
+            nn.BatchNorm2d(n_filters * 2),
             nn.ELU(),
             nn.AvgPool2d((1, 4)),
             dropoutType(dropout),
