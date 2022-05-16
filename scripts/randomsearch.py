@@ -4,6 +4,27 @@ import random
 import os
 import pandas as pd
 
+
+def run_script(params, fold=None, local=False, debug=False, options=None):
+    arguments = f"--feature=temporal --data-path={args.data_path} --save-path={args.save_path} --model-name=sub_RS_{n_test} -s=ALL -b={params['bs']} -f={params['f']} --patience=20 --seed={args.seed} --hlayers={params['hlayers']} --lr={params['lr']} --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --subclf --log"
+    if params["batchnorm"]:
+        arguments += " --batchnorm"
+    if options is not None:
+        arguments += f" {options}"
+    if fold is not None:
+        arguments += f" fold={fold}"
+    else:
+        arguments += " --crossval"
+    if debug:
+        arguments += " --debug --max-subj=10 --patience=1"
+    if local:
+        to_run = f"python {script_path} {arguments}"
+    else:
+        to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} ../../randomsearch.sh '{arguments}'"
+    print(to_run)
+    call(to_run, shell=True)
+
+
 tests = {
     "f": (6, 9, 12, 18, 24),
     "linear": (250, 500, 500, 1000, 1500, 2000),
@@ -66,10 +87,6 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-debug = args.debug
-local = args.local
-if debug:
-    args.n_tests = 1
 
 script_path = args.script if args.script is not None else "run.py"
 chunkload = args.chunkload
@@ -82,45 +99,51 @@ if os.path.exists(csv_file):
     tested = pd.read_csv(csv_file, index_col=0)
 else:
     tested = pd.DataFrame()
-while n_test < args.n_tests:
-    params = {
-        "f": random.choice(tests["f"]),
-        "linear": random.choice(tests["linear"]),
-        "d": random.choice(tests["d"]),
-        "hlayers": random.choice(tests["hlayers"]),
-        "nchan": random.choice(tests["nchan"]),
-        "batchnorm": random.choice(tests["batchnorm"]),
-        "maxpool": random.choice(tests["maxpool"]),
-        "bs": random.choice(tests["bs"]),
-        "lr": random.choice(tests["lr"]),
-    }
-    scores = {
-        "fold0": 0,
-        "fold1": 0,
-        "fold2": 0,
-        "fold3": 0,
-        "fold4": 0,
-    }
-    current_tested = tested.copy()
-    if len(current_tested) != 0:
-        for key, val in params.items():
-            current_tested = current_tested.loc[current_tested[key] == float(val)]
-    if len(current_tested) == 0:
-        arguments = f"--feature=temporal --data-path={args.data_path} --save-path={args.save_path} --model-name=sub_RS_{n_test} -s=ALL -b={params['bs']} -f={params['f']} --patience=20 --seed={args.seed} --hlayers={params['hlayers']} --lr={params['lr']} --linear={params['linear']} -d={params['d']} --maxpool={params['maxpool']} --nchan={params['nchan']} --crossval --subclf"
-        if params["batchnorm"]:
-            arguments += " --batchnorm"
-        if options is not None:
-            arguments += f" {options}"
-        if debug:
-            arguments += " --debug --max-subj=10 --patience=1"
-        if local:
-            to_run = f"python {script_path} {arguments}"
-        else:
-            to_run = f"sbatch -o '/home/mila/d/dehganar/randomsearch_%j.log' -J randomsearch_{n_test} ../../randomsearch.sh '{arguments}'"
-        print(to_run)
-        params.update(scores)
-        tested = tested.append(params, ignore_index=True)
-        tested.to_csv(csv_file)
 
-        call(to_run, shell=True)
-        n_test += 1
+if len(tested) >= args.n_tests:
+    for i, row in tested.iterrows():
+        for j in range(5):
+            key = f"fold{j}"
+            if row[key] == 0:
+                params = dict(row)
+                run_script(
+                    params,
+                    fold=j,
+                    local=args.local,
+                    debug=args.debug,
+                    options=args.options,
+                )
+        if i > args.n_tests:
+            break
+else:
+    while n_test < args.n_tests - len(tested):
+        params = {
+            "f": random.choice(tests["f"]),
+            "linear": random.choice(tests["linear"]),
+            "d": random.choice(tests["d"]),
+            "hlayers": random.choice(tests["hlayers"]),
+            "nchan": random.choice(tests["nchan"]),
+            "batchnorm": random.choice(tests["batchnorm"]),
+            "maxpool": random.choice(tests["maxpool"]),
+            "bs": random.choice(tests["bs"]),
+            "lr": random.choice(tests["lr"]),
+        }
+        scores = {
+            "fold0": 0,
+            "fold1": 0,
+            "fold2": 0,
+            "fold3": 0,
+            "fold4": 0,
+        }
+        current_tested = tested.copy()
+        if len(current_tested) != 0:
+            for key, val in params.items():
+                current_tested = current_tested.loc[current_tested[key] == float(val)]
+        if len(current_tested) == 0:
+            run_script(params, local=args.local, debug=args.debug, options=args.options)
+            params.update(scores)
+            tested = tested.append(params, ignore_index=True)
+            tested.to_csv(csv_file)
+            n_test += 1
+            if args.debug:
+                break
