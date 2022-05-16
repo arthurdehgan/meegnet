@@ -53,7 +53,9 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
     return cv
 
 
-def train_evaluate(fold: int, datasets: list, net_option: str, args) -> dict:
+def train_evaluate(
+    fold: int, datasets: list, net_option: str, args, skip_done: bool = False
+) -> dict:
     """Trains and evaluate a specified network based on the selected network option.
     This function will also update the randomsearch.py generated csv if one exists with the
     accuracy scores for each fold. It returns a dictionnary containing all relevent information
@@ -71,6 +73,10 @@ def train_evaluate(fold: int, datasets: list, net_option: str, args) -> dict:
         ['MLP', 'custom_net', 'VGG', 'EEGNet', 'vanPutNet']
     args :
         Args should be args = parser.parse_args() when using parser from the parsing file.
+    skip_done : bool
+        Allows the script to check in the randomsearch-generated csv file if the fold has been
+        computed already and skips it. Useful when compute ressources are limited and restarting
+        jobs is common.
 
     Returns
     -------
@@ -89,6 +95,23 @@ def train_evaluate(fold: int, datasets: list, net_option: str, args) -> dict:
             "current_patience": patience_state, # The current patience step,
                 only useful if the network training was interrupted.
     """
+    rs_csv_path = os.path.join(args.save_path, f"tested_params_seed{args.seed}.csv")
+    if os.path.exists(rs_csv_path) and skip_done:
+        df = pd.read_csv(rs_csv_path, index_col=0)
+        check = df.loc[
+            (df["f"] == float(args.filters))
+            & (df["linear"] == float(args.linear))
+            & (df["d"] == float(args.dropout))
+            & (df["hlayers"] == float(args.hlayers))
+            & (df["nchan"] == float(args.nchan))
+            & (df["batchnorm"] == float(args.batchnorm))
+            & (df["maxpool"] == float(args.maxpool))
+            & (df["bs"] == float(args.batch_size))
+            & (df["lr"] == float(args.lr)),
+        ]
+        if check[f"fold{fold}"].items() != 0:
+            return
+
     suffixes = ""
     if args.batchnorm:
         suffixes += "_BN"
@@ -182,7 +205,6 @@ def train_evaluate(fold: int, datasets: list, net_option: str, args) -> dict:
             )
 
     results = loadmat(model_filepath[:-2] + "mat")
-    rs_csv_path = os.path.join(args.save_path, f"tested_params_seed{args.seed}.csv")
     if os.path.exists(rs_csv_path):
         df = pd.read_csv(rs_csv_path, index_col=0)
         df.loc[
@@ -309,7 +331,8 @@ if __name__ == "__main__":
                 cv = do_crossval(4, datasets, args.net_option, args=args)
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
-            cv = do_crossval(folds=4, args=args)
+            cv = do_crossval(4, datasets, args.net_option, args=args)
+            cv = [score for score in cv if score is not None]
             logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     elif args.crossval:
