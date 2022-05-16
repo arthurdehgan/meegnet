@@ -140,9 +140,10 @@ def create_datasets(
     if dattype == "passive":
         # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
         forbidden_subs = []
-        logging.info(
-            f"removed subjects {forbidden_subs}, they were causing problems..."
-        )
+        if len(forbidden_subs) > 0:
+            logging.info(
+                f"removed subjects {forbidden_subs}, they were causing problems..."
+            )
         for sub in forbidden_subs:
             if sub in subs:
                 subs = np.delete(subs, np.where(subs == sub)[0])
@@ -217,7 +218,10 @@ def load_sets(
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
     forbidden_subs = []
-    logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
+    if len(forbidden_subs) > 0:
+        logging.info(
+            f"removed subjects {forbidden_subs}, they were causing problems..."
+        )
 
     for sub in forbidden_subs:
         dataframe = dataframe.loc[dataframe["sub"] != sub]
