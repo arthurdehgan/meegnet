@@ -96,10 +96,6 @@ class CustomNet(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    def save_model(self, filepath="."):
-        if not filepath.endswith("/"):
-            filepath += "/"
-
 
 class EEGNet(CustomNet):
     def __init__(
@@ -173,82 +169,57 @@ class EEGNet(CustomNet):
 
 # This implementation is rather common and found on various blogs/github repos
 class VGG16_NET(nn.Module):
-    def __init__(self):
+    def __init__(self, name, input_size, n_outputs):
         super(VGG16_NET, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(
-            in_channels=64, out_channels=64, kernel_size=3, padding=1
-        )
-
-        self.conv3 = nn.Conv2d(
-            in_channels=64, out_channels=128, kernel_size=3, padding=1
-        )
-        self.conv4 = nn.Conv2d(
-            in_channels=128, out_channels=128, kernel_size=3, padding=1
-        )
-
-        self.conv5 = nn.Conv2d(
-            in_channels=128, out_channels=256, kernel_size=3, padding=1
-        )
-        self.conv6 = nn.Conv2d(
-            in_channels=256, out_channels=256, kernel_size=3, padding=1
-        )
-        self.conv7 = nn.Conv2d(
-            in_channels=256, out_channels=256, kernel_size=3, padding=1
-        )
-
-        self.conv8 = nn.Conv2d(
-            in_channels=256, out_channels=512, kernel_size=3, padding=1
-        )
-        self.conv9 = nn.Conv2d(
-            in_channels=512, out_channels=512, kernel_size=3, padding=1
-        )
-        self.conv10 = nn.Conv2d(
-            in_channels=512, out_channels=512, kernel_size=3, padding=1
-        )
-
-        self.conv11 = nn.Conv2d(
-            in_channels=512, out_channels=512, kernel_size=3, padding=1
-        )
-        self.conv12 = nn.Conv2d(
-            in_channels=512, out_channels=512, kernel_size=3, padding=1
-        )
-        self.conv13 = nn.Conv2d(
-            in_channels=512, out_channels=512, kernel_size=3, padding=1
-        )
+        self.input_size = input_size
 
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        layer_list = [
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            self.maxpool,
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            self.maxpool,
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            self.maxpool,
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            self.maxpool,
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            self.maxpool,
+            Flatten(),
+        ]
+        layers = nn.ModuleList(layer_list)
+        self.feature_extraction = nn.Sequential(*layers)
 
-        self.fc14 = nn.Linear(25088, 4096)
-        self.fc15 = nn.Linear(4096, 4096)
-        self.fc16 = nn.Linear(4096, 10)
+        lin_size = self._get_lin_size(layers)
+        self.classif = nn.Sequential(
+            *nn.ModuleList(
+                [
+                    nn.Linear(lin_size, 4096),
+                    nn.ReLU(),
+                    nn.Dropout(),
+                    nn.Linear(4096, 4096),
+                    nn.ReLU(),
+                    nn.Dropout(),
+                    nn.Linear(4096, n_outputs),
+                ]
+            )
+        )
+
+        self.name = name
+
+    def _get_lin_size(self, layers):
+        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = self.maxpool(x)
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = self.maxpool(x)
-        x = F.relu(self.conv5(x))
-        x = F.relu(self.conv6(x))
-        x = F.relu(self.conv7(x))
-        x = self.maxpool(x)
-        x = F.relu(self.conv8(x))
-        x = F.relu(self.conv9(x))
-        x = F.relu(self.conv10(x))
-        x = self.maxpool(x)
-        x = F.relu(self.conv11(x))
-        x = F.relu(self.conv12(x))
-        x = F.relu(self.conv13(x))
-        x = self.maxpool(x)
-        x = x.reshape(x.shape[0], -1)
-        x = F.relu(self.fc14(x))
-        x = F.dropout(x, 0.5)  # dropout was included to combat overfitting
-        x = F.relu(self.fc15(x))
-        x = F.dropout(x, 0.5)
-        x = self.fc16(x)
-        return x
+        return self.classif(self.feature_extraction(x))
 
 
 class MLP(CustomNet):
