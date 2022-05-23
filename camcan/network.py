@@ -127,7 +127,12 @@ class EEGNet(customNet):
         n_channels = input_size[1]
         layer_list = [
             nn.Conv2d(
-                input_size[0], n_filters, (1, filter_size), padding="same", bias=False
+                input_size[0],
+                n_filters,
+                (1, filter_size),
+                padding=(1, (filter_size) // 2),
+                # padding="same",
+                bias=False,
             ),
             nn.BatchNorm2d(n_filters),
             # depthwise_constraind=maxnorm(1.) not used
@@ -135,7 +140,7 @@ class EEGNet(customNet):
                 n_filters,
                 (n_channels, 1),
                 depthwise_multiplier=depthwise_multiplier,
-                padding="valid",
+                padding=0,
                 bias=False,
             ),
             # Changed n_filters to *2 becaus of dimension error,
@@ -145,7 +150,7 @@ class EEGNet(customNet):
             nn.AvgPool2d((1, 4)),
             dropoutType(dropout),
             SeparableConv2d(
-                n_filters * 2, n_filters * 2, (1, 16), padding="same", bias=False
+                n_filters * 2, n_filters * 2, (1, 16), padding=(1, 8), bias=False
             ),
             nn.BatchNorm2d(n_filters * 2),
             nn.ELU(),
