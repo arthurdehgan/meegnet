@@ -17,6 +17,8 @@ def create_net(net_option, name, input_size, n_outputs, device, args):
                 "mlp_dropout": args.dropout,
             },
         ).to(device)
+    elif net_option == "best_net":
+        return testNet(name, input_size, n_outputs).to(device)
     elif net_option == "custom_net":
         return FullNet(
             name,
@@ -27,7 +29,6 @@ def create_net(net_option, name, input_size, n_outputs, device, args):
             args.nchan,
             args.linear,
             args.dropout,
-            args.dropout_option,
             args.batchnorm,
             args.maxpool,
         ).to(device)
@@ -83,21 +84,23 @@ class SeparableConv2d(nn.Module):
         return self.pointwise(self.depthwise(x))
 
 
-class CustomNet(nn.Module):
+class customNet(nn.Module):
     def __init__(self, name, input_size, n_outputs):
-        nn.Module.__init__(self)
+        super(customNet, self).__init__()
         self.input_size = input_size
         self.name = name
-        logging.info(name)
+        self.n_outputs = n_outputs
+
+    def forward(self, x):
+        feats = self.feature_extraction(x)
+        outs = self.classif(feats)
+        return outs
 
     def _get_lin_size(self, layers):
         return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
 
-    def forward(self, x):
-        return self.model(x)
 
-
-class EEGNet(CustomNet):
+class EEGNet(customNet):
     def __init__(
         self,
         name,
@@ -110,7 +113,7 @@ class EEGNet(CustomNet):
         dropout_option="Dropout",
         depthwise_multiplier=2,
     ):
-        CustomNet.__init__(self, name, input_size, n_outputs)
+        customNet.__init__(self, name, input_size, n_outputs)
         if dropout_option == "SpatialDropout2D":
             dropoutType = nn.Dropout2d
         elif dropout_option == "Dropout":
@@ -166,14 +169,15 @@ class EEGNet(CustomNet):
         )
 
     def forward(self, x):
-        return self.classif(self.feature_extraction(x))
+        feats = self.feature_extraction(x)
+        outs = self.classif(feats)
+        return outs
 
 
 # This implementation is rather common and found on various blogs/github repos
-class VGG16_NET(nn.Module):
+class VGG16_NET(customNet):
     def __init__(self, name, input_size, n_outputs):
-        super(VGG16_NET, self).__init__()
-        self.input_size = input_size
+        super(VGG16_NET, self).__init__(name, input_size, n_outputs)
 
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         layer_list = [
@@ -210,25 +214,17 @@ class VGG16_NET(nn.Module):
                     nn.Linear(4096, 4096),
                     nn.ReLU(),
                     nn.Dropout(),
-                    nn.Linear(4096, n_outputs),
+                    nn.Linear(4096, self.n_outputs),
                 ]
             )
         )
 
-        self.name = name
 
-    def _get_lin_size(self, layers):
-        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
-
-    def forward(self, x):
-        return self.classif(self.feature_extraction(x))
-
-
-class MLP(CustomNet):
+class MLP(customNet):
     """Just  an MLP"""
 
     def __init__(self, name, input_size, n_outputs, hparams):
-        CustomNet.__init__(self, name, input_size, n_outputs)
+        customNet.__init__(self, name, input_size, n_outputs)
         self.name = name
         n_inputs = np.prod(input_size)
         self.flatten = Flatten()
@@ -256,7 +252,48 @@ class MLP(CustomNet):
         return x
 
 
-class FullNet(CustomNet):
+class testNet(customNet):
+    def __init__(
+        self,
+        name,
+        input_size,
+        n_outputs,
+        n_linear=2000,
+        dropout=0.5,
+    ):
+        super(testNet, self).__init__(name, input_size, n_outputs)
+        self.maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
+        layer_list = [
+            nn.Conv2d(input_size[0], 100, (input_size[1], 1)),
+            nn.ReLU(),
+            nn.Conv2d(100, 200, (1, 9)),
+            self.maxpool,
+            nn.ReLU(),
+            nn.Conv2d(200, 200, (1, 9)),
+            self.maxpool,
+            nn.ReLU(),
+            nn.Conv2d(200, 100, (1, 9)),
+            self.maxpool,
+            nn.ReLU(),
+            Flatten(),
+            nn.Dropout(dropout),
+        ]
+
+        layers = nn.ModuleList(layer_list)
+        lin_size = self._get_lin_size(layers)
+
+        self.feature_extraction = nn.Sequential(*layers)
+        self.classif = nn.Sequential(
+            *nn.ModuleList(
+                [
+                    nn.Linear(lin_size, int(n_linear / 2)),
+                    nn.Linear(int(n_linear / 2), n_outputs),
+                ]
+            )
+        )
+
+
+class FullNet(nn.Module):
     def __init__(
         self,
         name,
@@ -267,29 +304,14 @@ class FullNet(CustomNet):
         nchan=5,
         n_linear=150,
         dropout=0.25,
-        dropout_option="same",
         batchnorm=False,
         maxpool=0,
     ):
-        CustomNet.__init__(self, name, input_size, n_outputs)
-        if dropout_option == "same":
-            dropout1 = dropout
-            dropout2 = dropout
-        else:
-            assert (
-                dropout < 0.5
-            ), "dropout cannot be higher than .5 in this configuration"
-            if dropout_option == "double":
-                dropout1 = dropout
-                dropout2 = dropout * 2
-            elif dropout_option == "inverted":
-                dropout1 = dropout * 2
-                dropout2 = dropout
-            else:
-                logging.warning("{} is not a valid option".format(dropout_option))
+        super(FullNet, self).__init__()
+        self.input_size = input_size
+        self.name = name
 
         layer_list = [
-            # equivalent to doing nn.Linear(input_size[0], nchan)
             nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
             nn.ReLU(),
         ]
@@ -330,12 +352,7 @@ class FullNet(CustomNet):
         layers = nn.ModuleList(layer_list)
         lin_size = self._get_lin_size(layers)
 
-        # Previous version: comment out this line in order to use previous state dicts
         self.feature_extraction = nn.Sequential(*layers)
-
-        # Previous version: unceomment this line and comment the next in order to use previous
-        # state dicts Don't forget to remove unpacking (*)
-        # layers.extend(
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
@@ -344,17 +361,19 @@ class FullNet(CustomNet):
                 ]
             )
         )
-        # Previous version: uncomment this line and comment out forward method in order to use
-        # previous state dicts
-        # self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.classif(self.feature_extraction(x))
+        feats = self.feature_extraction(x)
+        outs = self.classif(feats)
+        return outs
+
+    def _get_lin_size(self, layers):
+        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
 
 
-class vanPutNet(CustomNet):
+class vanPutNet(customNet):
     def __init__(self, model_name, input_size, n_output, dropout=0.25):
-        CustomNet.__init__(self, model_name, input_size, n_output)
+        customNet.__init__(self, model_name, input_size, n_output)
         layers = nn.ModuleList(
             [
                 nn.Conv2d(1, 100, 3),
@@ -384,13 +403,13 @@ class vanPutNet(CustomNet):
         return self.model(x)
 
 
-class AutoEncoder(CustomNet):
+class AutoEncoder(customNet):
     def __init__(
         self,
         model_name,
         input_size,
     ):
-        CustomNet.__init__(self, model_name, input_size)
+        customNet.__init__(self, model_name, input_size)
 
         lin_size = input_size[0] * input_size[1] * input_size[2]
 
