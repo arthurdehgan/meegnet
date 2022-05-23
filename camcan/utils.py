@@ -13,7 +13,32 @@ from scipy.io import savemat, loadmat
 from path import Path as path
 
 
-def extract_bands(data, f=None):
+def extract_bands(data: np.array, f: list = None) -> np.array:
+    """extract_bands.
+
+    Parameters
+    ----------
+    data : np.array
+        the data after it has been transformed to frequency space. Of shape n_samples x n_channels x n_bins
+        or n_channels x n_bins
+    f : list
+        the list of bins. id set to None, a list of all bins every .5 from 0 to n_bins will be generated.
+
+    Returns
+    -------
+    data : np.array
+        the data after averaging for frequency bands of shape n_samples x n_channels x 7 or n_channels x 7 depending
+        on input shape.
+        bands are defined as follow:
+            delta: .5 to 4 Hz
+            theta: 4 to 8 Hz
+            alpha: 12 to 30 Hz
+            beta: 30 to 60 Hz
+            gamma1: 30 to 60 Hz
+            gamma2: 60 to 90 Hz
+            gamma3: 90 to 120 Hz
+
+    """
     add_axis = False
     if len(data.shape) < 3:
         data = data[np.newaxis, :, :]
@@ -205,9 +230,9 @@ def train(
         valid_loss, valid_acc = evaluate(net, validloader, criterion)
 
         train_accs.append(train_acc)
+        valid_accs.append(valid_acc)
         train_losses.append(train_loss)
         valid_losses.append(valid_loss)
-        valid_accs.append(valid_acc)
         if valid_loss < best_vloss:
             best_vacc = valid_acc
             best_vloss = valid_loss
@@ -221,7 +246,6 @@ def train(
                     "optimizer": optimizer.state_dict(),
                 }
                 torch.save(checkpoint, model_filepath)
-                net.save_model(save_path)
         else:
             patience_state += 1
 
@@ -242,6 +266,8 @@ def train(
                 "current_patience": patience_state,
             }
             savemat(os.path.join(save_path, net.name + ".mat"), results)
+        if debug and epoch >= 5:
+            break
 
     return net
 
