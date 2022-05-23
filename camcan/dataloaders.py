@@ -82,8 +82,6 @@ def assert_params(band, domain, dattype):
         logging.error(
             f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
         )
-    else:
-        logging.info(f"Loading data from the {dattype} data set")
     return
 
 
@@ -390,11 +388,11 @@ def load_data(
             )
             data = torch.Tensor(data)[random_samples]
 
-        X.append(torch.as_tensor(data))
+        X.append(torch.as_tensor(np.array(data)))
         if eventclf:
             y += dataframe.loc[dataframe["sub"] == sub]["event_labels"].tolist()[0]
         else:
-            y += [lab] * len(data)
+            y += [1 if lab == "FEMALE" else 0] * len(data)
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
     X = torch.cat(X, 0)
@@ -403,13 +401,14 @@ def load_data(
     return X, y
 
 
-def load_epoched_sub(data_path, sub, chan_index, s_freq=500):
+def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500):
+    assert dattype in ("passive", "smt"), "cannot load epoched data for resting state"
     try:
         sub_data = np.load(
             os.path.join(
                 data_path,
                 f"downsampled_{s_freq}",
-                f"passive_{sub}_epoched",
+                f"{dattype}_{sub}_epoched",
             )
         )[chan_index]
     except IOError:
@@ -442,7 +441,9 @@ def load_sub(
         chan_index = [0, 1, 2]
 
     if epoched:
-        data = load_epoched_sub(data_path, sub, chan_index, s_freq=s_freq)
+        data = load_epoched_sub(
+            data_path, sub, chan_index, dattype=dattype, s_freq=s_freq
+        )
     else:
         try:
             if domain in ("cov", "cosp"):  # TODO Deprecated
