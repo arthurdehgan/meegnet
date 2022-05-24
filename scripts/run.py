@@ -96,7 +96,7 @@ def train_evaluate(
                 only useful if the network training was interrupted.
     """
     rs_csv_path = os.path.join(args.save_path, f"tested_params_seed{args.seed}.csv")
-    if os.path.exists(rs_csv_path) and skip_done:
+    if os.path.exists(rs_csv_path) and skip_done and args.randomsearch:
         df = pd.read_csv(rs_csv_path, index_col=0)
         check = df.loc[
             (df["f"] == float(args.filters))
