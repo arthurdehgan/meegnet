@@ -48,7 +48,7 @@ def generate_topomap(
         data.ravel(),
         info,
         res=128,
-        cmap="viridis",
+        cmap=cmap,
         vmax=data.max() if vmax is None else vmax,
         vmin=data.min() if vmin is None else vmin,
         show=False,
