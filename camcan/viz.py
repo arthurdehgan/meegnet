@@ -33,7 +33,14 @@ def load_info():
 
 
 def generate_topomap(
-    data, info, vmin=None, vmax=None, res=128, cmap="viridis", colorbar=False
+    data,
+    info,
+    vmin=None,
+    vmax=None,
+    res=128,
+    cmap="viridis",
+    colorbar=False,
+    tight_layout=False,
 ):
     if colorbar:
         fig, ax = plt.subplots()
@@ -52,5 +59,6 @@ def generate_topomap(
 
     if colorbar:
         _ = fig.colorbar(im)
-    mne.viz.tight_layout()
+    if tight_layout:
+        mne.viz.tight_layout()
     return im
