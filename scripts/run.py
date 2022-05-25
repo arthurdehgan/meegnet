@@ -205,7 +205,7 @@ def train_evaluate(
             )
 
     results = loadmat(model_filepath[:-2] + "mat")
-    if os.path.exists(rs_csv_path):
+    if os.path.exists(rs_csv_path) and args.randomsearch:
         df = pd.read_csv(rs_csv_path, index_col=0)
         df.loc[
             (df["f"] == float(args.filters))
