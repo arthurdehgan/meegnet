@@ -255,7 +255,7 @@ if __name__ == "__main__":
             log_name += f"_fold{args.fold}"
         log_name += ".log"
         logging.basicConfig(
-            filename=os.path.join(args.save_path, args.model_name + ".log"),
+            filename=os.path.join(args.save_path, log_name),
             filemode="a",
             level=logging.INFO,
             format="%(asctime)s %(message)s",
