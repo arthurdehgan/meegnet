@@ -12,7 +12,7 @@ def run_script(params, fold=None, local=False, debug=False, options=None):
     if options is not None:
         arguments += f" {options}"
     if fold is not None:
-        arguments += f" fold={fold}"
+        arguments += f" --fold={fold}"
     else:
         arguments += " --crossval"
     if debug:
@@ -26,15 +26,15 @@ def run_script(params, fold=None, local=False, debug=False, options=None):
 
 
 tests = {
-    "f": (6, 9, 12, 18, 24),
-    "linear": (250, 500, 500, 1000, 1500, 2000),
+    "f": (6, 9, 12, 18),
+    "linear": (250, 500, 500, 1000, 1500),
     "d": (0.5, 0.5),
     "nchan": (25, 50, 100, 200),
     "batchnorm": (True, False),
     "maxpool": (0, 10, 20),
-    "hlayers": (1, 3, 5, 7),
+    "hlayers": (1, 3, 5),
     "lr": (0.0001, 0.00005, 0.00001, 0.0005),
-    "bs": (128, 256, 512, 1024),
+    "bs": (128, 256, 512),
 }
 
 parser = argparse.ArgumentParser()
@@ -116,7 +116,8 @@ if len(tested) >= args.n_tests:
         if i > args.n_tests:
             break
 else:
-    while n_test < args.n_tests - len(tested):
+    n_done = len(tested)
+    while n_test < args.n_tests - n_done:
         params = {
             "f": random.choice(tests["f"]),
             "linear": random.choice(tests["linear"]),
