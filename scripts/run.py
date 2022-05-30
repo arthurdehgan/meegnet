@@ -120,46 +120,45 @@ def train_evaluate(
         if args.maxpool != 0:
             suffixes += f"_maxpool{args.maxpool}"
 
-        # TODO maybe use a dictionnary in order to store these values or use switch case
-        if args.feature == "bins":
-            trial_length = 241
-        elif args.feature == "bands":
-            trial_length = 5
-        elif args.feature == "temporal":
-            trial_length = TIME_TRIAL_LENGTH
-        elif args.feature == "cov":
-            # TODO
-            pass
-        elif args.feature == "cosp":
-            # TODO
-            pass
-
-        if args.sensors == "MAG":
-            n_channels = 102
-        elif args.sensors == "GRAD":
-            n_channels = 204
-        elif args.sensors == "ALL":
-            n_channels = 306
-
-        input_size = (
-            (1, n_channels, trial_length)
-            if args.flat
-            else (n_channels // 102, 102, trial_length)
-        )
-
-        if args.mode == "overwrite":
-            save = True
-            load = False
-        elif args.mode in ("continue", "evaluate"):
-            save = True
-            load = True
-        else:
-            save = False
-            load = False
-
-        # TODO change dropout to be different than a float value maybe use a , or just convert .5 to 50%
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
+
+    # TODO maybe use a dictionnary in order to store these values or use switch case
+    if args.feature == "bins":
+        trial_length = 241
+    elif args.feature == "bands":
+        trial_length = 5
+    elif args.feature == "temporal":
+        trial_length = TIME_TRIAL_LENGTH
+    elif args.feature == "cov":
+        # TODO
+        pass
+    elif args.feature == "cosp":
+        # TODO
+        pass
+
+    if args.sensors == "MAG":
+        n_channels = 102
+    elif args.sensors == "GRAD":
+        n_channels = 204
+    elif args.sensors == "ALL":
+        n_channels = 306
+
+    input_size = (
+        (1, n_channels, trial_length)
+        if args.flat
+        else (n_channels // 102, 102, trial_length)
+    )
+
+    if args.mode == "overwrite":
+        save = True
+        load = False
+    elif args.mode in ("continue", "evaluate"):
+        save = True
+        load = True
+    else:
+        save = False
+        load = False
 
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     model_filepath = os.path.join(args.save_path, net.name + ".pt")
@@ -251,6 +250,10 @@ if __name__ == "__main__":
     ################
 
     if args.log:
+        log_name = args.model_name
+        if fold is not None:
+            log_name += f"_fold{args.fold}"
+        log_name += ".log"
         logging.basicConfig(
             filename=os.path.join(args.save_path, args.model_name + ".log"),
             filemode="a",
