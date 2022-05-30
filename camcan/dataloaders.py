@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import os
 import random
 import logging
+from ast import literal_eval
 import torch
 import psutil
 import pandas as pd
@@ -124,6 +125,7 @@ def create_datasets(
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
     )
+    participants_df["age"] = pd.to_numeric(participants_df["age"])
 
     subs = np.array(
         participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)[
@@ -281,7 +283,7 @@ def load_sets(
         random.shuffle(data)
         labels = np.array([i for _ in range(N)])
         for j, index in enumerate(indexes):
-            X_sets[j].append(torch.Tensor(data)[index])
+            X_sets[j].append(torch.Tensor(np.array(data))[index])
             y_sets[j].append(torch.Tensor(labels)[index])
 
     logging.info(
@@ -390,7 +392,12 @@ def load_data(
 
         X.append(torch.as_tensor(np.array(data)))
         if eventclf:
-            y += dataframe.loc[dataframe["sub"] == sub]["event_labels"].tolist()[0]
+            events = np.array(
+                literal_eval(
+                    dataframe.loc[dataframe["sub"] == sub]["event_labels"].item()
+                )
+            )
+            y += [0 if e == "visual" else 1 for e in events]
         else:
             y += [1 if lab == "FEMALE" else 0] * len(data)
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
@@ -403,16 +410,18 @@ def load_data(
 
 def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500):
     assert dattype in ("passive", "smt"), "cannot load epoched data for resting state"
+    sub_path = os.path.join(
+        data_path, f"downsampled_{s_freq}", f"{dattype}_{sub}_epoched.npy"
+    )
     try:
-        sub_data = np.load(
-            os.path.join(
-                data_path,
-                f"downsampled_{s_freq}",
-                f"{dattype}_{sub}_epoched",
-            )
-        )[chan_index]
+        sub_data = np.array(
+            list(map(lambda x: zscore(x, axis=-1), np.load(sub_path)[:, chan_index]))
+        )
     except IOError:
-        logging.warning(f"There was a problem loading subject {sub}")
+        logging.warning(f"There was a problem loading subject {sub_path}")
+        return None
+    except:
+        logging.warning(f"An error occured while loading {sub_path}")
         return None
 
     return sub_data
@@ -433,6 +442,7 @@ def load_sub(
 ):
     # TODO doc
     """seg is the size of the segments in seconds"""
+    # TODO this might not be correct anymore as we changed data structure ! CHANGE URGENTLY
     if ch_type == "MAG":
         chan_index = [2]
     elif ch_type == "GRAD":
@@ -466,7 +476,7 @@ def load_sub(
                     # Deprecated
                     data = [
                         np.append(
-                            zscore(sub_data[:, :, i : i + step], axis=1),
+                            zscore(sub_data[:, :, i : i + step], axis=-1),
                             welch(sub_data[:, :, i : i + step], fs=s_freq)[1],
                         )
                         for i in range(start, sub_data.shape[-1], step)
@@ -489,7 +499,7 @@ def load_sub(
                         trial = sub_data[:, :, i : i + step]
                         if trial.shape[-1] == step:
                             if not np.isnan(trial).any():
-                                data.append(zscore(trial, axis=1))
+                                data.append(zscore(trial, axis=-1))
                     if len(data) < 50:
                         return None
                     if n_samples is not None and n_samples <= len(data):
