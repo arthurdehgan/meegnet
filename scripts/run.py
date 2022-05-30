@@ -139,7 +139,11 @@ def train_evaluate(
     elif args.sensors == "ALL":
         n_channels = 306
 
-    input_size = (n_channels // 102, 102, trial_length)
+    input_size = (
+        (1, n_channels, trial_length)
+        if args.flat
+        else (n_channels // 102, 102, trial_length)
+    )
 
     if args.mode == "overwrite":
         save = True
@@ -174,7 +178,7 @@ def train_evaluate(
     )
     validloader = create_loader(
         datasets[fold],
-        batch_size=int(len(datasets[fold]) / 4),
+        batch_size=args.batch_size,
         num_workers=args.num_workers,
         shuffle=True,
     )
@@ -298,6 +302,7 @@ if __name__ == "__main__":
             epoched=args.epoched,
             dattype=args.dattype,
             testing=args.testsplit,
+            s_freq=args.sfreq,
         )
         # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
     else:
@@ -316,6 +321,7 @@ if __name__ == "__main__":
             eventclf=args.eventclf,
             epoched=args.epoched,
             testing=args.testsplit,
+            s_freq=args.sfreq,
         )
         n_outputs = 2
         # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.

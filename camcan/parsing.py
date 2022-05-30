@@ -9,6 +9,11 @@ parser.add_argument(
     help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
 )
 parser.add_argument(
+    "--flat",
+    action="store_true",
+    help="will flatten sensors dimension",
+)
+parser.add_argument(
     "--epoched",
     action="store_true",
     help="will load epoched data instead of the whole signal for each subject. This option only works for passive and smt data in which there are events that we use to generate epochs.",
@@ -58,6 +63,12 @@ parser.add_argument(
 )
 parser.add_argument(
     "-f", "--filters", default=8, type=int, help="The size of the first convolution"
+)
+parser.add_argument(
+    "--sfreq",
+    type=int,
+    default=200,
+    help="The sampling frequency of the data, mainly for loading the correct data",
 )
 parser.add_argument(
     "--maxpool",
