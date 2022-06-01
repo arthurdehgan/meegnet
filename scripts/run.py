@@ -318,7 +318,7 @@ if __name__ == "__main__":
             args.data_path,
             args.train_size,
             args.max_subj,
-            args.sensors,
+            chan_index,
             args.feature,
             seed=args.seed,
             debug=args.debug,
