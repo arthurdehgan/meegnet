@@ -139,10 +139,13 @@ def train_evaluate(
 
     if args.sensors == "MAG":
         n_channels = 102
+        chan_index = [0]
     elif args.sensors == "GRAD":
         n_channels = 204
+        chan_index = [1, 2]
     elif args.sensors == "ALL":
         n_channels = 306
+        chan_index = [0, 1, 2]
 
     input_size = (
         (1, n_channels, trial_length)
@@ -301,7 +304,7 @@ if __name__ == "__main__":
             args.data_path,
             n_samples=args.n_samples,
             max_subj=args.max_subj,
-            ch_type=args.sensors,
+            chan_index=chan_index,
             seed=args.seed,
             printmem=args.printmem,
             epoched=args.epoched,
