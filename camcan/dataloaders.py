@@ -90,7 +90,7 @@ def create_datasets(
     data_folder,
     train_size,
     max_subj,
-    ch_type,
+    chan_index,
     domain,
     s_freq=200,
     seg=2,
@@ -175,7 +175,7 @@ def create_datasets(
             *load_data(
                 df,
                 data_path=data_folder,
-                ch_type=ch_type,
+                chan_index=chan_index,
                 domain=domain,
                 printmem=printmem,
                 dattype=dattype,
@@ -201,7 +201,7 @@ def load_sets(
     seg=2,
     s_freq=200,
     n_samples=None,
-    ch_type="ALL",
+    chan_index=[0,1,2],
     domain="temporal",
     printmem=False,
     dattype="rest",
@@ -258,7 +258,7 @@ def load_sets(
             sub,
             n_samples=n_samples,
             band=band,
-            ch_type=ch_type,
+            chan_index=chan_index,
             dattype=dattype,
             epoched=epoched,
             domain=domain,
@@ -324,7 +324,7 @@ def load_data(
     offset=30,
     seg=2,
     s_freq=200,
-    ch_type="MAG",
+    chan_index=[0,1,2],
     domain="temporal",
     printmem=False,
     dattype="rest",
@@ -372,7 +372,7 @@ def load_data(
             sub,
             n_samples=n_samples,
             band=band,
-            ch_type=ch_type,
+            chan_index=chan_index,
             dattype=dattype,
             epoched=epoched,
             domain=domain,
@@ -432,7 +432,7 @@ def load_sub(
     sub,
     n_samples=None,
     band="",
-    ch_type="ALL",
+    chan_index,
     dattype="rest",
     epoched=False,
     domain="temporal",
@@ -442,14 +442,6 @@ def load_sub(
 ):
     # TODO doc
     """seg is the size of the segments in seconds"""
-    # TODO this might not be correct anymore as we changed data structure ! CHANGE URGENTLY
-    if ch_type == "MAG":
-        chan_index = [2]
-    elif ch_type == "GRAD":
-        chan_index = [0, 1]
-    elif ch_type == "ALL":
-        chan_index = [0, 1, 2]
-
     if epoched:
         data = load_epoched_sub(
             data_path, sub, chan_index, dattype=dattype, s_freq=s_freq
