@@ -26,6 +26,7 @@ parser.add_argument(
 parser.add_argument(
     "--fold",
     default=None,
+    type=int,
     help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",
 )
 parser.add_argument(
@@ -144,7 +145,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--seed",
-    default=420,
+    default=42,
     type=int,
     help="Seed to use for random splits.",
 )

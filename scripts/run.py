@@ -294,6 +294,16 @@ if __name__ == "__main__":
         args.dropout_option = "same"
         args.patience = 1
 
+    if args.sensors == "MAG":
+        n_channels = 102
+        chan_index = [0]
+    elif args.sensors == "GRAD":
+        n_channels = 204
+        chan_index = [1, 2]
+    elif args.sensors == "ALL":
+        n_channels = 306
+        chan_index = [0, 1, 2]
+
     ################
     # Loading data #
     ################
