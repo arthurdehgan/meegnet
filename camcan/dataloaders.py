@@ -390,16 +390,20 @@ def load_data(
             )
             data = torch.Tensor(data)[random_samples]
 
-        X.append(torch.as_tensor(np.array(data)))
         if eventclf:
             events = np.array(
                 literal_eval(
                     dataframe.loc[dataframe["sub"] == sub]["event_labels"].item()
                 )
             )
+            if len(events) != len(data):
+                n_sub -= 1
+                continue
             y += [0 if e == "visual" else 1 for e in events]
         else:
             y += [1 if lab == "FEMALE" else 0] * len(data)
+
+        X.append(torch.as_tensor(np.array(data)))
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
     X = torch.cat(X, 0)
