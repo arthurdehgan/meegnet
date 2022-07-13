@@ -69,16 +69,7 @@ class InfiniteDataLoader:
 # End of domainBed code
 
 
-def assert_params(band, domain, dattype):
-    if domain == "cosp":
-        if band == "":
-            logging.error(
-                "A frequency band must be specified when using co-spectrum matrices"
-            )
-        elif band not in BANDS:
-            logging.error(
-                f"{band} is not a correct band option. band must be in {BANDS}"
-            )
+def assert_params(band, dattype):
     if dattype not in ["rest", "passive", "task"]:
         logging.error(
             f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
@@ -89,9 +80,8 @@ def assert_params(band, domain, dattype):
 def create_datasets(
     data_folder,
     train_size,
-    max_subj,
-    chan_index,
-    domain,
+    max_subj=1000,
+    chan_index=[0, 1, 2],
     s_freq=200,
     seg=2,
     debug=False,
@@ -104,6 +94,7 @@ def create_datasets(
     eventclf=False,
     epoched=False,
     testing=None,
+    psd=False,
 ):
     """create dataloaders iterators.
 
@@ -176,7 +167,6 @@ def create_datasets(
                 df,
                 data_path=data_folder,
                 chan_index=chan_index,
-                domain=domain,
                 printmem=printmem,
                 dattype=dattype,
                 n_samples=n_samples,
@@ -186,6 +176,7 @@ def create_datasets(
                 band=band,
                 s_freq=s_freq,
                 seg=seg,
+                psd=psd,
             )
         )
         for i, df in enumerate(dataframes)
@@ -202,16 +193,16 @@ def load_sets(
     s_freq=200,
     n_samples=None,
     chan_index=[0, 1, 2],
-    domain="temporal",
     printmem=False,
     dattype="rest",
     epoched=False,
     seed=0,
     band="",
     testing=None,
+    psd=False,
 ):
     """Loading data subject per subject."""
-    assert_params(band, domain, dattype)
+    assert_params(band, dattype)
 
     csv_file = os.path.join(data_path, f"participants_info_{dattype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
@@ -261,10 +252,10 @@ def load_sets(
             chan_index=chan_index,
             dattype=dattype,
             epoched=epoched,
-            domain=domain,
             offset=offset,
             s_freq=s_freq,
             seg=seg,
+            psd=psd,
         )
         if data is None:
             n_sub -= 1
@@ -325,7 +316,6 @@ def load_data(
     seg=2,
     s_freq=200,
     chan_index=[0, 1, 2],
-    domain="temporal",
     printmem=False,
     dattype="rest",
     n_samples=None,
@@ -333,13 +323,14 @@ def load_data(
     epoched=False,
     eventclf=False,
     band="",
+    psd=False,
 ):
     """Loading data subject per subject and returns labels according to the task.
     Currently if epoched is set to True, we will load the event labels from epoched data.
     id eventclf is set to True, we will used labels from the events, if not,
     sex is used as the default label but can be easily changed to hand or age for example.
     """
-    assert_params(band, domain, dattype)
+    assert_params(band, dattype)
     if eventclf:
         assert (
             dattype != "rest"
@@ -375,10 +366,10 @@ def load_data(
             chan_index=chan_index,
             dattype=dattype,
             epoched=epoched,
-            domain=domain,
             offset=offset,
             s_freq=s_freq,
             seg=seg,
+            psd=psd,
         )
         if data is None:
             n_sub -= 1
@@ -406,17 +397,21 @@ def load_data(
         X.append(torch.as_tensor(np.array(data)))
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
 
-    X = torch.cat(X, 0)
+    if len(X) > 0:
+        X = torch.cat(X, 0)
+    else:
+        return None, None
     y = torch.as_tensor(y)
 
     return X, y
 
 
-def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500):
+def load_epoched_sub(
+    data_path, sub, chan_index, dattype="passive", s_freq=500, psd=False
+):
     assert dattype in ("passive", "smt"), "cannot load epoched data for resting state"
-    sub_path = os.path.join(
-        data_path, f"downsampled_{s_freq}", f"{dattype}_{sub}_epoched.npy"
-    )
+    folder = "psd" if psd else f"downsampled_{s_freq}"
+    sub_path = os.path.join(data_path, folder, f"{dattype}_{sub}_epoched.npy")
     try:
         sub_data = np.array(
             list(map(lambda x: zscore(x, axis=-1), np.load(sub_path)[:, chan_index]))
@@ -439,70 +434,46 @@ def load_sub(
     chan_index=[0, 1, 2],
     dattype="rest",
     epoched=False,
-    domain="temporal",
     offset=30,
     s_freq=200,
     seg=2,
+    psd=False,
 ):
     # TODO doc
     """seg is the size of the segments in seconds"""
     if epoched:
         data = load_epoched_sub(
-            data_path, sub, chan_index, dattype=dattype, s_freq=s_freq
+            data_path, sub, chan_index, dattype=dattype, s_freq=s_freq, psd=psd
         )
     else:
         try:
-            if domain in ("cov", "cosp"):  # TODO Deprecated
-                file_path = os.path.join(
-                    data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
+            # if domain in ("cov", "cosp"):  # TODO Deprecated
+            #     file_path = os.path.join(
+            #         data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
+            #     )
+            #     data = np.load(file_path)[chan_index]
+            #     data = np.swapaxes(data, 0, 1)
+            #     if domain == "cosp":
+            #         data = data[:, :, BANDS.index(band)]
+            # else:
+            folder = "psd" if psd else f"downsampled_{s_freq}"
+            file_path = os.path.join(data_path, folder, f"{dattype}_{sub}.npy")
+            sub_data = np.load(file_path)[chan_index]
+            step = int(seg * s_freq)
+            start = int(offset * s_freq)
+            data = []
+            for i in range(start, sub_data.shape[-1], step):
+                trial = sub_data[:, :, i : i + step]
+                if trial.shape[-1] == step:
+                    if not np.isnan(trial).any():
+                        data.append(zscore(trial, axis=-1))
+            if len(data) < 50:
+                return None
+            if n_samples is not None and n_samples <= len(data):
+                random_samples = np.random.choice(
+                    np.arange(len(data)), n_samples, replace=False
                 )
-                data = np.load(file_path)[chan_index]
-                data = np.swapaxes(data, 0, 1)
-                if domain == "cosp":
-                    data = data[:, :, BANDS.index(band)]
-            else:
-                file_path = os.path.join(
-                    data_path, f"downsampled_{s_freq}", f"{dattype}_{sub}.npy"
-                )
-                sub_data = np.load(file_path)[chan_index]
-                step = int(seg * s_freq)
-                start = int(offset * s_freq)
-                if domain == "both":
-                    # TODO the welch code might be wrong, check if the trans_freqormation is actually done correctly. It is supposed to give data = n x n_channels x time + bins so probably 3 x 102 x 200 + n_bins
-                    # Deprecated
-                    data = [
-                        np.append(
-                            zscore(sub_data[:, :, i : i + step], axis=-1),
-                            welch(sub_data[:, :, i : i + step], fs=s_freq)[1],
-                        )
-                        for i in range(start, sub_data.shape[-1], step)
-                    ]
-                elif domain == "bands":
-                    # TODO for now does the same thing as bins, but should be averaged to get the bands value instead of the bins directly.
-                    # We can use a function that should be in utils also, start using multitaper instead of welch
-                    data = [
-                        np.append(welch(sub_data[:, :, i : i + step], fs=s_freq)[1])
-                        for i in range(start, sub_data.shape[-1], step)
-                    ]
-                elif domain == "bins":
-                    data = [
-                        np.append(welch(sub_data[:, :, i : i + step], fs=s_freq)[1])
-                        for i in range(start, sub_data.shape[-1], step)
-                    ]
-                elif domain == "temporal":
-                    data = []
-                    for i in range(start, sub_data.shape[-1], step):
-                        trial = sub_data[:, :, i : i + step]
-                        if trial.shape[-1] == step:
-                            if not np.isnan(trial).any():
-                                data.append(zscore(trial, axis=-1))
-                    if len(data) < 50:
-                        return None
-                    if n_samples is not None and n_samples <= len(data):
-                        random_samples = np.random.choice(
-                            np.arange(len(data)), n_samples, replace=False
-                        )
-                        data = torch.Tensor(data)[random_samples]
+                data = torch.Tensor(data)[random_samples]
 
         except IOError:
             logging.warning(f"There was a problem loading subject file for {sub}")
