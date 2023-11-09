@@ -1,4 +1,4 @@
-"""This script is intenden to work for the camcan MEG dataset with maxfilter and transform to default common space (mf_transdef) data.
+"""This script is intended to work for the camcan MEG dataset with maxfilter and transform to default common space (mf_transdef) data.
 
 The Camcan dataset is not open access and you need to send a request on the websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataaccess/).
 
