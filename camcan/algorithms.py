@@ -4,14 +4,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.autograd as autograd
-from torch.autograd import Variable
-
+import camcan.networks as networks
 import copy
 import numpy as np
-from collections import defaultdict
 
 # from domainbed import networks
-# from domainbed.lib.misc import random_pairs_of_minibatches, ParamDict
+from domainbed.lib.misc import random_pairs_of_minibatches, ParamDict
 
 ALGORITHMS = [
     "ERM",
