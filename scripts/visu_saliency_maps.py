@@ -15,6 +15,7 @@ def generate_saliency_figure(
     save_path: str = "",
     suffix: str = "",
     title: str = "",
+    eventclf=False,
 ):
     """generate_saliency_figure.
 
@@ -37,7 +38,7 @@ def generate_saliency_figure(
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
     grid = GridSpec(2, 10)
-    fig = plt.figure(figsize=(13, 4))
+    fig = plt.figure(figsize=(20, 4))
     plt.title(title)
     plt.axis("off")
     axes = []
@@ -45,16 +46,16 @@ def generate_saliency_figure(
         gradient = saliencies[label]
         gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
-        for j, chan in zip(range(0, 9, 3), ("MAG", "PLANNAR1", "PLANNAR2")):
-            vmax = gradient.max()
-            vmin = gradient.min()
+        for j, chan in zip(range(0, 9, 3), ("MAG", "GRAD1", "GRAD2")):
             idx = j // 3
             grads = gradient[idx]
+            vmax = grads.max()
+            vmin = grads.min()
             highest = np.argmax(np.mean(np.abs(grads), axis=0))
             # cmap = sns.color_palette("icefire", as_cmap=True)
             # cmap = sns.color_palette("coolwarm", as_cmap=True, center="dark")
-            cmap = "magma"
-            # cmap = "coolwarm"
+            # cmap = "inferno"
+            cmap = "coolwarm"
             # cmap = "seismic"
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
             plt.imshow(
@@ -68,10 +69,14 @@ def generate_saliency_figure(
             axes[-1].spines["top"].set_visible(False)
             axes[-1].spines["right"].set_visible(False)
             axes[-1].yaxis.tick_right()
-            plt.xticks([0, 75, 200, 400], [-150, 0, 250, 650])
-            plt.yticks([0, 102], [102, 0])
-            plt.axvline(x=75, color="black", linestyle="--")
-            plt.axvline(x=highest, color="green", linestyle="--")
+            plt.yticks([], [])
+            if eventclf:
+                plt.xticks([0, 75, 200, 400], [-150, 0, 250, 650], fontsize=8)
+                # plt.yticks([0, 102], [102, 0])
+                plt.axvline(x=75, color="black", linestyle="--", linewidth=1)
+                plt.axvline(x=highest, color="green", linestyle="--", linewidth=1)
+            else:
+                plt.xticks([0, 200, 400], [0, 1000, 2000], fontsize=8)
             if j == 0:
                 axes[-1].text(
                     -50, 50, label, ha="left", va="center", rotation="vertical"
@@ -92,8 +97,8 @@ def generate_saliency_figure(
                 fig.colorbar(
                     im,
                     ax=axes[-1],
-                    location="left",
-                    shrink=0.6,
+                    location="right",
+                    shrink=0.9,
                     ticks=(vmin, 0, vmax),
                 )
                 axes[-1].axis("off")
@@ -194,6 +199,7 @@ if __name__ == "__main__":
                 save_path=args.save_path,
                 suffix=suffix,
                 title=f"saliencies for a single trial of subject {sub}",
+                eventclf=args.eventclf,
             )
             suffix = f"{sub}_all_trials"
             if args.subclf:
@@ -207,6 +213,7 @@ if __name__ == "__main__":
                 save_path=args.save_path,
                 suffix=suffix,
                 title=f"saliencies for the averaged trials of subject {sub}",
+                eventclf=args.eventclf,
             )
 
     final_dict = {
@@ -226,4 +233,5 @@ if __name__ == "__main__":
         save_path=args.save_path,
         suffix=suffix,
         title="saliencies averaged across all subjects",
+        eventclf=args.eventclf,
     )

@@ -18,7 +18,7 @@ def create_net(net_option, name, input_size, n_outputs, device, args):
             },
         ).to(device)
     elif net_option == "best_net":
-        return testNet(name, input_size, n_outputs).to(device)
+        return my_net(name, input_size, n_outputs).to(device)
     elif net_option == "custom_net":
         return FullNet(
             name,
@@ -257,7 +257,7 @@ class MLP(customNet):
         return x
 
 
-class testNet(customNet):
+class my_net(customNet):
     def __init__(
         self,
         name,
@@ -266,7 +266,7 @@ class testNet(customNet):
         n_linear=2000,
         dropout=0.5,
     ):
-        super(testNet, self).__init__(name, input_size, n_outputs)
+        super(my_net, self).__init__(name, input_size, n_outputs)
         self.maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
         layer_list = [
             nn.Conv2d(input_size[0], 100, (input_size[1], 1)),

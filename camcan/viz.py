@@ -41,6 +41,7 @@ def generate_topomap(
     cmap="viridis",
     colorbar=False,
     tight_layout=False,
+    mask=None,
 ):
     if colorbar:
         fig, ax = plt.subplots()

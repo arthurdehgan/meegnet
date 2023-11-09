@@ -2,17 +2,16 @@ import os
 from collections.abc import Iterable
 import torch
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import numpy as np
 import pandas as pd
 from torch import nn
-from joblib import Parallel, delayed, parallel_backend
 
 # from scipy.signal import welch
 from camcan.parsing import parser
 from camcan.params import TIME_TRIAL_LENGTH
-from camcan.utils import load_checkpoint, compute_psd
+from camcan.utils import load_checkpoint, compute_psd, cuda_check
 from camcan.dataloaders import (
-    load_passive_sub_events,
     load_sub,
     BANDS,
 )
@@ -22,89 +21,11 @@ from camcan.misc_functions import (
     convert_to_grayscale,
     get_positive_negative_saliency,
 )
-from run import create_net
+from camcan.network import create_net
 
-DEVICE = "cpu"
+DEVICE = cuda_check()
 LABELS = ["image", "sound"]  # image is label 0 and sound label 1
-
-
-def compute_the_good_stuff(
-    net, trial, y, w_size, fs, use_windows=False, sal_option="pos"
-):
-    X = torch.Tensor(trial[np.newaxis])
-    X.requires_grad_(True)
-    # If confidence is good enough we use the trial for visualization
-    confidence = torch.nn.Softmax(dim=1)(net(X)).max()
-    chan_data = None
-    if confidence >= 0.95:
-        if use_windows:
-            GBP = GuidedBackprop(net)
-            guided_grads = GBP.generate_gradients(X, y)
-            pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
-            if sal_option == "pos":
-                saliency = pos_saliency
-            elif sal_option == "neg":
-                saliency = neg_saliency
-            else:
-                saliency = pos_saliency + neg_saliency
-            chan_data = []
-            for chan in saliency:
-                windows_idx = choose_best_window(chan)
-                transformed_data = []
-                for j, index in enumerate(windows_idx):
-                    if isinstance(index, Iterable):
-                        tmp = []
-                        for idx in index:
-                            tmp.append(
-                                compute_psd(
-                                    chan[j, idx : idx + w_size].reshape(1, w_size),
-                                    fs=fs,
-                                )
-                            )
-                        bands = np.mean(tmp, axis=0)
-                    else:
-                        bands = compute_psd(
-                            chan[j, index : index + w_size].reshape(1, w_size),
-                            fs=fs,
-                        )
-                    transformed_data.append(bands)
-                chan_data.append(np.array(transformed_data).squeeze())
-            chan_data = np.array(chan_data)
-        else:
-            chan_data = compute_psd(trial, fs=fs)
-    return chan_data
-
-
-def choose_best_window(data, fs=500, w_size=300):
-    """
-    data: array
-        Must be of size k x n_samples. k can be sensor dimension or trial dimension.
-    w_size: int
-        The size of the window in ms
-    """
-    masks = [dat >= (np.mean(dat) + np.std(dat) / 2) for dat in data]
-    w_size = int(w_size * fs / 1000)
-    best_window_idx = []
-    for mask in masks:
-        windows = np.array([mask[i : i + w_size] for i in range(len(mask) - w_size)])
-        values = [sum(window) for window in windows]
-        best_window_index = np.where(values == max(values))[0]
-        if len(best_window_index) > 1:
-            idx_range = best_window_index[-1] - best_window_index[0]
-            if idx_range <= 150 * fs / 1000:  # 150ms betweeen first and last window
-                # Then best would be in the middle of all this
-                best = int(len(best_window_index) / 2)
-                best_window_idx.append(best_window_index[best])
-            elif idx_range <= 300 * fs / 1000:  # 300ms
-                best_window_idx.append((best_window_index[0], best_window_index[-1]))
-            else:
-                best = int(len(best_window_index) / 2)
-                best_window_idx.append(
-                    (best_window_index[0], best, best_window_index[-1])
-                )
-        else:
-            best_window_idx.append(best_window_index[0])
-    return best_window_idx
+CHANNELS = ("GRAD", "GRAD2", "MAG")
 
 
 def compute_save_guided_bprop(net, X, y):
@@ -124,7 +45,7 @@ def compute_save_guided_bprop(net, X, y):
 
 
 def generate_topograd_map(guided_grads, target_name, spectral=False):
-    for k, chan in enumerate(("GRAD", "GRAD2", "MAG")):
+    for k, chan in enumerate(CHANNELS):
         imlist = []
         data = guided_grads[k]
         for step in range(data.shape[-1]):
@@ -157,16 +78,16 @@ def generate_topograd_map(guided_grads, target_name, spectral=False):
             make_gif(imlist)
 
 
-def load_data(args, sub="CC321464"):
+def load_data(data_path, sub="CC321464"):
+    # TODO Change this since we changed the way we store passive data
     # change path depending on the data type. TODO Hard coded
     # Add an option to change this
-    data_path = args.path
     if args.dattype == "passive":
-        data_path += "downsampled_500/"
-        return load_passive_sub_events(data_path, sub)
+        data_path = os.path.join(args.data_path, "downsamlped_500")
+        # return load_passive_sub_events(data_path, sub)
     else:
         dataframe = pd.read_csv(f"{data_path}trials_df_clean.csv", index_col=0)
-        data_path += "downsamlped_200"
+        data_path = os.path.join(args.data_path, "downsamlped_200")
         X = load_sub(data_path, sub)
         y = dataframe[dataframe["subs"] == sub]["sex"].iloc(0)
 
@@ -203,11 +124,6 @@ if __name__ == "__main__":
         "--topograd",
         action="store_true",
         help="wether or not to generate the topomaps of the guided backprop.",
-    )
-    parser.add_argument(
-        "--all-subj",
-        action="store_true",
-        help="compute for all subjs instead of just one",
     )
     parser.add_argument(
         "--outputs",
@@ -268,10 +184,10 @@ if __name__ == "__main__":
     else:
         n_outputs = 2
 
-    info = load_info(args.path)
+    info = load_info(args.data_path)
 
-    model_filepath = "../models/" + name + ".pt"
-    net = create_net(args.net_option, name, input_size, n_outputs, args)
+    model_filepath = os.path.join("../models/", name + ".pt")
+    net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
     net.to(DEVICE)
@@ -289,9 +205,9 @@ if __name__ == "__main__":
                 model_weights.append(layer.weight)
                 conv_layers.append(layer)
 
-    ##########################
-    ### Genrating topomaps ###
-    ##########################
+    #############################################
+    ### Genrating feature importance topomaps ###
+    #############################################
 
     if args.topomaps:
         plt.figure(figsize=(20, 17))
@@ -306,7 +222,7 @@ if __name__ == "__main__":
     #######################################################
 
     if args.outputs:
-        X = torch.Tensor(load_data(args)[0])
+        X = torch.Tensor(load_data(args.data_path)[0])
 
         # Generating outputs after forward pass of each conv layer
         # TODO check if we should add maxpooling to this, since it
@@ -336,67 +252,76 @@ if __name__ == "__main__":
     ########################
 
     if args.topograd:
-        if args.all_subj:
-            dataframe = pd.read_csv(
-                f"{args.path}clean_participant_new.csv", index_col=0
-            )
-            subj_list = dataframe["participant_id"]
-            subj_list = subj_list.sample(frac=1).reset_index(drop=True)
-            if args.max_subj is not None:
-                subj_list = subj_list.loc[: args.max_subj]
-        else:
-            subj_list = ["CC510433"]
-        bands_values = [[], []]
-        w_size = 300  # Parameter TODO put somewhere else when factoring in fucntions
-        fs = 500  # Parameter TODO put somewhere else when factoring in fucntions
-        w_size = int(w_size * fs / 1000)
-        files = [f"../data/psd_{lab}.npy" for lab in LABELS]
+        dataframe = pd.read_csv(
+            f"{args.data_path}clean_participant_new.csv", index_col=0
+        )
+        subj_list = dataframe["participant_id"]
+        subj_list = subj_list.sample(frac=1).reset_index(drop=True)
+        if args.max_subj is not None:
+            subj_list = subj_list.loc[: args.max_subj]
 
-        if all(os.path.exists(file) for file in files) and not args.use_windows:
-            for i, file in enumerate(files):
-                bands_values[i] = np.load(file)
-        else:
-            for sub in subj_list:
-                examples, targets = load_data(args, sub)
-                if targets is None:
-                    continue
-                print(sub)
-                targets = np.array(targets)
-                examples = np.array(examples)
-                for targ in np.unique(targets):
-                    chan_data = Parallel(n_jobs=-1)(
-                        delayed(compute_the_good_stuff)(
-                            net,
-                            trial,
-                            y,
-                            w_size,
-                            fs,
-                            use_windows=args.use_windows,
-                            sal_option=args.saliency,
-                        )
-                        for trial, y in zip(
-                            examples[targets == targ], targets[targets == targ]
-                        )
-                    )
-                    chan_data = [e for e in chan_data if e is not None]
-                    bands_values[targ] += chan_data
-            print(
-                f"used {len(bands_values[0])} image trials, and {len(bands_values[1])} sound trials."
-            )
+        sal_options = ["pos", "neg"] if args.saliency == "both" else [args.saliency]
+        all_options_bv = []
+        for sal_option in sal_options:
+            bands_values = [[], []]
             name = "../data/psd"
             name = (
-                name + f"_{args.saliency}_saliency_windows"
-                if args.use_windows
-                else name
+                name + f"_{sal_option}_saliency_windows" if args.use_windows else name
             )
-            for i, bv in enumerate(bands_values):
-                np.save(name + f"_{LABELS[i]}.npy", bv)
-            bands_values = [np.array(bv).mean(axis=0) for bv in bands_values]
+            files = [f"{name}_{lab}.npy" for lab in LABELS]
 
-        for i, bv in enumerate(bands_values):
-            if not args.use_windows:
-                tname = "psd_" + LABELS[i]
+            if all(os.path.exists(file) for file in files):
+                for i, file in enumerate(files):
+                    bands_values[i] = np.load(file)
+                bands_values = [np.array(bv).mean(axis=0) for bv in bands_values]
             else:
-                tname = LABELS[i]
-            tname += f"_{args.saliency}_saliency"
-            generate_topograd_map(bv, tname, spectral=args.spectral)
+                print(
+                    "Could not find the psd files for the genration of the topograd maps."
+                )
+                print(
+                    "Please check dapa path or compute them using the compute_saliency_based_psd.py script."
+                )
+
+            for i, bv in enumerate(bands_values):
+                if not args.use_windows:
+                    tname = "psd_" + LABELS[i]
+                else:
+                    tname = LABELS[i]
+                tname += f"_{sal_option}_saliency"
+                generate_topograd_map(bv, tname, spectral=args.spectral)
+            all_options_bv.append(np.array(bands_values))
+
+        all_options_bv = np.array(all_options_bv)
+        if args.saliency == "both":
+            for k, band in enumerate(BANDS):
+                for i, chan in enumerate(CHANNELS):
+                    grid = GridSpec(2, 3)
+                    fig = plt.figure(0)
+                    fig.clf()
+                    axes = []
+                    for j, sal in enumerate(["pos", "neg", "pos - neg"]):
+                        data = (
+                            all_options_bv[j]
+                            if j < 2
+                            else all_options_bv[0] - all_options_bv[1]
+                        )
+                        for l, label in enumerate(LABELS):
+                            axes.append(fig.add_subplot(grid[l, j]))
+                            im = generate_topomap(
+                                data[l, i, :, k],
+                                info,
+                                vmin=all_options_bv[:, l, i, :, k].min(),
+                                vmax=all_options_bv[:, l, i, :, k].max(),
+                            )
+
+                            if l == 0:
+                                plt.title(sal)
+                            if j == 0:
+                                axes[-1].text(
+                                    -0.25, 0, label, va="center", rotation="vertical"
+                                )
+                            # TODO add a colormap
+                    plt.savefig(
+                        f"../figures/topograds/{chan}/all_saliency_{band}.png", dpi=300
+                    )
+                    plt.close()

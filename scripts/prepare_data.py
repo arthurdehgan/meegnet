@@ -89,34 +89,85 @@ def prepare_data(
         f"derivatives_{dattype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
-    csv_path = os.path.join(
+    source_csv_path = os.path.join(
         source_path,
         "dataman/useraccess/processed/",
         camcan_user,
         "standard_data.csv",
     )
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(source_csv_path)
     for file in os.listdir(os.path.join(data_path, sub_folder)):
-        if file.endswith("fif"):
+        if file.endswith(".fif"):
             fif_file = os.path.join(data_path, sub_folder, file)
             break
 
-    raw = mne.io.read_raw_fif(fif_file).resample(sfreq=s_freq)
+    sub = sub_folder.split("-")[1]
+    if epoched:
+        filename = f"{dattype}_{sub}_epoched.npy"
+    else:
+        filename = f"{dattype}_{sub}.npy"
+    out_path = os.path.join(save_path, f"downsampled_{args.sfreq}", filename)
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    bad_csv_path = os.path.join(
+        args.save_path, f"bad_participants_info_{args.dattype}.csv"
+    )
+    columns = ["sub", "error"]
+    bad_subs_df = (
+        pd.read_csv(bad_csv_path, index_col=0)
+        if os.path.exists(bad_csv_path)
+        else pd.DataFrame({}, columns=columns)
+    )
+    good_csv_path = os.path.join(
+        args.save_path, f"participants_info_{args.dattype}.csv"
+    )
+    columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
+    if args.dattype != "rest":
+        columns.append("event_labels")
+    good_subs_df = (
+        pd.read_csv(good_csv_path, index_col=0)
+        if os.path.exists(good_csv_path)
+        else pd.DataFrame([{}], columns=columns)
+    )
+
+    if sub in good_subs_df["sub"].tolist() + bad_subs_df["sub"].tolist():
+        return
+
+    raw = mne.io.read_raw_fif(fif_file)
     bads = raw.info["bads"]
     if bads == []:
-        sub = sub_folder.split("-")[1]
         channels = []
         logging.info(sub_folder)
         logging.info(raw.info)
         if epoched and dattype != "rest":  # dattype in ("passive","smt"):
-            events = mne.find_events(raw)
+            try:
+                events = mne.find_events(raw)
+            except ValueError as e:
+                logging.info(f"{sub} could not be used because of {e}")
+                row = [sub, "wrong event timings"]
+                bad_subs_df = bad_subs_df.append(
+                    {key: val for key, val in zip(columns, row)}, ignore_index=True
+                )
+                bad_subs_df.to_csv(bad_csv_path)
+                return
             event_dict = {6: "auditory1", 7: "auditory2", 8: "auditory3", 9: "visual"}
             data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
-            labels = [event_dict[event] for event in events[:, -1]]
-            filename = f"{dattype}_{sub}_epoched.npy"
+            if set(events[:, -1]) == {6, 7, 8, 9}:
+                labels = [event_dict[event] for event in events[:, -1]]
+            else:
+                logging.info(f"a different event has been found in {sub}")
+                row = [sub, "wrong event found"]
+                good_subs_df = good_subs_df.append(
+                    {key: val for key, val in zip(columns, row)}, ignore_index=True
+                )
+                good_subs_df.to_csv(good_csv_path)
+                return
+
         else:
             data = raw
-            filename = f"{dattype}_{sub}.npy"
+        data = data.resample(sfreq=s_freq)
         channels.append(data.get_data(picks="mag"))
         channels.append(data.get_data(picks="planar1"))
         channels.append(data.get_data(picks="planar2"))
@@ -124,18 +175,24 @@ def prepare_data(
         if dattype == "passive":
             data = data.swapaxes(0, 1)
         logging.info(data.shape)
-        save_path = os.path.join(save_path, f"downsampled_{args.sfreq}")
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        np.save(os.path.join(save_path, filename), data)
+        np.save(out_path, data)
         row = df[df["CCID"] == sub].values.tolist()[0]
         if dattype in ("passive", "smt"):
             row.append(labels)
-        print(row)
-        print(data.shape)
     else:
         logging.info(f"{sub} was dropped because of bad channels {bads}")
-    return row
+        row = [sub, "bad channels"]
+        bad_subs_df = bad_subs_df.append(
+            {key: val for key, val in zip(columns, row)}, ignore_index=True
+        )
+        bad_subs_df.to_csv(bad_csv_path)
+        return
+
+    good_subs_df = good_subs_df.append(
+        {key: val for key, val in zip(columns, row)}, ignore_index=True
+    )
+    good_subs_df.to_csv(good_csv_path)
+    return
 
 
 if __name__ == "__main__":
@@ -145,7 +202,7 @@ if __name__ == "__main__":
         f"derivatives_{args.dattype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
-    a = Parallel(n_jobs=6)(
+    table = Parallel(n_jobs=1)(
         delayed(prepare_data)(
             sub,
             args.data_path,
@@ -156,11 +213,4 @@ if __name__ == "__main__":
             dattype=args.dattype,
         )
         for sub in os.listdir(data_path)
-    )
-    columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
-    if args.dattype != "rest":
-        columns.append("event_labels")
-    dataframe = pd.DataFrame(a, columns=columns)
-    dataframe.to_csv(
-        os.path.join(args.save_path, f"participants_info_{args.dattype}.csv")
     )

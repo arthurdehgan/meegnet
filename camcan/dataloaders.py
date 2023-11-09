@@ -177,6 +177,7 @@ def create_datasets(
                 s_freq=s_freq,
                 seg=seg,
                 psd=psd,
+                group_id=i * len(df),
             )
         )
         for i, df in enumerate(dataframes)
@@ -324,6 +325,7 @@ def load_data(
     eventclf=False,
     band="",
     psd=False,
+    group_id=None,
 ):
     """Loading data subject per subject and returns labels according to the task.
     Currently if epoched is set to True, we will load the event labels from epoched data.
@@ -337,7 +339,7 @@ def load_data(
         ), "We can not perform event classification on resting state data as it contains no events and therefore can not be epoched."
 
     n_sub = len(dataframe)
-    X, y = [], []
+    X, y, groups = [], [], []
     logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
         # subj_sizes = [] # assigned but never used ?
@@ -393,6 +395,8 @@ def load_data(
             y += [0 if e == "visual" else 1 for e in events]
         else:
             y += [1 if lab == "FEMALE" else 0] * len(data)
+        if group_id is not None:
+            groups += [group_id + i] * len(data)
 
         X.append(torch.as_tensor(np.array(data)))
     logging.info(f"Loaded {n_sub} subjects succesfully\n")
@@ -402,7 +406,9 @@ def load_data(
     else:
         return None, None
     y = torch.as_tensor(y)
-
+    if group_id is not None:
+        groups = torch.as_tensor(groups)
+        return X, y, groups
     return X, y
 
 
@@ -413,9 +419,9 @@ def load_epoched_sub(
     folder = "psd" if psd else f"downsampled_{s_freq}"
     sub_path = os.path.join(data_path, folder, f"{dattype}_{sub}_epoched.npy")
     try:
-        sub_data = np.array(
-            list(map(lambda x: zscore(x, axis=-1), np.load(sub_path)[:, chan_index]))
-        )
+        sub_data = np.load(sub_path)[:, chan_index]
+        if not psd:
+            sub_data = np.array(list(map(lambda x: zscore(x, axis=-1), sub_data)))
     except IOError:
         logging.warning(f"There was a problem loading subject {sub_path}")
         return None
@@ -459,21 +465,24 @@ def load_sub(
             folder = "psd" if psd else f"downsampled_{s_freq}"
             file_path = os.path.join(data_path, folder, f"{dattype}_{sub}.npy")
             sub_data = np.load(file_path)[chan_index]
-            step = int(seg * s_freq)
-            start = int(offset * s_freq)
-            data = []
-            for i in range(start, sub_data.shape[-1], step):
-                trial = sub_data[:, :, i : i + step]
-                if trial.shape[-1] == step:
-                    if not np.isnan(trial).any():
-                        data.append(zscore(trial, axis=-1))
-            if len(data) < 50:
-                return None
-            if n_samples is not None and n_samples <= len(data):
-                random_samples = np.random.choice(
-                    np.arange(len(data)), n_samples, replace=False
-                )
-                data = torch.Tensor(data)[random_samples]
+            if not psd:
+                step = int(seg * s_freq)
+                start = int(offset * s_freq)
+                data = []
+                for i in range(start, sub_data.shape[-1], step):
+                    trial = sub_data[:, :, i : i + step]
+                    if trial.shape[-1] == step:
+                        if not np.isnan(trial).any():
+                            data.append(zscore(trial, axis=-1))
+                if len(data) < 50:
+                    return None
+                if n_samples is not None and n_samples <= len(data):
+                    random_samples = np.random.choice(
+                        np.arange(len(data)), n_samples, replace=False
+                    )
+                    data = torch.Tensor(data)[random_samples]
+            else:
+                data = sub_data
 
         except IOError:
             logging.warning(f"There was a problem loading subject file for {sub}")

@@ -5,8 +5,6 @@ Arguments should include:
     - The task (subject identification by default)
     - do we want crossval or not ?
 
-
-
 So we have to code:
     - output space and way to load data depending on the task (probably handled by cnn.py?
     - load the data ONCE
@@ -16,20 +14,17 @@ So we have to code:
         - in the end for this section we should have 12 scores
     -
 
-
-ACTUALLY MEYBE PUT ALL THE CHANGES IN CNN.PY RENAME IT AND CALL IT A DAY: We just:
+ACTUALLY MAYBE PUT ALL THE CHANGES IN CNN.PY RENAME IT AND CALL IT A DAY: We just:
     - added stuff to prepare_network
     - solved a few todos (datasets in functiond efinition as well as net option)
     - added a loop for all the benchmarks to run.
 
 """
-from itertools import product
 import os
 import logging
-import torch
 import numpy as np
 from scipy.io import loadmat
-from torch.utils.data import ConcatDataset, TensorDataset
+from torch.utils.data import ConcatDataset
 from camcan.params import TIME_TRIAL_LENGTH
 from camcan.dataloaders import create_loader, create_datasets, load_sets
 from camcan.network import FullNet, MLP, VGG16_NET, vanPutNet, EEGNet

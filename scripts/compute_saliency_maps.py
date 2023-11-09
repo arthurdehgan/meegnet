@@ -1,30 +1,154 @@
 import os
 import logging
+from time import time
 import numpy as np
 import torch
 import pandas as pd
-from scipy.stats import zscore
-from scipy.io import loadmat
-
-# from scipy.signal import welch
+from joblib import Parallel, delayed
 from camcan.parsing import parser
 from camcan.params import TIME_TRIAL_LENGTH
 from camcan.utils import load_checkpoint, cuda_check
 from camcan.network import create_net
 from camcan.dataloaders import load_data
-from camcan.misc_functions import get_positive_negative_saliency
+from camcan.misc_functions import (
+    get_positive_negative_saliency,
+    compute_saliency_based_psd,
+)
 from pytorch_grad_cam import GuidedBackpropReLUModel
 
 DEVICE = cuda_check()
 CHANNELS = ("MAG", "PLANAR1", "PLANAR2")
 
 
+def compute_all(sub, sal_path, args):
+    # existing_paths = []
+    # for j, sal_type in enumerate(("pos", "neg")):
+    #     if not args.eventclf:
+    #         for label in labels:
+    #             lab = "" if args.subclf else f"_{label}"
+    #             sal_filepath = os.path.join(
+    #                 sal_path,
+    #                 f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
+    #             )
+    #             existing_paths.append(os.path.exists(sal_filepath))
+    #     else:
+    #         for i, label in enumerate(labels):
+    #             sal_filepath = os.path.join(
+    #                 sal_path,
+    #                 f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
+    #             )
+    #             existing_paths.append(os.path.exists(sal_filepath))
+    # if all(existing_paths):
+    #     return
+
+    data, targets = load_data(
+        dataframe.loc[dataframe["sub"] == sub],
+        args.data_path,
+        epoched=args.epoched,
+        seed=args.seed,
+        s_freq=args.sfreq,
+        chan_index=chan_index,
+        dattype=args.dattype,
+        eventclf=args.eventclf,
+    )
+    if data is None or targets is None:
+        return
+    if args.eventclf:
+        target_saliencies = [[[], []], [[], []]]
+        target_psd = [[[], []], [[], []]]
+    else:
+        target_saliencies = [[], []]
+        target_psd = [[], []]
+    for trial, label in zip(data, targets):
+        X = trial[np.newaxis].type(torch.FloatTensor).to(DEVICE)
+        preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
+        pred = preds.argmax().item()
+        confidence = preds.max()
+        if args.subclf:
+            label = int(dataframe[dataframe["sub"] == sub].index[0])
+        if confidence >= args.confidence and pred == label:
+            guided_grads = GBP(X.to(DEVICE), label)
+            guided_grads = np.rollaxis(guided_grads, 2, 0)
+            pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
+            if args.eventclf:
+                target_saliencies[label][0].append(pos_saliency)
+                target_saliencies[label][1].append(neg_saliency)
+                if args.compute_psd:
+                    target_psd[label][0].append(
+                        compute_saliency_based_psd(
+                            pos_saliency, trial, args.w_size, args.sfreq
+                        )
+                    )
+                if args.compute_psd:
+                    target_psd[label][1].append(
+                        compute_saliency_based_psd(
+                            neg_saliency, trial, args.w_size, args.sfreq
+                        )
+                    )
+            else:
+                target_saliencies[0].append(pos_saliency)
+                target_saliencies[1].append(neg_saliency)
+                if args.compute_psd:
+                    target_psd[0].append(
+                        compute_saliency_based_psd(
+                            pos_saliency, trial, args.w_size, args.sfreq
+                        )
+                    )
+                if args.compute_psd:
+                    target_psd[1].append(
+                        compute_saliency_based_psd(
+                            neg_saliency, trial, args.w_size, args.sfreq
+                        )
+                    )
+
+        for j, sal_type in enumerate(("pos", "neg")):
+            if not args.eventclf:
+                lab = "" if args.subclf else f"_{labels[label]}"
+                sal_filepath = os.path.join(
+                    sal_path,
+                    f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
+                )
+                if not os.path.exists(sal_filepath):
+                    np.save(sal_filepath, np.array(target_saliencies[j]))
+            else:
+                for i, label in enumerate(labels):
+                    sal_filepath = os.path.join(
+                        sal_path,
+                        f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
+                    )
+                    if not os.path.exists(sal_filepath):
+                        np.save(sal_filepath, np.array(target_saliencies[i][j]))
+            if args.compute_psd:
+                if not args.eventclf:
+                    lab = "" if args.subclf else f"_{labels[label]}"
+                    psd_filepath = os.path.join(
+                        psd_path,
+                        f"{sub}{lab}_{sal_type}_psd_{args.confidence}confidence.npy",
+                    )
+                    if not os.path.exists(sal_filepath):
+                        np.save(psd_filepath, np.array(target_psd[j]))
+                else:
+                    for i, label in enumerate(labels):
+                        psd_filepath = os.path.join(
+                            psd_path,
+                            f"{sub}_{labels[i]}_{sal_type}_psd_{args.confidence}confidence.npy",
+                        )
+                    if not os.path.exists(sal_filepath):
+                        np.save(psd_filepath, np.array(target_psd[i][j]))
+
+
 if __name__ == "__main__":
 
     parser.add_argument(
-        "--use-windows",
+        "--compute-psd",
         action="store_true",
-        help="wether or not to use saliency windows generated by guided backprop.",
+        help="wether or not to to compute psd using saliency windows",
+    )
+    parser.add_argument(
+        "--w-size",
+        type=int,
+        default=300,
+        help="The window size for saliency based psd computation.",
     )
     parser.add_argument(
         "--confidence",
@@ -109,6 +233,11 @@ if __name__ == "__main__":
     else:
         n_outputs = 2
 
+    if args.compute_psd:
+        psd_path = os.path.join(args.save_path, "saliency_based_psds", name)
+        if not os.path.exists(psd_path):
+            os.makedirs(psd_path)
+
     sal_path = os.path.join(args.save_path, "saliency_maps", name)
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
@@ -128,78 +257,9 @@ if __name__ == "__main__":
         .sample(frac=1, random_state=args.seed)
         .reset_index(drop=True)[: args.max_subj]
     )
-    subj_list = dataframe["sub"]
+    subj_list = dataframe["sub"][
+        513:
+    ]  # TODO remove starting point ! did this because the computation were interrupted
 
     for i, sub in enumerate(subj_list):
-        existing_paths = []
-        for j, sal_type in enumerate(("pos", "neg")):
-            if not args.eventclf:
-                for label in labels:
-                    lab = "" if args.subclf else f"_{label}"
-                    sal_filepath = os.path.join(
-                        sal_path,
-                        f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
-                    )
-                    existing_paths.append(os.path.exists(sal_filepath))
-            else:
-                for i, label in enumerate(labels):
-                    sal_filepath = os.path.join(
-                        sal_path,
-                        f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
-                    )
-                    existing_paths.append(os.path.exists(sal_filepath))
-        if all(existing_paths):
-            continue
-
-        data, targets = load_data(
-            dataframe.loc[dataframe["sub"] == sub],
-            args.data_path,
-            epoched=args.epoched,
-            seed=args.seed,
-            s_freq=args.sfreq,
-            chan_index=chan_index,
-            dattype=args.dattype,
-            eventclf=args.eventclf,
-        )
-        if data is None or targets is None:
-            continue
-        if args.eventclf:
-            target_saliencies = [[[], []], [[], []]]
-        else:
-            target_saliencies = [[], []]
-        for trial, label in zip(data, targets):
-            X = trial[np.newaxis].type(torch.FloatTensor).to(DEVICE)
-            preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
-            pred = preds.argmax().item()
-            confidence = preds.max()
-            if args.subclf:
-                label = int(dataframe[dataframe["sub"] == sub].index[0])
-            if confidence >= args.confidence and pred == label:
-                guided_grads = GBP(X.to(DEVICE), label)
-                guided_grads = np.rollaxis(guided_grads, 2, 0)
-                pos_saliency, neg_saliency = get_positive_negative_saliency(
-                    guided_grads
-                )
-                if args.eventclf:
-                    target_saliencies[label][0].append(pos_saliency)
-                    target_saliencies[label][1].append(neg_saliency)
-                else:
-                    target_saliencies[0].append(pos_saliency)
-                    target_saliencies[1].append(neg_saliency)
-
-        for j, sal_type in enumerate(("pos", "neg")):
-            if not args.eventclf:
-                lab = "" if args.subclf else f"_{labels[label]}"
-                sal_filepath = os.path.join(
-                    sal_path,
-                    f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
-                )
-                if not os.path.exists(sal_filepath):
-                    np.save(sal_filepath, np.array(target_saliencies[j]))
-            else:
-                for i, label in enumerate(labels):
-                    sal_filepath = os.path.join(
-                        sal_path,
-                        f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
-                    )
-                    np.save(sal_filepath, np.array(target_saliencies[i][j]))
+        compute_all(sub, sal_path, args)

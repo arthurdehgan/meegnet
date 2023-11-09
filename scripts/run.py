@@ -1,11 +1,9 @@
-from itertools import product
 import os
 import logging
 import numpy as np
-import torch
 import pandas as pd
 from scipy.io import loadmat
-from torch.utils.data import ConcatDataset, TensorDataset
+from torch.utils.data import ConcatDataset
 from camcan.params import TIME_TRIAL_LENGTH
 from camcan.dataloaders import create_loader, create_datasets, load_sets
 from camcan.network import create_net
@@ -110,11 +108,11 @@ def train_evaluate(
             & (df["lr"] == float(args.lr)),
         ]
         if check[f"fold{fold}"].items() != 0:
-            return
+            return None
 
     name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.sensors}"
     suffixes = ""
-    if args.net_option == "custom_net":
+    if net_option == "custom_net":
         if args.batchnorm:
             suffixes += "_BN"
         if args.maxpool != 0:
@@ -136,16 +134,15 @@ def train_evaluate(
     elif args.feature == "cosp":
         # TODO
         pass
+    else:
+        pass
 
     if args.sensors == "MAG":
         n_channels = 102
-        chan_index = [0]
     elif args.sensors == "GRAD":
         n_channels = 204
-        chan_index = [1, 2]
-    elif args.sensors == "ALL":
+    else:
         n_channels = 306
-        chan_index = [0, 1, 2]
 
     input_size = (
         (1, n_channels, trial_length)
@@ -300,7 +297,7 @@ if __name__ == "__main__":
     elif args.sensors == "GRAD":
         n_channels = 204
         chan_index = [1, 2]
-    elif args.sensors == "ALL":
+    else:
         n_channels = 306
         chan_index = [0, 1, 2]
 
@@ -329,7 +326,6 @@ if __name__ == "__main__":
             args.train_size,
             args.max_subj,
             chan_index,
-            args.feature,
             seed=args.seed,
             debug=args.debug,
             printmem=args.printmem,

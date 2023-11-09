@@ -1,17 +1,19 @@
 """
 Created on Thu Oct 21 11:09:09 2017
-
-@author: Utku Ozbulak - github.com/utkuozbulak
 """
 import os
+from time import time
 import copy
 import numpy as np
 from PIL import Image, ImageFilter
 import matplotlib.cm as mpl_color_map
-
+from collections.abc import Iterable
+from joblib import Parallel, delayed
 import torch
+from pytorch_grad_cam import GuidedBackpropReLUModel
 from torch.autograd import Variable
 from torchvision import models
+from camcan.utils import compute_psd
 
 
 def convert_to_grayscale(im_as_arr):
@@ -202,6 +204,81 @@ def recreate_image(im_as_var):
 
     recreated_im = np.uint8(recreated_im).transpose(1, 2, 0)
     return recreated_im
+
+
+def choose_best_window(data, fs=500, w_size=300):
+    """
+    data: array
+        Must be of size k x n_samples. k can be sensor dimension or trial dimension.
+    w_size: int
+        The size of the window in ms
+    """
+    # Generate masks over time samples where sample is superior to 2x std of the vector
+    masks = [dat >= (np.mean(dat) + np.std(dat) * 2) for dat in data]
+    w_size = int(w_size * fs / 1000)
+    best_window_idx = Parallel(n_jobs=-1)(
+        delayed(best_window)(mask, w_size) for mask in masks
+    )
+    return best_window_idx
+
+
+def best_window(mask, w_size):
+    # create an array of all the possible windows in the trial with their mask values
+    windows = np.array([mask[i : i + w_size] for i in range(len(mask) - w_size)])
+    # get the sum of mask values in each windows. High number indicates lots of True values
+    values = [sum(window) for window in windows]
+    if max(values) == 0:
+        return None
+    # best window is where the values are the highest
+    best_window_index = np.where(values == max(values))[0]
+    # below is to handle if there are multiple best windows with the same values, in which case we
+    # try to check if they overlap, and keep only if they are separated.
+    if len(best_window_index) > 1:
+        idx_range = best_window_index[-1] - best_window_index[0]
+        # duration betweeen first and last window must be w_size/2
+        if idx_range <= int(w_size / 2):
+            # Then best would be in the middle of all this
+            best = int(len(best_window_index) / 2)
+            return best_window_index[best]
+        elif idx_range <= w_size:
+            return (best_window_index[0], best_window_index[-1])
+        else:
+            best = int(len(best_window_index) / 2)
+            return (best_window_index[0], best, best_window_index[-1])
+    else:
+        # only one window, just add it.
+        return best_window_index[0]
+
+
+def compute_single_sal_psd(index, trial, w_size, fs):
+    if isinstance(index, Iterable):
+        tmp = []
+        for idx in index:
+            window = trial[idx : idx + w_size]
+            while len(window.shape) < 3:
+                window = window[np.newaxis, :]
+            tmp.append(compute_psd(window, fs=fs))
+        return np.mean(tmp, axis=0)
+    else:
+        if index is not None:
+            window = trial[index : index + w_size]
+            while len(window.shape) < 3:
+                window = window[np.newaxis, :]
+            return compute_psd(window, fs=fs)
+        else:
+            return [None] * 7
+
+
+def compute_saliency_based_psd(saliency, trial, w_size, fs):
+    chan_data = []
+    for i, chan in enumerate(saliency):
+        windows_idx = choose_best_window(chan, fs, w_size)
+        transformed_data = Parallel(n_jobs=1)(
+            delayed(compute_single_sal_psd)(index, trial[i, j], w_size, fs)
+            for j, index in enumerate(windows_idx)
+        )
+        chan_data.append(np.array(transformed_data).squeeze())
+    return np.array(chan_data)
 
 
 def get_positive_negative_saliency(gradient):

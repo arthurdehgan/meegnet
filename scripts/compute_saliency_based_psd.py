@@ -8,102 +8,13 @@ from camcan.params import TIME_TRIAL_LENGTH
 from camcan.utils import compute_psd
 from camcan.parsing import parser
 from camcan.network import create_net
-from camcan.misc_functions import get_positive_negative_saliency
+from camcan.misc_functions import get_positive_negative_saliency, compute_sal_psd
 from camcan.utils import load_checkpoint, cuda_check
 from visu_filter_outputs import load_data
 
 
 DEVICE = "cpu"
 LABELS = ["image", "sound"]  # image is label 0 and sound label 1
-
-
-def choose_best_window(data, fs=500, w_size=300):
-    """
-    data: array
-        Must be of size k x n_samples. k can be sensor dimension or trial dimension.
-    w_size: int
-        The size of the window in ms
-    """
-    masks = [dat >= (np.mean(dat) + np.std(dat) / 2) for dat in data]
-    w_size = int(w_size * fs / 1000)
-    best_window_idx = []
-    for mask in masks:
-        windows = np.array([mask[i : i + w_size] for i in range(len(mask) - w_size)])
-        values = [sum(window) for window in windows]
-        best_window_index = np.where(values == max(values))[0]
-        if len(best_window_index) > 1:
-            idx_range = best_window_index[-1] - best_window_index[0]
-            if idx_range <= 150 * fs / 1000:  # 150ms betweeen first and last window
-                # Then best would be in the middle of all this
-                best = int(len(best_window_index) / 2)
-                best_window_idx.append(best_window_index[best])
-            elif idx_range <= 300 * fs / 1000:  # 300ms
-                best_window_idx.append((best_window_index[0], best_window_index[-1]))
-            else:
-                best = int(len(best_window_index) / 2)
-                best_window_idx.append(
-                    (best_window_index[0], best, best_window_index[-1])
-                )
-        else:
-            best_window_idx.append(best_window_index[0])
-    return best_window_idx
-
-
-def compute_psd_windows(saliency):
-    chan_data = []
-    for chan in saliency:
-        windows_idx = choose_best_window(chan)
-        transformed_data = []
-        for j, index in enumerate(windows_idx):
-            if isinstance(index, Iterable):
-                tmp = []
-                for idx in index:
-                    tmp.append(
-                        compute_psd(
-                            chan[j, idx : idx + w_size].reshape(1, w_size),
-                            fs=fs,
-                        )
-                    )
-                bands = np.mean(tmp, axis=0)
-            else:
-                bands = compute_psd(
-                    chan[j, index : index + w_size].reshape(1, w_size),
-                    fs=fs,
-                )
-            transformed_data.append(bands)
-        chan_data.append(np.array(transformed_data).squeeze())
-    return np.array(chan_data)
-
-
-def compute_the_good_stuff(
-    net, trial, y, w_size, fs, use_windows=False, sal_option="pos"
-):
-    X = torch.Tensor(trial[np.newaxis])
-    X.requires_grad_(True)
-    # If confidence is good enough we use the trial for visualization
-    confidence = torch.nn.Softmax(dim=1)(net(X)).max()
-    if confidence >= 0.95:
-        if use_windows:
-            GBP = GuidedBackprop(net)
-            guided_grads = GBP.generate_gradients(X, y)
-            pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
-            if sal_option == "pos":
-                saliency = pos_saliency
-            elif sal_option == "neg":
-                saliency = neg_saliency
-            elif sal_option == "both":
-                saliencies = (
-                    compute_psd_windows(pos_saliency),
-                    compute_psd_windows(neg_saliency),
-                )
-                return saliencies
-            else:
-                saliency = pos_saliency + neg_saliency
-            return compute_psd_windows(saliency)
-        else:
-            return compute_psd(trial, fs=fs)
-    else:
-        return None
 
 
 if __name__ == "__main__":
@@ -157,9 +68,17 @@ if __name__ == "__main__":
     if args.maxpool != 0:
         suffixes += f"_maxpool{args.maxpool}"
 
-    # WARNING: using an older version of networks: fold was saved from 0 to 4 instead of 1 to 5 !! TODO
-    name = f"{args.model_name}_{args.seed}_fold{args.fold}_{args.sensors}_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
-    name += suffixes
+    fold = args.fold + 1
+    name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
+    suffixes = ""
+    if args.net_option == "custom_net":
+        if args.batchnorm:
+            suffixes += "_BN"
+        if args.maxpool != 0:
+            suffixes += f"_maxpool{args.maxpool}"
+
+        name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+        name += suffixes
 
     if args.feature == "bins":
         trial_length = 241
@@ -217,7 +136,7 @@ if __name__ == "__main__":
             examples = np.array(examples)
             for targ in np.unique(targets):
                 chan_data = Parallel(n_jobs=-1)(
-                    delayed(compute_the_good_stuff)(
+                    delayed(compute_sal_psd)(
                         net,
                         trial,
                         y,
