@@ -22,7 +22,7 @@ SAVE_PATH = "/home/arthur/data/camcan/spectral"
 DATA_PATH = "/home/arthur/data/camcan/data"
 # DATA_TYPES = ["rest", "passive", "smt"]
 # CLEAN_TYPES = ["mf", "transdef_mf", "raw"]
-DATA_TYPES = ["rest"]
+DATA_TYPES = ["passive"]
 CLEAN_TYPES = ["transdef_mf"]
 
 

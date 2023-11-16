@@ -28,11 +28,12 @@ def group1(age):
 
 FREQ_DICT = {
     "Delta": (1, 4),
-    "Theta": (5, 8),
-    "Alpha": (9, 15),
-    "Beta": (16, 30),
-    "Gamma1": (31, 60),
-    "Gamma2": (61, 90),
+    "Theta": (4, 8),
+    "Alpha": (8, 15),
+    "Beta": (15, 30),
+    "Gamma1": (30, 60),
+    "Gamma2": (60, 90),
+    "Gamma3": (90, 120),
 }
 
 SF = 1000  # sampling frequency

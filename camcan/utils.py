@@ -3,12 +3,97 @@ import sys
 import logging
 from time import time
 import torch
+import mne
+import numpy as np
+import pandas as pd
 from torch import nn, optim
 from torch.autograd import Variable
-import numpy as np
+from mne.time_frequency.multitaper import psd_array_multitaper
 from scipy.io import savemat, loadmat
-import pandas as pd
+from scipy.signal import welch
 from path import Path as path
+
+
+def extract_bands(data: np.array, f: list = None) -> np.array:
+    """extract_bands.
+
+    Parameters
+    ----------
+    data : np.array
+        the data after it has been transformed to frequency space. Of shape n_samples x n_channels x n_bins
+        or n_channels x n_bins
+    f : list
+        the list of bins. id set to None, a list of all bins every .5 from 0 to n_bins will be generated.
+
+    Returns
+    -------
+    data : np.array
+        the data after averaging for frequency bands of shape n_samples x n_channels x 7 or n_channels x 7 depending
+        on input shape.
+        bands are defined as follow:
+            delta: .5 to 4 Hz
+            theta: 4 to 8 Hz
+            alpha: 12 to 30 Hz
+            beta: 30 to 60 Hz
+            gamma1: 30 to 60 Hz
+            gamma2: 60 to 90 Hz
+            gamma3: 90 to 120 Hz
+
+    """
+    if f is None:
+        f = np.asarray([float(i / 2) for i in range(data.shape[-1])])
+    data = [
+        data[..., (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
+        data[..., (f >= 4) * (f <= 8)].mean(axis=-1)[..., None],
+        data[..., (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
+        data[..., (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
+        data[..., (f >= 30) * (f <= 60)].mean(axis=-1)[..., None],
+        data[..., (f >= 60) * (f <= 90)].mean(axis=-1)[..., None],
+        data[..., (f >= 90) * (f <= 120)].mean(axis=-1)[..., None],
+    ]
+    data = np.concatenate(data, axis=-1)
+    return data
+
+
+def compute_psd(data: np.array, fs: int, option: str = "multitaper"):
+    """compute_psd.
+
+    Parameters
+    ----------
+    data : np.array
+        The data to compute psd on. Must be of shape n_channels x n_samples.
+    fs : int
+        The sampling frequency.
+    option : str
+        method option for the psd computation. Can be welch or multitaper.
+    """
+    """"""
+    mne.set_log_level(verbose=False)
+    if option == "multitaper":
+        psd, f = psd_array_multitaper(data, sfreq=fs, fmax=150)
+    elif option == "welch":
+        f, psd = welch(data, fs=fs)
+    else:
+        raise "Error: invalid option for psd computation."
+    return extract_bands(psd, f)
+
+
+def cuda_check():
+    if torch.cuda.is_available():
+        return "cuda"
+    else:
+        logging.warning("Warning: gpu device not available")
+        return "cpu"
+
+
+def check_PD(mat):
+    if len(mat.shape) > 2:
+        out = []
+        for submat in mat:
+            out.append(check_PD(submat))
+        return np.array(out)
+    else:
+        return np.all(np.linalg.eigvals(mat) > 0)
 
 
 def accuracy(y_pred, target):
@@ -39,9 +124,10 @@ def train(
     debug=False,
     timing=False,
     mode="overwrite",
-    p=20,
+    patience=20,
     lr=0.00001,
     save_path="./models",
+    permute_labels=False,
 ):
     # The train function trains and evaluates the network multiple times and prints the
     # loss and accuracy for each batch and each epoch. Everything is saved in a dictionnary
@@ -60,46 +146,43 @@ def train(
 
     # Load if asked and if the checkpoint exists in the specified path
     epoch = 0
-    if load_model and os.path.exists(model_filepath):
-        epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
-        net.load_state_dict(net_state)
-        optimizer.load_state_dict(optimizer_state)
-        results = loadmat(model_filepath[:-2] + "mat")
-        best_vacc = results["acc_score"]
-        best_vloss = results["loss_score"]
-        valid_accs = results["acc"]
-        train_accs = results["train_acc"]
-        valid_losses = results["valid_loss"]
-        train_losses = results["train_loss"]
-        best_epoch = results["best_epoch"]
-        epoch = results["n_epochs"]
-        if mode == "continue":
-            j = 0
-            lp = p
-        else:
-            j = results["current_patience"]
-            lp = results["patience"]
+    if load_model:
+        if os.path.exists(model_filepath):
+            epoch, net_state, optimizer_state = load_checkpoint(model_filepath)
+            net.load_state_dict(net_state)
+            optimizer.load_state_dict(optimizer_state)
+            results = loadmat(model_filepath[:-2] + "mat")
+            best_vacc = results["acc_score"]
+            best_vloss = results["loss_score"]
+            valid_accs = results["acc"]
+            train_accs = results["train_acc"]
+            valid_losses = results["valid_loss"]
+            train_losses = results["train_loss"]
+            best_epoch = results["best_epoch"]
+            epoch = results["n_epochs"]
+            if mode == "continue":
+                patience_state = 0
+                loaded_patience = patience
+            else:
+                patience_state = results["current_patience"]
+                loaded_patience = results["patience"]
 
-        if lp != p:
-            logging.warning(
-                f"Warning: current patience ({p}) is different from loaded patience ({lp})."
-            )
-            answer = input("Would you like to continue anyway ? (y/n)")
-            while answer not in ["y", "n"]:
+            if loaded_patience != patience:
+                logging.warning(
+                    f"Warning: current patience ({patience}) is different from loaded patience ({loaded_patience})."
+                )
                 answer = input("Would you like to continue anyway ? (y/n)")
-            if answer == "n":
-                sys.exit()
-
-    elif load_model:
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        logging.warning(
-            f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
-        )
-        j = 0
-
+                while answer not in ["y", "n"]:
+                    answer = input("Would you like to continue anyway ? (y/n)")
+                if answer == "n":
+                    sys.exit()
+        else:
+            logging.warning(
+                f"Warning: Couldn't find any checkpoint named {net.name} in {save_path}"
+            )
+            patience_state = 0
     else:
-        j = 0
+        patience_state = 0
 
     train_accs = []
     valid_accs = []
@@ -111,8 +194,8 @@ def train(
     best_epoch = 0
     net.train()
 
-    # The training and evaluation loop with patience early stop. j tracks the patience state.
-    while j < p:
+    # The training and evaluation loop with patience early stop. patience_state tracks the patience state.
+    while patience_state < patience:
         epoch += 1
         n_batches = len(trainloader)
         if timing:
@@ -121,11 +204,15 @@ def train(
             optimizer.zero_grad()
             X, y = batch
 
+            if permute_labels:
+                idx = torch.randperm(y.nelement())
+                y = y.view(-1)[idx].view(y.size())
+
             y = y.view(-1).to(device)
             X = X.view(-1, *net.input_size).to(device)
 
             net.train()
-            out = net.forward(X)
+            out = net.forward(X.float())
             loss = criterion(out, Variable(y.long()))
             loss.backward()
             optimizer.step()
@@ -153,15 +240,15 @@ def train(
         valid_loss, valid_acc = evaluate(net, validloader, criterion)
 
         train_accs.append(train_acc)
+        valid_accs.append(valid_acc)
         train_losses.append(train_loss)
         valid_losses.append(valid_loss)
-        valid_accs.append(valid_acc)
         if valid_loss < best_vloss:
             best_vacc = valid_acc
             best_vloss = valid_loss
             best_net = net
             best_epoch = epoch
-            j = 0
+            patience_state = 0
             if save_model:
                 checkpoint = {
                     "epoch": epoch + 1,
@@ -169,9 +256,8 @@ def train(
                     "optimizer": optimizer.state_dict(),
                 }
                 torch.save(checkpoint, model_filepath)
-                net.save_model(save_path)
         else:
-            j += 1
+            patience_state += 1
 
         logging.info("Epoch: {}".format(epoch))
         logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
@@ -186,10 +272,12 @@ def train(
                 "train_loss": train_losses,
                 "best_epoch": best_epoch,
                 "n_epochs": epoch,
-                "patience": p,
-                "current_patience": j,
+                "patience": patience,
+                "current_patience": patience_state,
             }
-            savemat(save_path + net.name + ".mat", results)
+            savemat(os.path.join(save_path, net.name + ".mat"), results)
+        if debug and epoch >= 5:
+            break
 
     return net
 
@@ -212,11 +300,11 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
             y = y.view(-1).to(device)
             X = X.view(-1, *net.input_size).to(device)
 
-            out = net.forward(X)
+            out = net.forward(X.float())
             loss = criterion(out, Variable(y.long()))
             acc = accuracy(out, y)
             n = y.size(0)
-            LOSSES += loss.sum().data.cpu().numpy() * n
+            LOSSES += loss.detach().sum().data.cpu().numpy() * n
             ACCURACY += acc.sum().data.cpu().numpy() * n
             COUNTER += n
         floss = LOSSES / float(COUNTER)
@@ -234,7 +322,7 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
         try:
             psd.append(loadmat(file_path)["data"].ravel())
         except IOError:
-            print(sub, "Not Found")
+            logging.info(sub, "Not Found")
     return np.array(psd), np.array(labels)
 
 
