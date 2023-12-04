@@ -18,52 +18,79 @@ BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
-    """Wraps another Sampler to yield an infinite stream."""
+   """
+   Wraps another Sampler to yield an infinite stream.
 
-    def __init__(self, sampler):
-        self.sampler = sampler
+   Parameters
+   ----------
+   sampler : torch.utils.data.Sampler
+       The sampler to be wrapped.
+   """
+   def __init__(self, sampler):
+       self.sampler = sampler
 
-    def __iter__(self):
-        while True:
-            for batch in self.sampler:
-                yield batch
+   def __iter__(self):
+       while True:
+           for batch in self.sampler:
+               yield batch
 
 
 class InfiniteDataLoader:
-    def __init__(
-        self, dataset, batch_size, num_workers, pin_memory=False, weights=None
-    ):
-        super().__init__()
+   """
+   Creates an infinite data loader.
 
-        if weights is not None:
-            sampler = torch.utils.data.WeightedRandomSampler(
-                weights, replacement=True, num_samples=batch_size
-            )
-        else:
-            sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
+   Parameters
+   ----------
+   dataset : torch.utils.data.Dataset
+       The dataset to be loaded.
+   batch_size : int
+       The size of the batches to be loaded.
+   num_workers : int, optional
+       The number of workers to use for loading the data, by default 0.
+   pin_memory : bool, optional
+       If True, the data loader will copy tensors into CUDA pinned memory before returning them. This can make data transfer faster, but requires more memory.
+   weights : torch.Tensor, optional
+       A 1D tensor assigning a weight to each sample in the dataset. If not provided, all samples are assumed to have the same weight.
 
-        if weights is None:
-            weights = torch.ones(len(dataset))
+   Returns
+   -------
+   InfiniteDataLoader
+       An infinite data loader.
+   """
+   def __init__(
+       self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
+   ):
+       super().__init__()
 
-        batch_sampler = torch.utils.data.BatchSampler(
-            sampler, batch_size=batch_size, drop_last=True
-        )
+       if weights is not None:
+           sampler = torch.utils.data.WeightedRandomSampler(
+               weights, replacement=True, num_samples=batch_size
+           )
+       else:
+           sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
 
-        self._infinite_iterator = iter(
-            torch.utils.data.DataLoader(
-                dataset,
-                num_workers=num_workers,
-                batch_sampler=_InfiniteSampler(batch_sampler),
-                pin_memory=pin_memory,
-            )
-        )
+       if weights is None:
+           weights = torch.ones(len(dataset))
 
-    def __iter__(self):
-        while True:
-            yield next(self._infinite_iterator)
+       batch_sampler = torch.utils.data.BatchSampler(
+           sampler, batch_size=batch_size, drop_last=True
+       )
 
-    def __len__(self):
-        raise ValueError
+       self._infinite_iterator = iter(
+           torch.utils.data.DataLoader(
+               dataset,
+               num_workers=num_workers,
+               batch_sampler=_InfiniteSampler(batch_sampler),
+               pin_memory=pin_memory,
+           )
+       )
+
+   def __iter__(self):
+       while True:
+           yield next(self._infinite_iterator)
+
+   def __len__(self):
+       raise ValueError
 
 
 # End of domainBed code
