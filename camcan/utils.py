@@ -79,11 +79,20 @@ def compute_psd(data: np.array, fs: int, option: str = "multitaper"):
 
 
 def cuda_check():
-    if torch.cuda.is_available():
-        return "cuda"
-    else:
-        logging.warning("Warning: gpu device not available")
-        return "cpu"
+   """
+   Checks if a CUDA device is available and returns it.
+
+   Returns
+   -------
+   torch.device
+       A CUDA device if one is available, otherwise a CPU device.
+   """
+   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+   if device.type == 'cuda':
+       logging.info('CUDA is available! Training on GPU.')
+   else:
+       logging.info('CUDA is not available. Training on CPU.')
+   return device
 
 
 def check_PD(mat):

@@ -10,12 +10,51 @@ from camcan.network import create_net
 from camcan.utils import train, load_checkpoint, cuda_check
 from camcan.parsing import parser
 
+####################
+# DEBUG PARAMETERS #
+####################
+
+DEBUG = {"dropout": 0.5,
+         "dropout_option": "same",
+         "patience": 1}
+
+##################
+# DEFAULT VALUES #
+##################
+
+TRIAL_LENGTH_BINS = 241
+TRIAL_LENGTH_BANDS = 5
+N_CHANNELS_MAG = 102
+N_CHANNELS_GRAD = 204
+N_CHANNELS_OTHER = 306
+
 ##############
 # CUDA CHECK #
 ##############
 
 DEVICE = cuda_check()
 
+#######################
+# Torchsummary checks #
+#######################
+
+try:
+   from torchinfo import summary as model_summary
+except ImportError:
+   logging.warning("Warning: Error loading torchinfo")
+
+def get_df_status(file_path, args) -> pd.DataFrame:
+    df = pd.read_csv(file_path, index_col=0)
+    return df.loc[
+        (df["f"] == float(args.filters))
+        & (df["linear"] == float(args.linear))
+        & (df["d"] == float(args.dropout))
+        & (df["hlayers"] == float(args.hlayers))
+        & (df["nchan"] == float(args.nchan))
+        & (df["batchnorm"] == float(args.batchnorm))
+        & (df["maxpool"] == float(args.maxpool))
+        & (df["bs"] == float(args.batch_size))
+        & (df["lr"] == float(args.lr))]
 
 def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
     """Will call train_evaluate function a folds amount of times and return a list of
@@ -95,19 +134,8 @@ def train_evaluate(
     """
     rs_csv_path = os.path.join(args.save_path, f"tested_params_seed{args.seed}.csv")
     if os.path.exists(rs_csv_path) and skip_done and args.randomsearch:
-        df = pd.read_csv(rs_csv_path, index_col=0)
-        check = df.loc[
-            (df["f"] == float(args.filters))
-            & (df["linear"] == float(args.linear))
-            & (df["d"] == float(args.dropout))
-            & (df["hlayers"] == float(args.hlayers))
-            & (df["nchan"] == float(args.nchan))
-            & (df["batchnorm"] == float(args.batchnorm))
-            & (df["maxpool"] == float(args.maxpool))
-            & (df["bs"] == float(args.batch_size))
-            & (df["lr"] == float(args.lr)),
-        ]
-        if check[f"fold{fold}"].items() != 0:
+        check = get_df_status(rs_csv_path, args)
+        if next(check[f"fold{fold}"].items())[1] != 0:
             return None
 
     name = f"{args.model_name}_{args.seed}_fold{fold+1}_{args.sensors}"
@@ -123,9 +151,9 @@ def train_evaluate(
 
     # TODO maybe use a dictionnary in order to store these values or use switch case
     if args.feature == "bins":
-        trial_length = 241
+        trial_length = TRIAL_LENGTH_BINS
     elif args.feature == "bands":
-        trial_length = 5
+        trial_length = TRIAL_LENGTH_BANDS
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
     elif args.feature == "cov":
@@ -138,16 +166,16 @@ def train_evaluate(
         pass
 
     if args.sensors == "MAG":
-        n_channels = 102
+        n_channels = N_CHANNELS_MAG
     elif args.sensors == "GRAD":
-        n_channels = 204
+        n_channels = N_CHANNELS_GRAD
     else:
-        n_channels = 306
+        n_channels = N_CHANNELS_OTHER
 
     input_size = (
         (1, n_channels, trial_length)
         if args.flat
-        else (n_channels // 102, 102, trial_length)
+        else (n_channels // N_CHANNELS_MAG, N_CHANNELS_MAG, trial_length)
     )
 
     if args.mode == "overwrite":
@@ -164,9 +192,9 @@ def train_evaluate(
     model_filepath = os.path.join(args.save_path, net.name + ".pt")
 
     logging.info(net.name)
-    if torchsum:
-        logging.info(summary(net, input_size))
-    else:
+    try: 
+        logging.info(model_summary(net, input_size))
+    except NameError:
         logging.info(net)
 
     # Create dataset splits for the current fold of the cross-val
@@ -211,19 +239,8 @@ def train_evaluate(
 
     results = loadmat(model_filepath[:-2] + "mat")
     if os.path.exists(rs_csv_path) and args.randomsearch:
-        df = pd.read_csv(rs_csv_path, index_col=0)
-        df.loc[
-            (df["f"] == float(args.filters))
-            & (df["linear"] == float(args.linear))
-            & (df["d"] == float(args.dropout))
-            & (df["hlayers"] == float(args.hlayers))
-            & (df["nchan"] == float(args.nchan))
-            & (df["batchnorm"] == float(args.batchnorm))
-            & (df["maxpool"] == float(args.maxpool))
-            & (df["bs"] == float(args.batch_size))
-            & (df["lr"] == float(args.lr)),
-            f"fold{fold}",
-        ] = results["acc_score"]
+        df = get_df_status(rs_csv_path, args)
+        df[f"fold{fold}"] = results["acc_score"]
         df.to_csv(rs_csv_path)
     return results
 
@@ -269,17 +286,6 @@ if __name__ == "__main__":
         )
 
     #######################
-    # Torchsummary checks #
-    #######################
-
-    torchsum = True
-    try:
-        from torchsummary import summary
-    except:  # TODO catch importError
-        logging.warning("Warning: Error loading torchsummary")
-        torchsum = False
-
-    #######################
     # learning parameters #
     #######################
 
@@ -287,18 +293,18 @@ if __name__ == "__main__":
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("ENTERING DEBUG MODE")
         # args.max_subj = 20
-        args.dropout = 0.5
-        args.dropout_option = "same"
-        args.patience = 1
+        args.dropout = DEBUG["dropout"]
+        args.dropout_option = DEBUG["droupt_option"]
+        args.patience = DEBUG["patience"]
 
     if args.sensors == "MAG":
-        n_channels = 102
+        n_channels = N_CHANNELS_MAG
         chan_index = [0]
     elif args.sensors == "GRAD":
-        n_channels = 204
+        n_channels = N_CHANNELS_GRAD
         chan_index = [1, 2]
     else:
-        n_channels = 306
+        n_channels = N_CHANNELS_OTHER
         chan_index = [0, 1, 2]
 
     ################
@@ -344,19 +350,20 @@ if __name__ == "__main__":
     # Training #
     ############
 
+    DEFAULT_FOLDS = 4
     if args.randomsearch:
         if args.testsplit is None:
             for outer_fold in range(5):
                 args.testsplit = outer_fold
-                cv = do_crossval(4, datasets, args.net_option, args=args)
+                cv = do_crossval(DEFAULT_FOLDS, datasets, args.net_option, args=args)
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
-            cv = do_crossval(4, datasets, args.net_option, args=args)
+            cv = do_crossval(DEFAULT_FOLDS, datasets, args.net_option, args=args)
             cv = [score for score in cv if score is not None]
             logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     elif args.crossval:
-        folds = 5 if args.testsplit is None else 4
+        folds = 5 if args.testsplit is None else DEFAULT_FOLDS
         cv = do_crossval(folds, datasets, args.net_option, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
