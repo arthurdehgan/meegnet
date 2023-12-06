@@ -8,89 +8,90 @@ import psutil
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
-from scipy.signal import welch
-from scipy.io import loadmat
 from torch.utils.data import DataLoader, random_split, TensorDataset
-from camcan.utils import extract_bands
 
 BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
 
 # From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
-   """
-   Wraps another Sampler to yield an infinite stream.
+    """
+    Wraps another Sampler to yield an infinite stream.
 
-   Parameters
-   ----------
-   sampler : torch.utils.data.Sampler
-       The sampler to be wrapped.
-   """
-   def __init__(self, sampler):
-       self.sampler = sampler
+    Parameters
+    ----------
+    sampler : torch.utils.data.Sampler
+        The sampler to be wrapped.
+    """
 
-   def __iter__(self):
-       while True:
-           for batch in self.sampler:
-               yield batch
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            for batch in self.sampler:
+                yield batch
 
 
 class InfiniteDataLoader:
-   """
-   Creates an infinite data loader.
+    """
+    Creates an infinite data loader.
 
-   Parameters
-   ----------
-   dataset : torch.utils.data.Dataset
-       The dataset to be loaded.
-   batch_size : int
-       The size of the batches to be loaded.
-   num_workers : int, optional
-       The number of workers to use for loading the data, by default 0.
-   pin_memory : bool, optional
-       If True, the data loader will copy tensors into CUDA pinned memory before returning them. This can make data transfer faster, but requires more memory.
-   weights : torch.Tensor, optional
-       A 1D tensor assigning a weight to each sample in the dataset. If not provided, all samples are assumed to have the same weight.
+    Parameters
+    ----------
+    dataset : torch.utils.data.Dataset
+        The dataset to be loaded.
+    batch_size : int
+        The size of the batches to be loaded.
+    num_workers : int, optional
+        The number of workers to use for loading the data, by default 0.
+    pin_memory : bool, optional
+        If True, the data loader will copy tensors into CUDA pinned memory before returning them. This can make data
+        transfer faster, but requires more memory.
+    weights : torch.Tensor, optional
+        A 1D tensor assigning a weight to each sample in the dataset. If not provided, all samples are assumed to have
+        the same weight.
 
-   Returns
-   -------
-   InfiniteDataLoader
-       An infinite data loader.
-   """
-   def __init__(
-       self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
-   ):
-       super().__init__()
+    Returns
+    -------
+    InfiniteDataLoader
+        An infinite data loader.
+    """
 
-       if weights is not None:
-           sampler = torch.utils.data.WeightedRandomSampler(
-               weights, replacement=True, num_samples=batch_size
-           )
-       else:
-           sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
+    def __init__(
+        self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
+    ):
+        super().__init__()
 
-       if weights is None:
-           weights = torch.ones(len(dataset))
+        if weights is not None:
+            sampler = torch.utils.data.WeightedRandomSampler(
+                weights, replacement=True, num_samples=batch_size
+            )
+        else:
+            sampler = torch.utils.data.RandomSampler(dataset, replacement=True)
 
-       batch_sampler = torch.utils.data.BatchSampler(
-           sampler, batch_size=batch_size, drop_last=True
-       )
+        if weights is None:
+            weights = torch.ones(len(dataset))
 
-       self._infinite_iterator = iter(
-           torch.utils.data.DataLoader(
-               dataset,
-               num_workers=num_workers,
-               batch_sampler=_InfiniteSampler(batch_sampler),
-               pin_memory=pin_memory,
-           )
-       )
+        batch_sampler = torch.utils.data.BatchSampler(
+            sampler, batch_size=batch_size, drop_last=True
+        )
 
-   def __iter__(self):
-       while True:
-           yield next(self._infinite_iterator)
+        self._infinite_iterator = iter(
+            torch.utils.data.DataLoader(
+                dataset,
+                num_workers=num_workers,
+                batch_sampler=_InfiniteSampler(batch_sampler),
+                pin_memory=pin_memory,
+            )
+        )
 
-   def __len__(self):
-       raise ValueError
+    def __iter__(self):
+        while True:
+            yield next(self._infinite_iterator)
+
+    def __len__(self):
+        raise ValueError
 
 
 # End of domainBed code
@@ -252,7 +253,7 @@ def load_sets(
     n_sub = len(dataframe)
     logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
-        totmem = psutil.virtual_memory().total / 10 ** 9
+        totmem = psutil.virtual_memory().total / 10**9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
 
     final_n_splits = n_splits - 1 if testing is not None else n_splits
@@ -263,7 +264,7 @@ def load_sets(
         random.seed(seed)
         torch.manual_seed(seed)
         if printmem:
-            usedmem = psutil.virtual_memory().used / 10 ** 9
+            usedmem = psutil.virtual_memory().used / 10**9
             memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
             if n_sub > 10:
                 if i % (n_sub // 10) == 0:
@@ -370,14 +371,14 @@ def load_data(
     logging.debug(f"Loading {n_sub} subjects data")
     if printmem:
         # subj_sizes = [] # assigned but never used ?
-        totmem = psutil.virtual_memory().total / 10 ** 9
+        totmem = psutil.virtual_memory().total / 10**9
         logging.info(f"Total Available memory: {totmem:.3f} Go")
     for i, row in enumerate(dataframe.iterrows()):
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
         if printmem:
-            usedmem = psutil.virtual_memory().used / 10 ** 9
+            usedmem = psutil.virtual_memory().used / 10**9
             memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
             if n_sub > 10:
                 if i % (n_sub // 10) == 0:

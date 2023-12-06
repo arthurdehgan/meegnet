@@ -14,9 +14,7 @@ from camcan.parsing import parser
 # DEBUG PARAMETERS #
 ####################
 
-DEBUG = {"dropout": 0.5,
-         "dropout_option": "same",
-         "patience": 1}
+DEBUG = {"dropout": 0.5, "dropout_option": "same", "patience": 1}
 
 ##################
 # DEFAULT VALUES #
@@ -39,9 +37,10 @@ DEVICE = cuda_check()
 #######################
 
 try:
-   from torchinfo import summary as model_summary
+    from torchinfo import summary as model_summary
 except ImportError:
-   logging.warning("Warning: Error loading torchinfo")
+    logging.warning("Warning: Error loading torchinfo")
+
 
 def get_df_status(file_path, args) -> pd.DataFrame:
     df = pd.read_csv(file_path, index_col=0)
@@ -54,7 +53,9 @@ def get_df_status(file_path, args) -> pd.DataFrame:
         & (df["batchnorm"] == float(args.batchnorm))
         & (df["maxpool"] == float(args.maxpool))
         & (df["bs"] == float(args.batch_size))
-        & (df["lr"] == float(args.lr))]
+        & (df["lr"] == float(args.lr))
+    ]
+
 
 def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
     """Will call train_evaluate function a folds amount of times and return a list of
@@ -192,7 +193,7 @@ def train_evaluate(
     model_filepath = os.path.join(args.save_path, net.name + ".pt")
 
     logging.info(net.name)
-    try: 
+    try:
         logging.info(model_summary(net, input_size))
     except NameError:
         logging.info(net)
@@ -246,7 +247,6 @@ def train_evaluate(
 
 
 if __name__ == "__main__":
-
     ###########
     # PARSING #
     ###########
@@ -325,7 +325,8 @@ if __name__ == "__main__":
             testing=args.testsplit,
             s_freq=args.sfreq,
         )
-        # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
+        # Note: replace testing = testsplit or testing when we add the option to load test set and
+        # use it for a test pass.
     else:
         datasets = create_datasets(
             args.data_path,
@@ -344,7 +345,8 @@ if __name__ == "__main__":
             s_freq=args.sfreq,
         )
         n_outputs = 2
-        # Note: replace testing = testsplit or testing when we add the option to load test set and use it for a test pass.
+        # Note: replace testing = testsplit or testing when we add the option to load test set and
+        # use it for a test pass.
 
     ############
     # Training #
