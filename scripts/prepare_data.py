@@ -1,8 +1,11 @@
-"""This script is intended to work for the camcan MEG dataset with maxfilter and transform to default common space (mf_transdef) data.
+"""This script is intended to work for the camcan MEG dataset with maxfilter
+and transform to default common space (mf_transdef) data.
 
-The Camcan dataset is not open access and you need to send a request on the websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataaccess/).
+The Camcan dataset is not open access and you need to send a request on the
+websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataaccess/).
 
-This script assumes a copy of the cc700 and dataman folders to a data path parsed through the argparser.
+This script assumes a copy of the cc700 and dataman folders to a data path parsed
+through the argparser.
 
 TODO:
     add a prompt on the amount of disk space and time required
@@ -19,7 +22,8 @@ from camcan.parsing import parser
 parser.add_argument(
     "--user",
     type=str,
-    help="name of the camcan user folder for loading csv data. Usually of the form firstname_name_ID",
+    help="name of the camcan user folder for loading csv data.\
+    Usually of the form firstname_name_ID",
 )
 parser.add_argument(
     "--sfreq",
@@ -61,9 +65,11 @@ def prepare_data(
     sub_folder : str
         the subject folder in BIDS format of the form: "sub-[SUB_ID]".
     source_path : str
-        the path to the folder containing the Cam-CAN dataset (with cc700 folder in it) as copied from the CC servers.
+        the path to the folder containing the Cam-CAN dataset
+        (with cc700 folder in it) as copied from the CC servers.
     save_path : str
-        the path where all the data will be saved in subfolder "downsampled_{s_freq}" and the csv file will be saved.
+        the path where all the data will be saved in subfolder "downsampled_{s_freq}"
+        and the csv file will be saved.
     camcan_user : str
         your camcan user in order to find metadata about the subjects. Should be firstname_name_ID.
     s_freq : int
@@ -71,12 +77,14 @@ def prepare_data(
     dattype : str
         the type of data to prepare. Must be in ['rest', 'passive', 'smt'].
     epoched : bool
-        epoch the data based on events found in it or not. Epoching the data will apply baseline correction (mode: mean).
+        epoch the data based on events found in it or not.
+        Epoching the data will apply baseline correction (mode: mean).
 
     Returns
     -------
     row : list
-        a list of values from the camcan metadata csv file. The row will be added to the participants_info_{dattype}.csv file.
+        a list of values from the camcan metadata csv file.
+        The row will be added to the participants_info_{dattype}.csv file.
     """
     if dattype == "rest":
         assert (
@@ -96,10 +104,11 @@ def prepare_data(
         "standard_data.csv",
     )
     df = pd.read_csv(source_csv_path)
-    for file in os.listdir(os.path.join(data_path, sub_folder)):
-        if file.endswith(".fif"):
-            fif_file = os.path.join(data_path, sub_folder, file)
-            break
+
+    fif_file = ""
+    file_list = os.listdir(os.path.join(data_path, sub_folder))
+    while not fif_file.endswith(".fif"):
+        fif_file = os.path.join(data_path, sub_folder, file_list.pop())
 
     sub = sub_folder.split("-")[1]
     if epoched:
@@ -141,7 +150,7 @@ def prepare_data(
         channels = []
         logging.info(sub_folder)
         logging.info(raw.info)
-        if epoched and dattype != "rest":  # dattype in ("passive","smt"):
+        if epoched and dattype in ("passive", "smt"):  # dattype != "rest"
             try:
                 events = mne.find_events(raw)
             except ValueError as e:
@@ -152,9 +161,13 @@ def prepare_data(
                 )
                 bad_subs_df.to_csv(bad_csv_path)
                 return
-            event_dict = {6: "auditory1", 7: "auditory2", 8: "auditory3", 9: "visual"}
-            data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
             if set(events[:, -1]) == {6, 7, 8, 9}:
+                event_dict = {
+                    6: "auditory1",
+                    7: "auditory2",
+                    8: "auditory3",
+                    9: "visual",
+                }
                 labels = [event_dict[event] for event in events[:, -1]]
             else:
                 logging.info(f"a different event has been found in {sub}")
@@ -164,9 +177,10 @@ def prepare_data(
                 )
                 good_subs_df.to_csv(good_csv_path)
                 return
-
+            data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
         else:
             data = raw
+
         data = data.resample(sfreq=s_freq)
         channels.append(data.get_data(picks="mag"))
         channels.append(data.get_data(picks="planar1"))
