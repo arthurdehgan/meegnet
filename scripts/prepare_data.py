@@ -1,5 +1,5 @@
 """This script is intended to work for the camcan MEG dataset with maxfilter
-and transform to default common space (mf_transdef) data.
+and transform to default common space (mf_transdef) data in BIDS format.
 
 The Camcan dataset is not open access and you need to send a request on the
 websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataaccess/).
@@ -7,8 +7,12 @@ websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataac
 This script assumes a copy of the cc700 and dataman folders to a data path parsed
 through the argparser.
 
+example on how to run the script:
+python prepare_data.py --data-path="/home/user/data/camcan/" --save-path="/home/user/data" --user="Firstname_Name_1160" --dattype="passive" --epoched
+
 TODO:
     add a prompt on the amount of disk space and time required
+    add option of not doing epoched with passive and smt data
 
 """
 import os
@@ -17,20 +21,15 @@ import mne
 import pandas as pd
 import numpy as np
 from joblib import Parallel, delayed
-from camcan.parsing import parser
+from meegnet.parsing import parser
 
 parser.add_argument(
     "--user",
     type=str,
     help="name of the camcan user folder for loading csv data.\
-    Usually of the form firstname_name_ID",
+    Usually of the form Firstname_Name_ID",
 )
-parser.add_argument(
-    "--sfreq",
-    type=int,
-    default=200,
-    help="Sets the frequency to downsample the data to.",
-)
+
 args = parser.parse_args()
 
 if args.log:
@@ -115,7 +114,8 @@ def prepare_data(
         filename = f"{dattype}_{sub}_epoched.npy"
     else:
         filename = f"{dattype}_{sub}.npy"
-    out_path = os.path.join(save_path, f"downsampled_{args.sfreq}", filename)
+    out_path = os.path.join(save_path, f"downsampled_{args.sfreq}")
+    out_file = os.path.join(out_path, filename)
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -156,7 +156,7 @@ def prepare_data(
             except ValueError as e:
                 logging.info(f"{sub} could not be used because of {e}")
                 row = [sub, "wrong event timings"]
-                bad_subs_df = bad_subs_df.append(
+                bad_subs_df = bad_subs_df._append(
                     {key: val for key, val in zip(columns, row)}, ignore_index=True
                 )
                 bad_subs_df.to_csv(bad_csv_path)
@@ -172,7 +172,7 @@ def prepare_data(
             else:
                 logging.info(f"a different event has been found in {sub}")
                 row = [sub, "wrong event found"]
-                good_subs_df = good_subs_df.append(
+                good_subs_df = good_subs_df._append(
                     {key: val for key, val in zip(columns, row)}, ignore_index=True
                 )
                 good_subs_df.to_csv(good_csv_path)
@@ -189,20 +189,22 @@ def prepare_data(
         if dattype == "passive":
             data = data.swapaxes(0, 1)
         logging.info(data.shape)
-        np.save(out_path, data)
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+        np.save(out_file, data)
         row = df[df["CCID"] == sub].values.tolist()[0]
         if dattype in ("passive", "smt"):
             row.append(labels)
     else:
         logging.info(f"{sub} was dropped because of bad channels {bads}")
         row = [sub, "bad channels"]
-        bad_subs_df = bad_subs_df.append(
+        bad_subs_df = bad_subs_df._append(
             {key: val for key, val in zip(columns, row)}, ignore_index=True
         )
         bad_subs_df.to_csv(bad_csv_path)
         return
 
-    good_subs_df = good_subs_df.append(
+    good_subs_df = good_subs_df._append(
         {key: val for key, val in zip(columns, row)}, ignore_index=True
     )
     good_subs_df.to_csv(good_csv_path)
