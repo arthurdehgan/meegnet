@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
   { name="Arthur Dehgan", email="arthurdehgan@hotmail.com" },
 ]
-description = ""
+description = "A set of MEG-optimized ANNs and visualization tools."
 readme = "README.md"
 classifiers = [
     "Programming Language :: Python :: 3",
