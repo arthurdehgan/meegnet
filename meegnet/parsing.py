@@ -136,11 +136,13 @@ parser.add_argument(
 parser.add_argument(
     "--save-path",
     type=str,
+    default=".",
     help="The path where the model will be saved.",
 )
 parser.add_argument(
     "--data-path",
     type=str,
+    required=True,
     help="The path where the data samples can be found.",
 )
 parser.add_argument(

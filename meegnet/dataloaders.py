@@ -124,10 +124,65 @@ def create_datasets(
     testing=None,
     psd=False,
 ):
-    """create dataloaders iterators.
+    """
+    Create dataloader iterators.
 
-    testing: if set to an integer between 0 and 4 will leave out a part of the dataset.
-             Useful for random search.
+    Parameters
+    ----------
+    data_folder : str
+        Path to the folder containing the data.
+    train_size : float
+        Fraction of the total dataset to be used for training.
+    max_subj : int, optional
+        Maximum number of subjects to be included in the dataset. Default is 1000.
+    chan_index : list, optional
+        List of channel indices to be considered. Default is [0, 1, 2].
+        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
+    s_freq : int, optional
+        Sampling frequency. Default is 200.
+    seg : int, optional
+        Segment size in seconds. Default is 2.
+    debug : bool, optional
+        Whether to enable debugging mode. Default is False.
+    seed : int, optional
+        Random seed for reproducibility. Default is 0.
+    printmem : bool, optional
+        Whether to print memory usage. Default is False.
+    ages : tuple, optional
+        Age range of the participants to be included in the dataset. Default is (0, 100).
+    dattype : str, optional
+        Type of data to be loaded. Default is "rest".
+        other options are "passive" and "smt"
+    band : str, optional
+        Frequency band to be considered. Default is "".
+        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
+    n_samples : int, optional
+        Number of samples to load. Default is None.
+    eventclf : bool, optional
+        Whether to perform event-wise classification. Default is False.
+    epoched : bool, optional
+        Whether to epoch the data. Default is False.
+    testing : int, optional
+        If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
+    psd : bool, optional
+        Whether to calculate power spectral density. Default is False.
+
+    Returns
+    -------
+    list
+        A list of TensorDatasets.
+
+    Raises
+    ------
+    ValueError
+        If `eventclf` is set to True and `epoched` is set to False. We need to use epoched data around stimuli
+        in order to perform event classification
+
+    Notes
+    -----
+    The function creates dataloader iterators for a given dataset. The dataset is divided into training, validation, and test sets.
+    The division ratio is determined by the `train_size` parameter. The function also handles the removal of subjects that cause issues
+    during data loading.
     """
     if eventclf and not epoched:
         logging.warning(
@@ -230,7 +285,57 @@ def load_sets(
     testing=None,
     psd=False,
 ):
-    """Loading data subject per subject."""
+    """
+    Load data subject per subject.
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the folder containing the data.
+    max_subj : int, optional
+        Maximum number of subjects to be included in the dataset. Default is 1000.
+    n_splits : int, optional
+        Number of splits to make for the data. Default is 5.
+    offset : int, optional
+        Offset for the data. Default is 0.
+    seg : int, optional
+        Segment size in seconds. Default is 2.
+    s_freq : int, optional
+        Sampling frequency. Default is 200.
+    n_samples : int, optional
+        Number of samples to load. Default is None.
+    chan_index : list, optional
+        List of channel indices to be considered. Default is [0, 1, 2].
+        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
+    printmem : bool, optional
+        Whether to print memory usage. Default is False.
+    dattype : str, optional
+        Type of data to be loaded. Default is "rest".
+        Other options are "passive" and "smt".
+    epoched : bool, optional
+        Whether to epoch the data. Default is False.
+    seed : int, optional
+        Random seed for reproducibility. Default is 0.
+    band : str, optional
+        Frequency band to be considered. Default is "".
+        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
+    testing : int, optional
+        If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
+    psd : bool, optional
+        Whether to calculate power spectral density. Default is False.
+
+    Returns
+    -------
+    int
+        Number of subjects successfully loaded.
+    list
+        A list of TensorDatasets.
+
+    Notes
+    -----
+    This function loads data subject by subject. It divides the data into a specified number of splits. Each subject's data is loaded into a separate split.
+    The function also handles the removal of subjects that cause issues during data loading.
+    """
     assert_params(band, dattype)
 
     csv_file = os.path.join(data_path, f"participants_info_{dattype}.csv")
@@ -322,6 +427,27 @@ def create_loader(
     infinite=False,
     **kwargs,
 ):
+    """
+    Creates a DataLoader or InfiniteDataLoader based on the specified conditions.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        The dataset to be loaded.
+    infinite : bool, optional
+        If set to True, creates an InfiniteDataLoader; otherwise, creates a regular DataLoader. Default is False.
+    **kwargs : dict, optional
+        Additional keyword arguments to pass to the DataLoader or InfiniteDataLoader constructor.
+
+    Returns
+    -------
+    DataLoader or InfiniteDataLoader
+        The created DataLoader or InfiniteDataLoader.
+
+    Notes
+    -----
+    This function is useful when you want to create a DataLoader that can loop over the dataset indefinitely.
+    """
     if infinite:
         loader = InfiniteDataLoader
     else:
@@ -355,11 +481,56 @@ def load_data(
     psd=False,
     group_id=None,
 ):
-    """Loading data subject per subject and returns labels according to the task.
-    Currently if epoched is set to True, we will load the event labels from epoched data.
-    id eventclf is set to True, we will used labels from the events, if not,
-    sex is used as the default label but can be easily changed to hand or age for example.
     """
+    Loads data subject per subject and returns labels according to the task.
+
+    Parameters
+    ----------
+    dataframe : DataFrame
+        DataFrame containing information about the data.
+    data_path : str
+        Path to the folder containing the data.
+    offset : int, optional
+        Offset for the data. Default is 30.
+    seg : int, optional
+        Segment size in seconds. Default is 2.
+    s_freq : int, optional
+        Sampling frequency. Default is 200.
+    chan_index : list, optional
+        List of channel indices to be considered. Default is [0, 1, 2].
+        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
+    printmem : bool, optional
+        Whether to print memory usage. Default is False.
+    dattype : str, optional
+        Type of data to be loaded. Default is "rest".
+        Other options are "passive" and "smt".
+    n_samples : int, optional
+        Number of samples to load. Default is None.
+    seed : int, optional
+        Random seed for reproducibility. Default is 0.
+    epoched : bool, optional
+        Whether to epoch the data. Default is False.
+    eventclf : bool, optional
+        Whether to perform event-wise classification. Default is False.
+    band : str, optional
+        Frequency band to be considered. Default is "".
+        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
+    psd : bool, optional
+        Whether to calculate power spectral density. Default is False.
+    group_id : int, optional
+        Group ID for grouping the data. Default is None.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the loaded data, labels, and group IDs (if applicable).
+
+    Notes
+    -----
+    The function loads data subject by subject and assigns labels according to the task.
+    If `eventclf` is set to True, it uses labels from the events. Otherwise, it uses sex as the default label.
+    """
+
     assert_params(band, dattype)
     if eventclf:
         assert (
@@ -443,6 +614,39 @@ def load_data(
 def load_epoched_sub(
     data_path, sub, chan_index, dattype="passive", s_freq=500, psd=False
 ):
+    """
+    Loads epoched data for a particular subject.
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the folder containing the data.
+    sub : str
+        Subject identifier.
+    chan_index : list
+        List of channel indices to be considered.
+    dattype : str, optional
+        Type of data to be loaded. Default is "passive".
+        Other options is "smt".
+    s_freq : int, optional
+        Sampling frequency. Default is 500.
+    psd : bool, optional
+        Whether to load power spectral density data. Default is False.
+
+    Returns
+    -------
+    ndarray or None
+        The loaded epoched data for the subject, or None if an error occurred.
+
+    Raises
+    ------
+    AssertionError
+        If `dattype` is not "passive" or "smt".
+
+    Notes
+    -----
+    This function loads epoched data for a particular subject. The data is loaded from a `.npy` file located in a specific directory depending on whether power spectral density data is requested. The function also performs zero mean normalization on the data if it's not power spectral density data.
+    """
     assert dattype in ("passive", "smt"), "cannot load epoched data for resting state"
     folder = "psd" if psd else f"downsampled_{s_freq}"
     sub_path = os.path.join(data_path, folder, f"{dattype}_{sub}_epoched.npy")
@@ -473,8 +677,48 @@ def load_sub(
     seg=2,
     psd=False,
 ):
-    # TODO doc
-    """seg is the size of the segments in seconds"""
+    """
+    Loads data for a particular subject.
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the folder containing the data.
+    sub : str
+        Subject identifier.
+    n_samples : int, optional
+        Number of samples to load. Default is None.
+    band : str, optional
+        Frequency band to be considered. Default is "".
+        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
+    chan_index : list, optional
+        List of channel indices to be considered. Default is [0, 1, 2].
+        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
+    dattype : str, optional
+        Type of data to be loaded. Default is "rest".
+        Other options are "passive" and "smt".
+    epoched : bool, optional
+        Whether to load epoched data. Default is False.
+    offset : int, optional
+        Offset for the data. Default is 30.
+    s_freq : int, optional
+        Sampling frequency. Default is 200.
+    seg : int, optional
+        Segment size in seconds. Default is 2.
+    psd : bool, optional
+        Whether to load power spectral density data. Default is False.
+
+    Returns
+    -------
+    ndarray or None
+        The loaded data for the subject, or None if an error occurred.
+
+    Notes
+    -----
+    This function loads data for a particular subject.
+    The data is loaded from a `.npy` file located in a specific directory.
+    The function also performs zero mean normalization on the data if it's not power spectral density data.
+    """
     if epoched:
         data = load_epoched_sub(
             data_path, sub, chan_index, dattype=dattype, s_freq=s_freq, psd=psd
