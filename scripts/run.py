@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 from scipy.io import loadmat
 from torch.utils.data import ConcatDataset
-from camcan.params import TIME_TRIAL_LENGTH
-from camcan.dataloaders import create_loader, create_datasets, load_sets
-from camcan.network import create_net
-from camcan.utils import train, load_checkpoint, cuda_check
-from camcan.parsing import parser
+from meegnet.params import TIME_TRIAL_LENGTH
+from meegnet.dataloaders import create_loader, create_datasets, load_sets
+from meegnet.network import create_net
+from meegnet.utils import train, load_checkpoint, cuda_check
+from meegnet.parsing import parser
 
 ####################
 # DEBUG PARAMETERS #
