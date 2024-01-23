@@ -26,6 +26,7 @@ from meegnet.parsing import parser
 parser.add_argument(
     "--user",
     type=str,
+    required=True,
     help="name of the camcan user folder for loading csv data.\
     Usually of the form Firstname_Name_ID",
 )

@@ -2,8 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from camcan.parsing import parser
-from camcan.viz import load_info, generate_topomap
+from meegnet.parsing import parser
+from meegnet.viz import load_info, generate_topomap
 import mne
 import seaborn as sns
 

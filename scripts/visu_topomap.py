@@ -8,14 +8,13 @@ from scipy.stats import binom
 from scipy.io import loadmat
 import numpy as np
 import matplotlib.pyplot as plt
-from parser import args
-from params import RAW_PATH, DATA_PATH, SAVE_PATH, SUB_DF
+from meegnet.parser import args
+from meegnet.params import RAW_PATH, DATA_PATH, SAVE_PATH, SUB_DF
 
 PVAL = 0.001
 
 
 if __name__ == "__main__":
-
     ftype = args.feature
     classifier = args.clf
     classif = args.label

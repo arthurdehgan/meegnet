@@ -3,7 +3,7 @@ from collections import defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.io import loadmat
-from camcan.parsing import parser
+from meegnet.parsing import parser
 
 if __name__ == "__main__":
     """

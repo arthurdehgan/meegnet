@@ -2,9 +2,9 @@ import mne
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io import loadmat
-from parsing import parser
+from meegnet.parsing import parser
 from mne.viz import plot_topomap
-from viz import generate_topomap, load_info
+from meegnet.viz import generate_topomap, load_info
 
 
 def save_topomap(filepath, weights, info):

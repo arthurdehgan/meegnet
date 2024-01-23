@@ -18,8 +18,8 @@ from sklearn.discriminant_analysis import (
     QuadraticDiscriminantAnalysis as QDA,
 )
 from mlneurotools.ml import StratifiedShuffleGroupSplit as SSGS
-from utils import elapsed_time
-from params import CHAN_DF, SUB_DF, LABELS
+from meegnet.utils import elapsed_time
+from meegnet.params import CHAN_DF, SUB_DF, LABELS
 
 
 def check_classif_done(elec_index, args):
@@ -328,7 +328,6 @@ def classif_all_elecs(train_set, test_set, elec_list, args):
 
 
 if __name__ == "__main__":
-
     if args.elec == "MAG":
         elec_index = range(2, 306, 3)
     elif args.elec == "GRAD":

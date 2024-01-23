@@ -6,13 +6,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from scipy.io import savemat, loadmat
-from params import TIME_TRIAL_LENGTH
-from dataloaders import create_loaders
-from network import FullNet
-from utils import train, accuracy, load_checkpoint, nice_time as nt
-from algorithms import ERM, IRM
-from misc import seed_hash
-from parsing import parser
+from meegnet.params import TIME_TRIAL_LENGTH
+from meegnet.dataloaders import create_loaders
+from meegnet.network import FullNet
+from meegnet.utils import train, accuracy, load_checkpoint, nice_time as nt
+from meegnet.algorithms import ERM, IRM
+from meegnet.misc import seed_hash
+from meegnet.parsing import parser
 
 
 def gen_hparam(name, default_val, random_val_fn, random_seed):
@@ -25,7 +25,6 @@ def gen_hparam(name, default_val, random_val_fn, random_seed):
 
 
 if __name__ == "__main__":
-
     ###########
     # PARSING #
     ###########

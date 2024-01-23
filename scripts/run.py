@@ -43,6 +43,7 @@ except ImportError:
 
 
 def get_df_status(file_path, args) -> pd.DataFrame:
+    """checks if the specific parameters for the network are already logged."""
     df = pd.read_csv(file_path, index_col=0)
     return df.loc[
         (df["f"] == float(args.filters))
