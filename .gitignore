@@ -8,3 +8,4 @@ data
 *.out
 *.sh
 *.npy
+*.bak
