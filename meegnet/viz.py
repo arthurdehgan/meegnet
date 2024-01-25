@@ -163,9 +163,7 @@ def preprocess_image(pil_im, resize_im=True):
         try:
             pil_im = Image.fromarray(pil_im)
         except Exception as e:
-            print(
-                "could not transform PIL_img to a PIL Image object. Please check input."
-            )
+            print("could not transform PIL_img to a PIL Image object. Please check input.")
 
     # Resize image
     if resize_im:
@@ -219,9 +217,7 @@ def choose_best_window(data, fs=500, w_size=300):
     # Generate masks over time samples where sample is superior to 2x std of the vector
     masks = [dat >= (np.mean(dat) + np.std(dat) * 2) for dat in data]
     w_size = int(w_size * fs / 1000)
-    best_window_idx = Parallel(n_jobs=-1)(
-        delayed(best_window)(mask, w_size) for mask in masks
-    )
+    best_window_idx = Parallel(n_jobs=-1)(delayed(best_window)(mask, w_size) for mask in masks)
     return best_window_idx
 
 
@@ -354,9 +350,7 @@ def make_gif(image_list, output=None, duration=100, loop=0):
 def load_info():
     # Chargement des données de potition des capteurs:
     data_path = mne.datasets.sample.data_path()
-    raw = mne.io.read_raw_fif(
-        f"{data_path}/MEG/sample/sample_audvis_raw.fif", preload=False
-    )
+    raw = mne.io.read_raw_fif(f"{data_path}/MEG/sample/sample_audvis_raw.fif", preload=False)
     # TODO check if we are correct to do this for grad topoplots, maybe use planar
     # (planar1 doesnt work and for grad they do a different computation)
     return raw.pick_types(meg="mag").info

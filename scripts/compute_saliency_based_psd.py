@@ -4,12 +4,12 @@ import pandas as pd
 import torch
 import os
 from joblib import Parallel, delayed, parallel_backend
-from camcan.params import TIME_TRIAL_LENGTH
-from camcan.utils import compute_psd
-from camcan.parsing import parser
-from camcan.network import create_net
-from camcan.misc_functions import get_positive_negative_saliency, compute_sal_psd
-from camcan.utils import load_checkpoint, cuda_check
+from meegnet.params import TIME_TRIAL_LENGTH
+from meegnet.utils import compute_psd
+from meegnet.parsing import parser
+from meegnet.network import create_net
+from meegnet.misc_functions import get_positive_negative_saliency, compute_sal_psd
+from meegnet.utils import load_checkpoint, cuda_check
 from visu_filter_outputs import load_data
 
 
@@ -145,9 +145,7 @@ if __name__ == "__main__":
                         use_windows=args.use_windows,
                         sal_option=sal_option,
                     )
-                    for trial, y in zip(
-                        examples[targets == targ], targets[targets == targ]
-                    )
+                    for trial, y in zip(examples[targets == targ], targets[targets == targ])
                 )
                 chan_data = [e for e in chan_data if e is not None]
                 bands_values[targ] += chan_data

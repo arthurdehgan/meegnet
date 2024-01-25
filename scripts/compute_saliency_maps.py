@@ -5,12 +5,12 @@ import numpy as np
 import torch
 import pandas as pd
 from joblib import Parallel, delayed
-from camcan.parsing import parser
-from camcan.params import TIME_TRIAL_LENGTH
-from camcan.utils import load_checkpoint, cuda_check
-from camcan.network import create_net
-from camcan.dataloaders import load_data
-from camcan.misc_functions import (
+from meegnet.parsing import parser
+from meegnet.params import TIME_TRIAL_LENGTH
+from meegnet.utils import load_checkpoint, cuda_check
+from meegnet.network import create_net
+from meegnet.dataloaders import load_data
+from meegnet.misc_functions import (
     get_positive_negative_saliency,
     compute_saliency_based_psd,
 )
@@ -40,7 +40,6 @@ def compute_all(sub, sal_path, args):
     #             existing_paths.append(os.path.exists(sal_filepath))
     # if all(existing_paths):
     #     return
-
     data, targets = load_data(
         dataframe.loc[dataframe["sub"] == sub],
         args.data_path,
@@ -138,7 +137,6 @@ def compute_all(sub, sal_path, args):
 
 
 if __name__ == "__main__":
-
     parser.add_argument(
         "--compute-psd",
         action="store_true",
@@ -216,7 +214,10 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
-    fold = args.fold + 1
+    if args.fold is not None:
+        fold = args.fold + 1
+    else:
+        fold = 1
     name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
@@ -242,7 +243,8 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
-    model_filepath = os.path.join("../models/", name + ".pt")
+    # TODO Make use of data-path here, having path hard-coded = bad
+    model_filepath = os.path.join(name + ".pt")
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)

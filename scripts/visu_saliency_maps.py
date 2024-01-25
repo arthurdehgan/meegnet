@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -8,6 +9,12 @@ import mne
 import seaborn as sns
 
 mne.set_log_level(False)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
 
 
 def generate_saliency_figure(
@@ -44,9 +51,13 @@ def generate_saliency_figure(
     axes = []
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label]
+        if np.isnan(gradient):
+            continue
         gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
-        for j, chan in zip(range(0, 9, 3), ("MAG", "GRAD1", "GRAD2")):
+        # Change this part, hard codded = bad and we want some flexibility depending on the use of sensors
+        channels = "MAG"  # ("MAG", "GRAD1", "GRAD2")
+        for j, chan in zip(range(0, 9, 3), channels):
             idx = j // 3
             grads = gradient[idx]
             vmax = grads.max()
@@ -78,9 +89,7 @@ def generate_saliency_figure(
             else:
                 plt.xticks([0, 200, 400], [0, 1000, 2000], fontsize=8)
             if j == 0:
-                axes[-1].text(
-                    -50, 50, label, ha="left", va="center", rotation="vertical"
-                )
+                axes[-1].text(-50, 50, label, ha="left", va="center", rotation="vertical")
             if idx == 2:
                 axes[-1].yaxis.set_label_position("right")
                 plt.ylabel("sensors")
@@ -119,7 +128,10 @@ if __name__ == "__main__":
 
     random_subject = args.seed
 
-    fold = args.fold + 1
+    if args.fold is not None:
+        fold = args.fold + 1
+    else:
+        fold = 1
     name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
@@ -133,6 +145,7 @@ if __name__ == "__main__":
 
     sal_path = os.path.join(args.data_path, "saliency_maps", name)
     file_list = os.listdir(sal_path)
+    # might want to use participants.csv for subject list :
     subjects = np.unique([file.split("_")[0] for file in file_list])[: args.max_subj]
     all_subjects_saliencies = {"image": [], "sound": []}
 
@@ -164,6 +177,9 @@ if __name__ == "__main__":
                 if os.path.exists(sal_file):
                     try:
                         saliencies[saliency_type] = np.load(sal_file)
+                        if not saliencies[saliency_type]:
+                            logging.info(f"No saliencies found in file : {sal_file}")
+                            continue
                     except:
                         print(f"Error loading {sal_file}")
                         nofile = True
@@ -181,6 +197,8 @@ if __name__ == "__main__":
             if nofile:
                 continue
             current_sub[label] = saliencies["pos"] - saliencies["neg"]
+            if current_sub[label].size == 0:
+                continue
             all_subjects_saliencies[label].append(current_sub[label].mean(axis=0))
             if args.subclf:
                 break  # we only need to add one label per subject so get out of the loop
@@ -194,6 +212,8 @@ if __name__ == "__main__":
             else:
                 suffix += "_sexclf"
 
+            if list(current_sub.values())[0].size == 0:
+                continue
             generate_saliency_figure(
                 {key: val[0] for key, val in current_sub.items()},
                 save_path=args.save_path,
@@ -216,9 +236,7 @@ if __name__ == "__main__":
                 eventclf=args.eventclf,
             )
 
-    final_dict = {
-        key: np.mean(val, axis=0) for key, val in all_subjects_saliencies.items()
-    }
+    final_dict = {key: np.mean(val, axis=0) for key, val in all_subjects_saliencies.items()}
     if args.subclf:
         final_dict = {"all_subj": np.mean(list(final_dict.values()), axis=0)}
         labels = ["all_subj"]
