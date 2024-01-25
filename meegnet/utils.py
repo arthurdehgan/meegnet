@@ -211,7 +211,10 @@ def train(
             t1 = time()
         for i, batch in enumerate(trainloader):
             optimizer.zero_grad()
-            X, y = batch
+            if len(batch) > 2:
+                X, y, groups = batch
+            else:
+                X, y = batch
 
             if permute_labels:
                 idx = torch.randperm(y.nelement())
@@ -305,7 +308,10 @@ def evaluate(net, dataloader, criterion=nn.CrossEntropyLoss()):
         ACCURACY = 0
         COUNTER = 0
         for batch in dataloader:
-            X, y = batch
+            if len(batch) > 2:
+                X, y, groups = batch
+            else:
+                X, y = batch
             y = y.view(-1).to(device)
             X = X.view(-1, *net.input_size).to(device)
 

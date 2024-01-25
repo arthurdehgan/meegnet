@@ -49,6 +49,32 @@ else:
     )
 
 
+def bad_subj_found(sub: str, info: str, message: str, df_path: str):
+    """
+    Open, edits and saves the dataframe (bad_subj_df) with provided error info.
+
+    Parameters
+    ----------
+    sub : str
+        The subject identifier.
+    info : str
+        Information about the subject.
+    message : str
+        The log message to be logged.
+    df_path : str
+        The path to the CSV file where the DataFrame is stored.
+
+    Returns
+    -------
+    None
+    """
+    logging.info(message)
+    row = [sub, info]
+    df = pd.read_csv(df_path, index_col=0)
+    df = df._append({key: val for key, val in zip(df.columns, row)}, ignore_index=True)
+    df.to_csv(df_path)
+
+
 def prepare_data(
     sub_folder: str,
     source_path: str,
@@ -63,7 +89,7 @@ def prepare_data(
     Parameters
     ----------
     sub_folder : str
-        the subject folder in BIDS format of the form: "sub-[SUB_ID]".
+        the subject folder".
     source_path : str
         the path to the folder containing the Cam-CAN dataset
         (with cc700 folder in it) as copied from the CC servers.
@@ -121,18 +147,14 @@ def prepare_data(
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    bad_csv_path = os.path.join(
-        args.save_path, f"bad_participants_info_{args.dattype}.csv"
-    )
-    columns = ["sub", "error"]
+    bad_csv_path = os.path.join(args.save_path, f"bad_participants_info_{args.dattype}.csv")
     bad_subs_df = (
         pd.read_csv(bad_csv_path, index_col=0)
         if os.path.exists(bad_csv_path)
-        else pd.DataFrame({}, columns=columns)
+        else pd.DataFrame({}, columns=["sub", "error"])
     )
-    good_csv_path = os.path.join(
-        args.save_path, f"participants_info_{args.dattype}.csv"
-    )
+    bad_subs_df.to_csv(bad_csv_path)
+    good_csv_path = os.path.join(args.save_path, f"participants_info_{args.dattype}.csv")
     columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
     if args.dattype != "rest":
         columns.append("event_labels")
@@ -141,6 +163,7 @@ def prepare_data(
         if os.path.exists(good_csv_path)
         else pd.DataFrame([{}], columns=columns)
     )
+    good_subs_df.to_csv(good_csv_path)
 
     if sub in good_subs_df["sub"].tolist() + bad_subs_df["sub"].tolist():
         return
@@ -155,14 +178,15 @@ def prepare_data(
             try:
                 events = mne.find_events(raw)
             except ValueError as e:
-                logging.info(f"{sub} could not be used because of {e}")
-                row = [sub, "wrong event timings"]
-                bad_subs_df = bad_subs_df._append(
-                    {key: val for key, val in zip(columns, row)}, ignore_index=True
+                bad_subj_found(
+                    sub=sub,
+                    info="wrong event timings",
+                    message=f"{sub} could not be used because of {e}",
+                    df_path=bad_csv_path,
                 )
-                bad_subs_df.to_csv(bad_csv_path)
                 return
-            if set(events[:, -1]) == {6, 7, 8, 9}:
+            unique_events = set(events[:, -1])
+            if unique_events == {6, 7, 8, 9}:
                 event_dict = {
                     6: "auditory1",
                     7: "auditory2",
@@ -171,12 +195,12 @@ def prepare_data(
                 }
                 labels = [event_dict[event] for event in events[:, -1]]
             else:
-                logging.info(f"a different event has been found in {sub}")
-                row = [sub, "wrong event found"]
-                good_subs_df = good_subs_df._append(
-                    {key: val for key, val in zip(columns, row)}, ignore_index=True
+                bad_subj_found(
+                    sub=sub,
+                    info=f"wrong event found: {unique_events}",
+                    message=f"a different event has been found in {sub}: {unique_events}",
+                    df_path=bad_csv_path,
                 )
-                good_subs_df.to_csv(good_csv_path)
                 return
             data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
         else:
@@ -197,16 +221,16 @@ def prepare_data(
         if dattype in ("passive", "smt"):
             row.append(labels)
     else:
-        logging.info(f"{sub} was dropped because of bad channels {bads}")
-        row = [sub, "bad channels"]
-        bad_subs_df = bad_subs_df._append(
-            {key: val for key, val in zip(columns, row)}, ignore_index=True
+        bad_subj_found(
+            sub=sub,
+            info="bad channels",
+            message=f"{sub} was dropped because of bad channels {bads}",
+            df_path=bad_csv_path,
         )
-        bad_subs_df.to_csv(bad_csv_path)
         return
 
     good_subs_df = good_subs_df._append(
-        {key: val for key, val in zip(columns, row)}, ignore_index=True
+        {key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
     )
     good_subs_df.to_csv(good_csv_path)
     return

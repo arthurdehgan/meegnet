@@ -143,7 +143,7 @@ else:
         if len(current_tested) == 0:
             run_script(params, local=args.local, debug=args.debug, options=args.options)
             params.update(scores)
-            tested = tested.append(params, ignore_index=True)
+            tested = tested._append(params, ignore_index=True)
             tested.to_csv(csv_file)
             n_test += 1
             if args.debug:

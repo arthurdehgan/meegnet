@@ -31,7 +31,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--net-option",
-    default="custom_net",
+    default="best_net",
     choices=["custom_net", "best_net", "EEGNet", "VGG", "vanPutNet", "MLP"],
     help="cNet is the custom net.",
 )
@@ -231,6 +231,7 @@ parser.add_argument(
 parser.add_argument(
     "-n",
     "--nchan",
+    default=100,
     type=int,
     help="the number of channels for the first convolution, the other channel numbers scale with this one",
 )

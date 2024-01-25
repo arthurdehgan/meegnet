@@ -36,10 +36,10 @@ DEVICE = cuda_check()
 # Torchsummary checks #
 #######################
 
-try:
-    from torchinfo import summary as model_summary
-except ImportError:
-    logging.warning("Warning: Error loading torchinfo")
+# try:
+#     from torchinfo import summary as model_summary
+# except ImportError:
+#     logging.warning("Warning: Error loading torchinfo")
 
 
 def get_df_status(file_path, args) -> pd.DataFrame:
@@ -158,6 +158,8 @@ def train_evaluate(
         trial_length = TRIAL_LENGTH_BANDS
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
+        if args.eventclf:
+            trial_length=160
     elif args.feature == "cov":
         # TODO
         pass
