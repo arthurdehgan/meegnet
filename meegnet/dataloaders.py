@@ -58,9 +58,7 @@ class InfiniteDataLoader:
         An infinite data loader.
     """
 
-    def __init__(
-        self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
-    ):
+    def __init__(self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None):
         super().__init__()
 
         if weights is not None:
@@ -99,9 +97,7 @@ class InfiniteDataLoader:
 
 def assert_params(band, dattype):
     if dattype not in ["rest", "passive", "task"]:
-        logging.error(
-            f"Incorrect data type: {dattype}. Must be in (rest, passive, task)"
-        )
+        logging.error(f"Incorrect data type: {dattype}. Must be in (rest, passive, task)")
     return
 
 
@@ -202,9 +198,7 @@ def create_datasets(
     participants_df["age"] = pd.to_numeric(participants_df["age"])
 
     subs = np.array(
-        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)[
-            "sub"
-        ]
+        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)["sub"]
     )
 
     subs = subs[:max_subj]
@@ -215,9 +209,7 @@ def create_datasets(
         # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
         forbidden_subs = []
         if len(forbidden_subs) > 0:
-            logging.info(
-                f"removed subjects {forbidden_subs}, they were causing problems..."
-            )
+            logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
         for sub in forbidden_subs:
             if sub in subs:
                 subs = np.delete(subs, np.where(subs == sub)[0])
@@ -344,16 +336,12 @@ def load_sets(
     # forbidden_subs = ["CC220901"]
     forbidden_subs = []
     if len(forbidden_subs) > 0:
-        logging.info(
-            f"removed subjects {forbidden_subs}, they were causing problems..."
-        )
+        logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
 
     for sub in forbidden_subs:
         dataframe = dataframe.loc[dataframe["sub"] != sub]
 
-    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[
-        :max_subj
-    ]
+    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[:max_subj]
 
     n_sub = len(dataframe)
     logging.debug(f"Loading {n_sub} subjects data")
@@ -577,16 +565,12 @@ def load_data(
             continue
 
         if n_samples is not None:
-            random_samples = np.random.choice(
-                np.arange(len(data)), n_samples, replace=False
-            )
+            random_samples = np.random.choice(np.arange(len(data)), n_samples, replace=False)
             data = torch.Tensor(data)[random_samples]
 
         if eventclf:
             events = np.array(
-                literal_eval(
-                    dataframe.loc[dataframe["sub"] == sub]["event_labels"].item()
-                )
+                literal_eval(dataframe.loc[dataframe["sub"] == sub]["event_labels"].item())
             )
             if len(events) != len(data):
                 n_sub -= 1
@@ -611,9 +595,7 @@ def load_data(
     return X, y
 
 
-def load_epoched_sub(
-    data_path, sub, chan_index, dattype="passive", s_freq=500, psd=False
-):
+def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500, psd=False):
     """
     Loads epoched data for a particular subject.
 
@@ -737,6 +719,8 @@ def load_sub(
             folder = "psd" if psd else f"downsampled_{s_freq}"
             file_path = os.path.join(data_path, folder, f"{dattype}_{sub}.npy")
             sub_data = np.load(file_path)[chan_index]
+            if len(sub_data.shape) < 3:
+                sub_data = sub_data[np.newaxis, :]
             if not psd:
                 step = int(seg * s_freq)
                 start = int(offset * s_freq)
