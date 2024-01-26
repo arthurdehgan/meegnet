@@ -68,7 +68,7 @@ parser.add_argument(
 parser.add_argument(
     "--sfreq",
     type=int,
-    default=200,
+    default=500,
     help="The sampling frequency of the data, mainly for loading the correct data",
 )
 parser.add_argument(
