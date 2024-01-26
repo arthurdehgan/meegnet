@@ -79,20 +79,20 @@ def compute_psd(data: np.array, fs: int, option: str = "multitaper"):
 
 
 def cuda_check():
-   """
-   Checks if a CUDA device is available and returns it.
+    """
+    Checks if a CUDA device is available and returns it.
 
-   Returns
-   -------
-   torch.device
-       A CUDA device if one is available, otherwise a CPU device.
-   """
-   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-   if device.type == 'cuda':
-       logging.info('CUDA is available! Training on GPU.')
-   else:
-       logging.info('CUDA is not available. Training on CPU.')
-   return device
+    Returns
+    -------
+    torch.device
+        A CUDA device if one is available, otherwise a CPU device.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda":
+        logging.info("CUDA is available! Training on GPU.")
+    else:
+        logging.info("CUDA is not available. Training on CPU.")
+    return device
 
 
 def check_PD(mat):
@@ -234,9 +234,7 @@ def train(
             if timing:
                 tpb = (time() - t1) / (i + 1)
                 et = tpb * n_batches
-                progress += (
-                    f"// time per batch = {tpb:.5f} // epoch time = {nice_time(et)}"
-                )
+                progress += f"// time per batch = {tpb:.5f} // epoch time = {nice_time(et)}"
 
             if n_batches > 10:
                 if i % (n_batches // 10) == 0:
