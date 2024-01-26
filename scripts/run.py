@@ -7,7 +7,7 @@ from torch.utils.data import ConcatDataset
 from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.dataloaders import create_loader, create_datasets, load_sets
 from meegnet.network import create_net
-from meegnet.utils import train, load_checkpoint, cuda_check
+from meegnet.utils import train, load_checkpoint, cuda_check, evaluate
 from meegnet.parsing import parser
 
 ####################
@@ -84,9 +84,7 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
         logging.info(f"Training model for fold {fold+1}/{folds}:")
         results = train_evaluate(fold, datasets, net_option, args=args)
         logging.info(f"Finished training for fold {fold+1}/{folds}:")
-        logging.info(
-            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
-        )
+        logging.info(f"loss: {results['loss_score']} // accuracy: {results['acc_score']}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
         cv.append(results["acc_score"])
     return cv
@@ -159,7 +157,7 @@ def train_evaluate(
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
         if args.eventclf:
-            trial_length=160
+            trial_length = 160
     elif args.feature == "cov":
         # TODO
         pass
@@ -237,9 +235,7 @@ def train_evaluate(
             _, net_state, _ = load_checkpoint(model_filepath)
             net.load_state_dict(net_state)
         else:
-            logging.warning(
-                f"Error: Can't evaluate model {model_filepath}, file not found."
-            )
+            logging.warning(f"Error: Can't evaluate model {model_filepath}, file not found.")
 
     results = loadmat(model_filepath[:-2] + "mat")
     if os.path.exists(rs_csv_path) and args.randomsearch:
@@ -256,9 +252,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     fold = None if args.fold is None else int(args.fold)
-    assert not (
-        args.eventclf and args.subclf
-    ), "Please choose only one type of classification"
+    assert not (args.eventclf and args.subclf), "Please choose only one type of classification"
     if args.eventclf:
         assert (
             args.dattype != "rest"
@@ -269,6 +263,7 @@ if __name__ == "__main__":
     # Starting log #
     ################
 
+    logging.root.setLevel(logging.INFO)
     if args.log:
         log_name = args.model_name
         if fold is not None:
@@ -376,4 +371,5 @@ if __name__ == "__main__":
         fold = 0 if fold is None else fold
         logging.info("Training model:")
         train_evaluate(fold, datasets, args.net_option, args=args)
-        logging.info("Evaluating model:")
+        # logging.info("Evaluating model:")
+        # evaluate(fold, datasets, args.net_option, args=args)
