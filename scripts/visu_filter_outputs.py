@@ -8,20 +8,20 @@ import pandas as pd
 from torch import nn
 
 # from scipy.signal import welch
-from camcan.parsing import parser
-from camcan.params import TIME_TRIAL_LENGTH
-from camcan.utils import load_checkpoint, compute_psd, cuda_check
-from camcan.dataloaders import (
+from meegnet.parsing import parser
+from meegnet.params import TIME_TRIAL_LENGTH
+from meegnet.utils import load_checkpoint, compute_psd, cuda_check
+from meegnet.dataloaders import (
     load_sub,
     BANDS,
 )
-from camcan.viz import generate_topomap, load_info, GuidedBackprop, make_gif
-from camcan.misc_functions import (
+from meegnet.viz import generate_topomap, load_info, GuidedBackprop, make_gif
+from meegnet.util_viz import (
     save_gradient_images,
     convert_to_grayscale,
     get_positive_negative_saliency,
 )
-from camcan.network import create_net
+from meegnet.network import create_net
 
 DEVICE = cuda_check()
 LABELS = ["image", "sound"]  # image is label 0 and sound label 1
@@ -35,9 +35,7 @@ def compute_save_guided_bprop(net, X, y):
     file_name_to_export = f"../figures/{target_name}"
     save_gradient_images(guided_grads, file_name_to_export + "_Guided_BP_color")
     grayscale_guided_grads = convert_to_grayscale(guided_grads)
-    save_gradient_images(
-        grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray"
-    )
+    save_gradient_images(grayscale_guided_grads, file_name_to_export + "_Guided_BP_gray")
     pos_sal, neg_sal = get_positive_negative_saliency(guided_grads)
     save_gradient_images(pos_sal, file_name_to_export + "_pos_sal")
     save_gradient_images(neg_sal, file_name_to_export + "_neg_sal")
@@ -252,9 +250,7 @@ if __name__ == "__main__":
     ########################
 
     if args.topograd:
-        dataframe = pd.read_csv(
-            f"{args.data_path}clean_participant_new.csv", index_col=0
-        )
+        dataframe = pd.read_csv(f"{args.data_path}clean_participant_new.csv", index_col=0)
         subj_list = dataframe["participant_id"]
         subj_list = subj_list.sample(frac=1).reset_index(drop=True)
         if args.max_subj is not None:
@@ -265,9 +261,7 @@ if __name__ == "__main__":
         for sal_option in sal_options:
             bands_values = [[], []]
             name = "../data/psd"
-            name = (
-                name + f"_{sal_option}_saliency_windows" if args.use_windows else name
-            )
+            name = name + f"_{sal_option}_saliency_windows" if args.use_windows else name
             files = [f"{name}_{lab}.npy" for lab in LABELS]
 
             if all(os.path.exists(file) for file in files):
@@ -275,9 +269,7 @@ if __name__ == "__main__":
                     bands_values[i] = np.load(file)
                 bands_values = [np.array(bv).mean(axis=0) for bv in bands_values]
             else:
-                print(
-                    "Could not find the psd files for the genration of the topograd maps."
-                )
+                print("Could not find the psd files for the genration of the topograd maps.")
                 print(
                     "Please check dapa path or compute them using the compute_saliency_based_psd.py script."
                 )
