@@ -10,7 +10,7 @@ from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, cuda_check
 from meegnet.network import create_net
 from meegnet.dataloaders import load_data
-from meegnet.misc_functions import (
+from meegnet.util_viz import (
     get_positive_negative_saliency,
     compute_saliency_based_psd,
 )
@@ -60,6 +60,8 @@ def compute_all(sub, sal_path, args):
         target_psd = [[], []]
     for trial, label in zip(data, targets):
         X = trial[np.newaxis].type(torch.FloatTensor).to(DEVICE)
+        if len(X.shape) < 4:
+            X = X[np.newaxis, :]
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
         confidence = preds.max()
@@ -194,7 +196,10 @@ if __name__ == "__main__":
     if args.feature == "bands":
         trial_length = 5
     elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
+        if args.eventclf:
+            trial_length = 160
+        else:
+            trial_length = TIME_TRIAL_LENGTH
     elif args.feature == "cov":
         # TODO
         pass
@@ -244,11 +249,11 @@ if __name__ == "__main__":
         os.makedirs(sal_path)
 
     # TODO Make use of data-path here, having path hard-coded = bad
-    model_filepath = os.path.join(name + ".pt")
+    model_filepath = os.path.join(args.save_path, name + ".pt")
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
-    GBP = GuidedBackpropReLUModel(net, use_cuda=(DEVICE == "cpu"))
+    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
     logging.info(net)
 
     dataframe = (
@@ -259,9 +264,10 @@ if __name__ == "__main__":
         .sample(frac=1, random_state=args.seed)
         .reset_index(drop=True)[: args.max_subj]
     )
-    subj_list = dataframe["sub"][
-        513:
-    ]  # TODO remove starting point ! did this because the computation were interrupted
+    subj_list = dataframe["sub"]
+    # [
+    #     513:
+    # ]  # TODO remove starting point ! did this because the computation were interrupted
 
     for i, sub in enumerate(subj_list):
         compute_all(sub, sal_path, args)
