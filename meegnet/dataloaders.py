@@ -107,7 +107,7 @@ def create_datasets(
     max_subj=1000,
     chan_index=[0, 1, 2],
     s_freq=200,
-    seg=2,
+    seg=0.8,
     debug=False,
     seed=0,
     printmem=False,
@@ -137,7 +137,7 @@ def create_datasets(
     s_freq : int, optional
         Sampling frequency. Default is 200.
     seg : int, optional
-        Segment size in seconds. Default is 2.
+        Segment size in seconds. Default is .8.
     debug : bool, optional
         Whether to enable debugging mode. Default is False.
     seed : int, optional
@@ -265,7 +265,7 @@ def load_sets(
     max_subj=1000,
     n_splits=5,
     offset=0,
-    seg=2,
+    seg=0.8,
     s_freq=200,
     n_samples=None,
     chan_index=[0, 1, 2],
@@ -291,7 +291,7 @@ def load_sets(
     offset : int, optional
         Offset for the data. Default is 0.
     seg : int, optional
-        Segment size in seconds. Default is 2.
+        Segment size in seconds. Default is .8.
     s_freq : int, optional
         Sampling frequency. Default is 200.
     n_samples : int, optional
@@ -456,7 +456,7 @@ def load_data(
     dataframe,
     data_path,
     offset=30,
-    seg=2,
+    seg=0.8,
     s_freq=200,
     chan_index=[0, 1, 2],
     printmem=False,
@@ -481,7 +481,7 @@ def load_data(
     offset : int, optional
         Offset for the data. Default is 30.
     seg : int, optional
-        Segment size in seconds. Default is 2.
+        Segment size in seconds. Default is .8.
     s_freq : int, optional
         Sampling frequency. Default is 200.
     chan_index : list, optional
@@ -656,7 +656,7 @@ def load_sub(
     epoched=False,
     offset=30,
     s_freq=200,
-    seg=2,
+    seg=0.8,
     psd=False,
 ):
     """
@@ -686,7 +686,7 @@ def load_sub(
     s_freq : int, optional
         Sampling frequency. Default is 200.
     seg : int, optional
-        Segment size in seconds. Default is 2.
+        Segment size in seconds. Default is .8.
     psd : bool, optional
         Whether to load power spectral density data. Default is False.
 
