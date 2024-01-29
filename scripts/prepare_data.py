@@ -8,7 +8,7 @@ This script assumes a copy of the cc700 and dataman folders to a data path parse
 through the argparser.
 
 example on how to run the script:
-python prepare_data.py --data-path="/home/user/data/camcan/" --save-path="/home/user/data" --user="Firstname_Name_1160" --datatype="passive" --epoched
+python prepare_data.py --data-path="/home/user/data/camcan/" --save-path="/home/user/data" --datatype="passive" --epoched
 
 TODO:
     add a prompt on the amount of disk space and time required
@@ -70,8 +70,6 @@ def prepare_data(
     save_path : str
         the path where all the data will be saved in subfolder "downsampled_{s_freq}"
         and the csv file will be saved.
-    camcan_user : str
-        your camcan user in order to find metadata about the subjects. Should be firstname_name_ID.
     s_freq : int
         the frequency to downsample the data to.
     datatype : str
@@ -98,7 +96,7 @@ def prepare_data(
         f"derivatives_{datatype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
-    user = os.listdir("dataman/useraccess/processed/")
+    user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
     source_csv_path = os.path.join(
         data_path,
         f"dataman/useraccess/processed/{user}/standard_data.csv",
