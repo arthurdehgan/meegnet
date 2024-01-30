@@ -47,7 +47,7 @@ def compute_all(sub, sal_path, args):
         seed=args.seed,
         s_freq=args.sfreq,
         chan_index=chan_index,
-        dattype=args.dattype,
+        datatype=args.datatype,
         eventclf=args.eventclf,
     )
     if data is None or targets is None:
@@ -258,7 +258,7 @@ if __name__ == "__main__":
 
     dataframe = (
         pd.read_csv(
-            os.path.join(args.data_path, f"participants_info_{args.dattype}.csv"),
+            os.path.join(args.data_path, f"participants_info_{args.datatype}.csv"),
             index_col=0,
         )
         .sample(frac=1, random_state=args.seed)

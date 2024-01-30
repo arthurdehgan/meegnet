@@ -12,7 +12,7 @@ from scipy.io import savemat
 from scipy.signal import welch
 from joblib import Parallel, delayed
 from mne.io import read_raw_fif
-from params import SUBJECT_LIST
+from meegnet.params import SUBJECT_LIST
 
 
 SF = 1000  # Sampling Frequency
@@ -82,7 +82,5 @@ if __name__ == "__main__":
             window=WINDOW,
             overlap=OVERLAP,
         )
-        for subject, data_type, clean_type in product(
-            SUBJECT_LIST, DATA_TYPES, CLEAN_TYPES
-        )
+        for subject, data_type, clean_type in product(SUBJECT_LIST, DATA_TYPES, CLEAN_TYPES)
     )
