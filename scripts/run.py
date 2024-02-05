@@ -84,7 +84,9 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
         logging.info(f"Training model for fold {fold+1}/{folds}:")
         results = train_evaluate(fold, datasets, net_option, args=args)
         logging.info(f"Finished training for fold {fold+1}/{folds}:")
-        logging.info(f"loss: {results['loss_score']} // accuracy: {results['acc_score']}")
+        logging.info(
+            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
+        )
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
         cv.append(results["acc_score"])
     return cv
@@ -233,7 +235,9 @@ def train_evaluate(
             _, net_state, _ = load_checkpoint(model_filepath)
             net.load_state_dict(net_state)
         else:
-            logging.warning(f"Error: Can't evaluate model {model_filepath}, file not found.")
+            logging.warning(
+                f"Error: Can't evaluate model {model_filepath}, file not found."
+            )
 
     results = loadmat(model_filepath[:-2] + "mat")
     if os.path.exists(rs_csv_path) and args.randomsearch:
@@ -250,11 +254,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     fold = None if args.fold is None else int(args.fold)
-    assert not (args.eventclf and args.subclf), "Please choose only one type of classification"
+    assert not (
+        args.eventclf and args.subclf
+    ), "Please choose only one type of classification"
     if args.eventclf:
         assert (
-            args.dattype != "rest"
-        ), "dattype must be set to passive in order to run eventclf"
+            args.datatype != "rest"
+        ), "datatype must be set to passive in order to run eventclf"
     ages = (args.age_min, args.age_max)
 
     ################
@@ -317,7 +323,7 @@ if __name__ == "__main__":
             seed=args.seed,
             printmem=args.printmem,
             epoched=args.epoched,
-            dattype=args.dattype,
+            datatype=args.datatype,
             testing=args.testsplit,
             s_freq=args.sfreq,
         )
@@ -334,7 +340,7 @@ if __name__ == "__main__":
             printmem=args.printmem,
             ages=ages,
             n_samples=args.n_samples,
-            dattype=args.dattype,
+            datatype=args.datatype,
             eventclf=args.eventclf,
             epoched=args.epoched,
             testing=args.testsplit,

@@ -36,7 +36,7 @@ parser.add_argument(
     help="cNet is the custom net.",
 )
 parser.add_argument(
-    "--dattype",
+    "--datatype",
     default="rest",
     choices=["rest", "smt", "passive"],
     help="the type of data to be loaded",

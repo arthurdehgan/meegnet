@@ -58,7 +58,9 @@ class InfiniteDataLoader:
         An infinite data loader.
     """
 
-    def __init__(self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None):
+    def __init__(
+        self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
+    ):
         super().__init__()
 
         if weights is not None:
@@ -95,9 +97,11 @@ class InfiniteDataLoader:
 # End of domainBed code
 
 
-def assert_params(band, dattype):
-    if dattype not in ["rest", "passive", "task"]:
-        logging.error(f"Incorrect data type: {dattype}. Must be in (rest, passive, task)")
+def assert_params(band, datatype):
+    if datatype not in ["rest", "passive", "task"]:
+        logging.error(
+            f"Incorrect data type: {datatype}. Must be in (rest, passive, task)"
+        )
     return
 
 
@@ -112,7 +116,7 @@ def create_datasets(
     seed=0,
     printmem=False,
     ages=(0, 100),
-    dattype="rest",
+    datatype="rest",
     band="",
     n_samples=None,
     eventclf=False,
@@ -146,7 +150,7 @@ def create_datasets(
         Whether to print memory usage. Default is False.
     ages : tuple, optional
         Age range of the participants to be included in the dataset. Default is (0, 100).
-    dattype : str, optional
+    datatype : str, optional
         Type of data to be loaded. Default is "rest".
         other options are "passive" and "smt"
     band : str, optional
@@ -189,7 +193,7 @@ def create_datasets(
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    csv_filepath = os.path.join(data_folder, f"participants_info_{dattype}.csv")
+    csv_filepath = os.path.join(data_folder, f"participants_info_{datatype}.csv")
     participants_df = (
         pd.read_csv(csv_filepath, index_col=0)
         .sample(frac=1, random_state=seed)
@@ -198,18 +202,22 @@ def create_datasets(
     participants_df["age"] = pd.to_numeric(participants_df["age"])
 
     subs = np.array(
-        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)["sub"]
+        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)[
+            "sub"
+        ]
     )
 
     subs = subs[:max_subj]
 
     # We noticed that specific subjects were the reason why we couldn't
     # learn anything from the data: TODO we might remove those now that we updated dataset
-    if dattype == "passive":
+    if datatype == "passive":
         # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
         forbidden_subs = []
         if len(forbidden_subs) > 0:
-            logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
+            logging.info(
+                f"removed subjects {forbidden_subs}, they were causing problems..."
+            )
         for sub in forbidden_subs:
             if sub in subs:
                 subs = np.delete(subs, np.where(subs == sub)[0])
@@ -243,7 +251,7 @@ def create_datasets(
                 data_path=data_folder,
                 chan_index=chan_index,
                 printmem=printmem,
-                dattype=dattype,
+                datatype=datatype,
                 n_samples=n_samples,
                 seed=seed,
                 epoched=epoched,
@@ -270,7 +278,7 @@ def load_sets(
     n_samples=None,
     chan_index=[0, 1, 2],
     printmem=False,
-    dattype="rest",
+    datatype="rest",
     epoched=False,
     seed=0,
     band="",
@@ -301,7 +309,7 @@ def load_sets(
         0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
     printmem : bool, optional
         Whether to print memory usage. Default is False.
-    dattype : str, optional
+    datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
     epoched : bool, optional
@@ -328,20 +336,24 @@ def load_sets(
     This function loads data subject by subject. It divides the data into a specified number of splits. Each subject's data is loaded into a separate split.
     The function also handles the removal of subjects that cause issues during data loading.
     """
-    assert_params(band, dattype)
+    assert_params(band, datatype)
 
-    csv_file = os.path.join(data_path, f"participants_info_{dattype}.csv")
+    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
     forbidden_subs = []
     if len(forbidden_subs) > 0:
-        logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
+        logging.info(
+            f"removed subjects {forbidden_subs}, they were causing problems..."
+        )
 
     for sub in forbidden_subs:
         dataframe = dataframe.loc[dataframe["sub"] != sub]
 
-    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[:max_subj]
+    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[
+        :max_subj
+    ]
 
     n_sub = len(dataframe)
     logging.debug(f"Loading {n_sub} subjects data")
@@ -372,7 +384,7 @@ def load_sets(
             n_samples=n_samples,
             band=band,
             chan_index=chan_index,
-            dattype=dattype,
+            datatype=datatype,
             epoched=epoched,
             offset=offset,
             s_freq=s_freq,
@@ -460,7 +472,7 @@ def load_data(
     s_freq=200,
     chan_index=[0, 1, 2],
     printmem=False,
-    dattype="rest",
+    datatype="rest",
     n_samples=None,
     seed=0,
     epoched=False,
@@ -489,7 +501,7 @@ def load_data(
         0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
     printmem : bool, optional
         Whether to print memory usage. Default is False.
-    dattype : str, optional
+    datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
     n_samples : int, optional
@@ -519,10 +531,10 @@ def load_data(
     If `eventclf` is set to True, it uses labels from the events. Otherwise, it uses sex as the default label.
     """
 
-    assert_params(band, dattype)
+    assert_params(band, datatype)
     if eventclf:
         assert (
-            dattype != "rest"
+            datatype != "rest"
         ), "We can not perform event classification on resting state data as it contains no events and therefore can not be epoched."
 
     n_sub = len(dataframe)
@@ -553,7 +565,7 @@ def load_data(
             n_samples=n_samples,
             band=band,
             chan_index=chan_index,
-            dattype=dattype,
+            datatype=datatype,
             epoched=epoched,
             offset=offset,
             s_freq=s_freq,
@@ -565,12 +577,16 @@ def load_data(
             continue
 
         if n_samples is not None:
-            random_samples = np.random.choice(np.arange(len(data)), n_samples, replace=False)
+            random_samples = np.random.choice(
+                np.arange(len(data)), n_samples, replace=False
+            )
             data = torch.Tensor(data)[random_samples]
 
         if eventclf:
             events = np.array(
-                literal_eval(dataframe.loc[dataframe["sub"] == sub]["event_labels"].item())
+                literal_eval(
+                    dataframe.loc[dataframe["sub"] == sub]["event_labels"].item()
+                )
             )
             if len(events) != len(data):
                 n_sub -= 1
@@ -595,7 +611,9 @@ def load_data(
     return X, y
 
 
-def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500, psd=False):
+def load_epoched_sub(
+    data_path, sub, chan_index, datatype="passive", s_freq=500, psd=False
+):
     """
     Loads epoched data for a particular subject.
 
@@ -607,7 +625,7 @@ def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500, 
         Subject identifier.
     chan_index : list
         List of channel indices to be considered.
-    dattype : str, optional
+    datatype : str, optional
         Type of data to be loaded. Default is "passive".
         Other options is "smt".
     s_freq : int, optional
@@ -623,15 +641,15 @@ def load_epoched_sub(data_path, sub, chan_index, dattype="passive", s_freq=500, 
     Raises
     ------
     AssertionError
-        If `dattype` is not "passive" or "smt".
+        If `datatype` is not "passive" or "smt".
 
     Notes
     -----
     This function loads epoched data for a particular subject. The data is loaded from a `.npy` file located in a specific directory depending on whether power spectral density data is requested. The function also performs zero mean normalization on the data if it's not power spectral density data.
     """
-    assert dattype in ("passive", "smt"), "cannot load epoched data for resting state"
+    assert datatype in ("passive", "smt"), "cannot load epoched data for resting state"
     folder = "psd" if psd else f"downsampled_{s_freq}"
-    sub_path = os.path.join(data_path, folder, f"{dattype}_{sub}_epoched.npy")
+    sub_path = os.path.join(data_path, folder, f"{datatype}_{sub}_epoched.npy")
     try:
         sub_data = np.load(sub_path)[:, chan_index]
         if not psd:
@@ -652,7 +670,7 @@ def load_sub(
     n_samples=None,
     band="",
     chan_index=[0, 1, 2],
-    dattype="rest",
+    datatype="rest",
     epoched=False,
     offset=30,
     s_freq=200,
@@ -676,7 +694,7 @@ def load_sub(
     chan_index : list, optional
         List of channel indices to be considered. Default is [0, 1, 2].
         0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
-    dattype : str, optional
+    datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
     epoched : bool, optional
@@ -703,13 +721,13 @@ def load_sub(
     """
     if epoched:
         data = load_epoched_sub(
-            data_path, sub, chan_index, dattype=dattype, s_freq=s_freq, psd=psd
+            data_path, sub, chan_index, datatype=datatype, s_freq=s_freq, psd=psd
         )
     else:
         try:
             # if domain in ("cov", "cosp"):  # TODO Deprecated
             #     file_path = os.path.join(
-            #         data_path, "covariances", f"{sub}_{dattype}_{domain}.npy"
+            #         data_path, "covariances", f"{sub}_{datatype}_{domain}.npy"
             #     )
             #     data = np.load(file_path)[chan_index]
             #     data = np.swapaxes(data, 0, 1)
@@ -717,7 +735,7 @@ def load_sub(
             #         data = data[:, :, BANDS.index(band)]
             # else:
             folder = "psd" if psd else f"downsampled_{s_freq}"
-            file_path = os.path.join(data_path, folder, f"{dattype}_{sub}.npy")
+            file_path = os.path.join(data_path, folder, f"{datatype}_{sub}.npy")
             sub_data = np.load(file_path)[chan_index]
             if len(sub_data.shape) < 3:
                 sub_data = sub_data[np.newaxis, :]
