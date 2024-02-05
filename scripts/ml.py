@@ -16,7 +16,7 @@ from sklearn.model_selection import RandomizedSearchCV
 import numpy as np
 
 # from path import Path as path
-from params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF
+from meegnet.params import DATA_PATH, SAVE_PATH, CHAN_DF, SUB_DF
 
 typ = 2  # MAG
 if typ == 2:
@@ -29,7 +29,7 @@ def extract_bands(data):
     f = np.asarray([float(i / 3) for i in range(data.shape[-1])])
     # data = data[:, :, (f >= 8) * (f <= 12)].mean(axis=2)
     data = [
-        data[:, :, (f >= .5) * (f <= 4)].mean(axis=-1)[..., None],
+        data[:, :, (f >= 0.5) * (f <= 4)].mean(axis=-1)[..., None],
         data[:, :, (f >= 8) * (f <= 12)].mean(axis=-1)[..., None],
         data[:, :, (f >= 12) * (f <= 30)].mean(axis=-1)[..., None],
         data[:, :, (f >= 30) * (f <= 120)].mean(axis=-1)[..., None],
@@ -73,7 +73,6 @@ def load_freq_data(dataframe, path=DATA_PATH):
 
 
 if __name__ == "__main__":
-
     # from sklearn.datasets import load_breast_cancer
 
     # data = load_breast_cancer()

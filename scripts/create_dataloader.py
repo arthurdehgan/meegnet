@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from params import DATA_PATH, SUB_DF, OFFSET, TIME_TRIAL_LENGTH
+from meegnet.params import DATA_PATH, SUB_DF, OFFSET, TIME_TRIAL_LENGTH
 
 
 def create_sub_info_timestamps(dataframe, dpath=DATA_PATH):
