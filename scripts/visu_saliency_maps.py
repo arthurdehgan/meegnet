@@ -8,14 +8,6 @@ from meegnet.viz import load_info, generate_topomap
 import mne
 import seaborn as sns
 
-mne.set_log_level(False)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(message)s",
-    datefmt="%m/%d/%Y %I:%M:%S %p",
-)
-
 
 def generate_saliency_figure(
     saliencies: dict,
@@ -51,12 +43,11 @@ def generate_saliency_figure(
     axes = []
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label]
-        if np.isnan(gradient):
-            continue
         gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
         # Change this part, hard codded = bad and we want some flexibility depending on the use of sensors
-        channels = "MAG"  # ("MAG", "GRAD1", "GRAD2")
+        channels = ["MAG"]  # ("MAG", "GRAD1", "GRAD2")
+        n_blocs = len(channels)
         for j, chan in zip(range(0, 9, 3), channels):
             idx = j // 3
             grads = gradient[idx]
@@ -90,7 +81,7 @@ def generate_saliency_figure(
                 plt.xticks([0, 200, 400], [0, 1000, 2000], fontsize=8)
             if j == 0:
                 axes[-1].text(-50, 50, label, ha="left", va="center", rotation="vertical")
-            if idx == 2:
+            if idx == n_blocs - 1:
                 axes[-1].yaxis.set_label_position("right")
                 plt.ylabel("sensors")
             if i == 0:
@@ -100,9 +91,20 @@ def generate_saliency_figure(
             axes.append(fig.add_subplot(grid[i, j + 2]))
             data = grads[:, highest]
             info = load_info()
-            im = generate_topomap(data, info, vmin=vmin, vmax=vmax, cmap=cmap)
-            if idx == 2:
-                axes.append(fig.add_subplot(grid[i, 9]))
+
+            im, _ = mne.viz.plot_topomap(
+                data.ravel(),
+                info,
+                res=128,
+                cmap=cmap,
+                vlim=(vmin, vmax) if vmax > vmin else (None, None),
+                show=False,
+                contours=1,
+                extrapolate="local",
+            )
+            if idx == n_blocs - 1:
+                print(n_blocs)
+                axes.append(fig.add_subplot(grid[i, n_blocs * 3]))
                 fig.colorbar(
                     im,
                     ax=axes[-1],
@@ -118,6 +120,14 @@ def generate_saliency_figure(
 
 
 if __name__ == "__main__":
+    mne.set_log_level(False)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+    )
+
     parser.add_argument(
         "--confidence",
         type=float,
@@ -127,6 +137,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     random_subject = args.seed
+
+    #################################################
+    ### Create network name depending on the args ###
+    #################################################
 
     if args.fold is not None:
         fold = args.fold + 1
@@ -143,26 +157,29 @@ if __name__ == "__main__":
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
 
+    #########################################
+    ### Get saliencies found in data-path ###
+    #########################################
+
     sal_path = os.path.join(args.data_path, "saliency_maps", name)
     file_list = os.listdir(sal_path)
-    # might want to use participants.csv for subject list :
+    # TODO might want to use participants.csv for subject list :
     subjects = np.unique([file.split("_")[0] for file in file_list])[: args.max_subj]
-    all_subjects_saliencies = {"image": [], "sound": []}
 
     if args.eventclf:
         labels = ["visual", "auditory"]
-        all_subjects_saliencies = {labels[0]: [], labels[1]: []}
+        all_saliencies = {labels[0]: [], labels[1]: []}
     elif args.subclf:
         labels = subjects
-        all_subjects_saliencies = {sub: [] for sub in subjects}
+        all_saliencies = {sub: [] for sub in subjects}
     else:
         labels = ["male", "female"]
-        all_subjects_saliencies = {labels[0]: [], labels[1]: []}
+        all_saliencies = {labels[0]: [], labels[1]: []}
 
     # label contains same information as sub for subclf but we only load files that have label == sub
     for i, sub in enumerate(subjects):
-        current_sub = {}
-        for label in all_subjects_saliencies.keys():
+        sub_saliencies = {}
+        for label in all_saliencies.keys():
             if args.subclf:
                 if label != sub:
                     continue
@@ -177,18 +194,12 @@ if __name__ == "__main__":
                 if os.path.exists(sal_file):
                     try:
                         saliencies[saliency_type] = np.load(sal_file)
-                        if not saliencies[saliency_type]:
-                            logging.info(f"No saliencies found in file : {sal_file}")
-                            continue
+                        # if not saliencies[saliency_type]:
+                        #     logging.warning(f"No saliencies found in file : {sal_file}")
+                        #     nofile = True
+                        #     continue
                     except:
-                        print(f"Error loading {sal_file}")
-                        nofile = True
-                        continue
-                    if saliencies[saliency_type].shape[1:] != (3, 102, 400):
-                        nofile = True
-                        continue
-                    elif np.isnan(saliencies[saliency_type]).any():
-                        print(f"nan found in {sal_file}")
+                        logging.warning(f"Error loading {sal_file}")
                         nofile = True
                         continue
                 else:
@@ -196,10 +207,10 @@ if __name__ == "__main__":
                     continue
             if nofile:
                 continue
-            current_sub[label] = saliencies["pos"] - saliencies["neg"]
-            if current_sub[label].size == 0:
+            sub_saliencies[label] = saliencies["pos"]  # - saliencies["neg"]
+            if sub_saliencies[label].size == 0:
                 continue
-            all_subjects_saliencies[label].append(current_sub[label].mean(axis=0))
+            all_saliencies[label].append(sub_saliencies[label].mean(axis=0))
             if args.subclf:
                 break  # we only need to add one label per subject so get out of the loop
 
@@ -211,11 +222,10 @@ if __name__ == "__main__":
                 suffix += "_eventclf"
             else:
                 suffix += "_sexclf"
-
-            if list(current_sub.values())[0].size == 0:
-                continue
+            # if not sub_saliencies.values() or list(sub_saliencies.values())[0].size == 0:
+            #     continue
             generate_saliency_figure(
-                {key: val[0] for key, val in current_sub.items()},
+                {key: val[0] for key, val in sub_saliencies.items()},
                 save_path=args.save_path,
                 suffix=suffix,
                 title=f"saliencies for a single trial of subject {sub}",
@@ -229,14 +239,14 @@ if __name__ == "__main__":
             else:
                 suffix += "_sexclf"
             generate_saliency_figure(
-                {key: np.mean(val, axis=0) for key, val in current_sub.items()},
+                {key: np.mean(val, axis=0) for key, val in sub_saliencies.items()},
                 save_path=args.save_path,
                 suffix=suffix,
                 title=f"saliencies for the averaged trials of subject {sub}",
                 eventclf=args.eventclf,
             )
 
-    final_dict = {key: np.mean(val, axis=0) for key, val in all_subjects_saliencies.items()}
+    final_dict = {key: np.mean(val, axis=0) for key, val in all_saliencies.items()}
     if args.subclf:
         final_dict = {"all_subj": np.mean(list(final_dict.values()), axis=0)}
         labels = ["all_subj"]

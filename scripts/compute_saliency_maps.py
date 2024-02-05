@@ -40,6 +40,8 @@ def compute_all(sub, sal_path, args):
     #             existing_paths.append(os.path.exists(sal_filepath))
     # if all(existing_paths):
     #     return
+
+    # Load all trials and corresponding labels for a specific subject.
     data, targets = load_data(
         dataframe.loc[dataframe["sub"] == sub],
         args.data_path,
@@ -58,19 +60,28 @@ def compute_all(sub, sal_path, args):
     else:
         target_saliencies = [[], []]
         target_psd = [[], []]
+
+    # For each of those trial with associated label:
     for trial, label in zip(data, targets):
         X = trial[np.newaxis].type(torch.FloatTensor).to(DEVICE)
         if len(X.shape) < 4:
             X = X[np.newaxis, :]
+        # Compute predictions of the trained network, and confidence
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
         confidence = preds.max()
         if args.subclf:
             label = int(dataframe[dataframe["sub"] == sub].index[0])
+
+        # If the confidence reaches desired treshhold (given by args.confidence)
         if confidence >= args.confidence and pred == label:
+            # Compute Guided Back-propagation for given label projected on given data X
             guided_grads = GBP(X.to(DEVICE), label)
             guided_grads = np.rollaxis(guided_grads, 2, 0)
+            # Compute saliencies
             pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
+
+            # Depending on the task, add saliencies in lists
             if args.eventclf:
                 target_saliencies[label][0].append(pos_saliency)
                 target_saliencies[label][1].append(neg_saliency)
@@ -80,7 +91,6 @@ def compute_all(sub, sal_path, args):
                             pos_saliency, trial, args.w_size, args.sfreq
                         )
                     )
-                if args.compute_psd:
                     target_psd[label][1].append(
                         compute_saliency_based_psd(
                             neg_saliency, trial, args.w_size, args.sfreq
@@ -95,47 +105,40 @@ def compute_all(sub, sal_path, args):
                             pos_saliency, trial, args.w_size, args.sfreq
                         )
                     )
-                if args.compute_psd:
                     target_psd[1].append(
                         compute_saliency_based_psd(
                             neg_saliency, trial, args.w_size, args.sfreq
                         )
                     )
-
-        for j, sal_type in enumerate(("pos", "neg")):
-            if not args.eventclf:
-                lab = "" if args.subclf else f"_{labels[label]}"
+    # With all saliencies computed, we save them in the specified save-path
+    for j, sal_type in enumerate(("pos", "neg")):
+        if args.eventclf:
+            for i, label in enumerate(labels):
                 sal_filepath = os.path.join(
                     sal_path,
-                    f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
+                    f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
                 )
-                if not os.path.exists(sal_filepath):
-                    np.save(sal_filepath, np.array(target_saliencies[j]))
-            else:
-                for i, label in enumerate(labels):
-                    sal_filepath = os.path.join(
-                        sal_path,
-                        f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
-                    )
-                    if not os.path.exists(sal_filepath):
-                        np.save(sal_filepath, np.array(target_saliencies[i][j]))
-            if args.compute_psd:
-                if not args.eventclf:
-                    lab = "" if args.subclf else f"_{labels[label]}"
+                np.save(sal_filepath, np.array(target_saliencies[i][j]))
+                if args.compute_psd:
                     psd_filepath = os.path.join(
                         psd_path,
-                        f"{sub}{lab}_{sal_type}_psd_{args.confidence}confidence.npy",
+                        f"{sub}_{labels[i]}_{sal_type}_psd_{args.confidence}confidence.npy",
                     )
-                    if not os.path.exists(sal_filepath):
-                        np.save(psd_filepath, np.array(target_psd[j]))
-                else:
-                    for i, label in enumerate(labels):
-                        psd_filepath = os.path.join(
-                            psd_path,
-                            f"{sub}_{labels[i]}_{sal_type}_psd_{args.confidence}confidence.npy",
-                        )
-                    if not os.path.exists(sal_filepath):
-                        np.save(psd_filepath, np.array(target_psd[i][j]))
+                    np.save(psd_filepath, np.array(target_psd[i][j]))
+        else:
+            lab = "" if args.subclf else f"_{labels[label]}"
+            sal_filepath = os.path.join(
+                sal_path,
+                f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
+            )
+            np.save(sal_filepath, np.array(target_saliencies[j]))
+            if args.compute_psd:
+                lab = "" if args.subclf else f"_{labels[label]}"
+                psd_filepath = os.path.join(
+                    psd_path,
+                    f"{sub}{lab}_{sal_type}_psd_{args.confidence}confidence.npy",
+                )
+                np.save(psd_filepath, np.array(target_psd[j]))
 
 
 if __name__ == "__main__":
@@ -196,10 +199,7 @@ if __name__ == "__main__":
     if args.feature == "bands":
         trial_length = 5
     elif args.feature == "temporal":
-        if args.eventclf:
-            trial_length = 160
-        else:
-            trial_length = TIME_TRIAL_LENGTH
+        trial_length = TIME_TRIAL_LENGTH
     elif args.feature == "cov":
         # TODO
         pass
@@ -248,13 +248,11 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
-    # TODO Make use of data-path here, having path hard-coded = bad
     model_filepath = os.path.join(args.save_path, name + ".pt")
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
     GBP = GuidedBackpropReLUModel(net, device=DEVICE)
-    logging.info(net)
 
     dataframe = (
         pd.read_csv(

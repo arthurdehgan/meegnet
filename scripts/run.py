@@ -158,8 +158,6 @@ def train_evaluate(
         trial_length = TRIAL_LENGTH_BANDS
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
-        if args.eventclf:
-            trial_length = 160
     elif args.feature == "cov":
         # TODO
         pass
