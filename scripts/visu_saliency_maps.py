@@ -14,51 +14,91 @@ def generate_saliency_figure(
     save_path: str = "",
     suffix: str = "",
     title: str = "",
+    sensors: list = [""],
     eventclf=False,
+    sfreq=500,
+    cmap="coolwarm",
+    stim_tick=75,
 ):
-    """generate_saliency_figure.
+    """
+    Generates a figure visualizing saliency maps for MEG data.
+
+    This function creates a grid of images showing the saliency maps for different
+    types of stimuli (e.g., image and sound) and sensor channels (e.g., MAG, GRAD1, GRAD2).
+    It also plots a topomap for the maximum saliency index along with a color bar.
 
     Parameters
     ----------
     saliencies : dict
-        saliency maps: must be a dictionnary contining keys "image" and "sound", values must be numpy array
-        of shape 3 x height x width
-    save_path : str
-        the path where to save the figure
-    save_path : str
-        the path to get the data from (for psd computation only)
-    suffix : str
-        suffix
-    sfreq : int
-        sampling frequency for psd and data loading
-    labels : list
-        labels
+        Dictionary containing saliency maps. Keys should correspond to different types
+        of stimuli (e.g., "image", "sound"), and values should be numpy arrays of shape
+        3 x sensors x samples, representing the saliency maps for each channel.
+    save_path : str, optional
+        Path to save the generated figure. Default is an empty string, which means the
+        figure will not be saved automatically.
+    suffix : str, optional
+        Suffix to append to the filename when saving the figure. Default is an empty string.
+    title : str, optional
+        Title for the figure. Default is an empty string.
+    sensors : list, optional
+        List of sensor types to include in the visualization. Default is [""].
+    eventclf : bool, optional
+        Flag indicating whether the saliency maps are for event classification. If True,
+        the y-axis ticks and labels are adjusted accordingly. Default is False.
+    sfreq : int, optional
+        Sampling frequency for computation of  xticks. Default is  500.
+    cmap : str, optional
+        Colormap to use for displaying the topo- and saliency maps. Default is "coolwarm".
+    stim_tick : int, optional
+        Tick position for the stimulus event in the time axis. Default is  75.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    The function assumes that the input saliency maps are normalized to have zero mean and
+    unit variance. The colormap used for displaying the saliency maps is "coolwarm" by default,
+    but can be changed with the `cmap` parameter.
+
+    The function creates a grid layout with a subplot for each sensor channel and a subplot for the
+    topomap. The grid layout is dynamically adjusted based on the number of sensors.
+
+    The `eventclf` flag allows for adjustments in the y-axis ticks and labels for event classification
+    scenarios, where the stimulus event is marked with a specific tick position.
+
+    The function does not handle exceptions that may occur during the plotting process, such as issues with
+    file I/O or invalid input data.
+
+    The function uses hardcoded values for certain aspects of the plot, such as the number of bins for
+    histograms and the positions of tick marks. These values may need to be adjusted based
+    on the specific requirements of the data being visualized.
     """
+
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
-    grid = GridSpec(2, 10)
-    fig = plt.figure(figsize=(20, 4))
+    n_blocs = len(sensors)
+    n_lines = len(labels)
+    n_cols = n_blocs * 3 + 1
+    grid = GridSpec(n_lines, n_cols)
+    fig = plt.figure(figsize=(n_cols * 2, n_lines * 2))
     plt.title(title)
     plt.axis("off")
     axes = []
+    tick_ratio = int(1000 / sfreq)
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label]
         gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
-        # Change this part, hard codded = bad and we want some flexibility depending on the use of sensors
-        channels = ["MAG"]  # ("MAG", "GRAD1", "GRAD2")
-        n_blocs = len(channels)
-        for j, chan in zip(range(0, 9, 3), channels):
+        for j, chan in zip(range(0, n_blocs * 3, n_blocs), sensors):
             idx = j // 3
             grads = gradient[idx]
+            segment_length = grads.shape[1]
+            n_sensors = grads.shape[0]
             vmax = grads.max()
             vmin = grads.min()
-            highest = np.argmax(np.mean(np.abs(grads), axis=0))
-            # cmap = sns.color_palette("icefire", as_cmap=True)
-            # cmap = sns.color_palette("coolwarm", as_cmap=True, center="dark")
-            # cmap = "inferno"
-            cmap = "coolwarm"
-            # cmap = "seismic"
+            max_idx = np.argmax(np.mean(np.abs(grads), axis=0))
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
             plt.imshow(
                 grads,
@@ -71,14 +111,20 @@ def generate_saliency_figure(
             axes[-1].spines["top"].set_visible(False)
             axes[-1].spines["right"].set_visible(False)
             axes[-1].yaxis.tick_right()
-            plt.yticks([], [])
+
             if eventclf:
-                plt.xticks([0, 75, 200, 400], [-150, 0, 250, 650], fontsize=8)
-                # plt.yticks([0, 102], [102, 0])
-                plt.axvline(x=75, color="black", linestyle="--", linewidth=1)
-                plt.axvline(x=highest, color="green", linestyle="--", linewidth=1)
+                x_ticks = sorted(
+                    [0, stim_tick, int(segment_length / 2), segment_length] + [max_idx]
+                )
+                ticks_values = [(x_tick - stim_tick) * tick_ratio for x_tick in x_ticks]
+                plt.axvline(x=stim_tick, color="black", linestyle="--", linewidth=1)
+                plt.axvline(x=max_idx, color="green", linestyle="--", linewidth=1)
             else:
-                plt.xticks([0, 200, 400], [0, 1000, 2000], fontsize=8)
+                x_ticks = [0, int(segment_length / tick_ratio), segment_length]
+                ticks_values = [x_tick * tick_ratio for x_tick in x_ticks]
+            plt.xticks(x_ticks, ticks_values, fontsize=8)
+            plt.yticks([0, n_sensors], [n_sensors, 0])
+
             if j == 0:
                 axes[-1].text(-50, 50, label, ha="left", va="center", rotation="vertical")
             if idx == n_blocs - 1:
@@ -89,7 +135,7 @@ def generate_saliency_figure(
             if i == 1:
                 plt.xlabel("time (ms)")
             axes.append(fig.add_subplot(grid[i, j + 2]))
-            data = grads[:, highest]
+            data = grads[:, max_idx]
             info = load_info()
 
             im, _ = mne.viz.plot_topomap(
@@ -101,9 +147,9 @@ def generate_saliency_figure(
                 show=False,
                 contours=1,
                 extrapolate="local",
+                axes=axes[-1],
             )
             if idx == n_blocs - 1:
-                print(n_blocs)
                 axes.append(fig.add_subplot(grid[i, n_blocs * 3]))
                 fig.colorbar(
                     im,
@@ -176,6 +222,13 @@ if __name__ == "__main__":
         labels = ["male", "female"]
         all_saliencies = {labels[0]: [], labels[1]: []}
 
+    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
+
+    # cmap = sns.color_palette("icefire", as_cmap=True)
+    # cmap = sns.color_palette("coolwarm", as_cmap=True, center="dark")
+    # cmap = "inferno"
+    # cmap = "seismic"
+
     # label contains same information as sub for subclf but we only load files that have label == sub
     for i, sub in enumerate(subjects):
         sub_saliencies = {}
@@ -228,6 +281,7 @@ if __name__ == "__main__":
                 {key: val[0] for key, val in sub_saliencies.items()},
                 save_path=args.save_path,
                 suffix=suffix,
+                sensors=sensors,
                 title=f"saliencies for a single trial of subject {sub}",
                 eventclf=args.eventclf,
             )
@@ -242,6 +296,7 @@ if __name__ == "__main__":
                 {key: np.mean(val, axis=0) for key, val in sub_saliencies.items()},
                 save_path=args.save_path,
                 suffix=suffix,
+                sensors=sensors,
                 title=f"saliencies for the averaged trials of subject {sub}",
                 eventclf=args.eventclf,
             )
@@ -260,6 +315,7 @@ if __name__ == "__main__":
         final_dict,
         save_path=args.save_path,
         suffix=suffix,
+        sensors=sensors,
         title="saliencies averaged across all subjects",
         eventclf=args.eventclf,
     )
