@@ -169,6 +169,13 @@ if __name__ == "__main__":
         format="%(asctime)s %(message)s",
         datefmt="%m/%d/%Y %I:%M:%S %p",
     )
+    parser.add_argument(
+        "--saliency-type",
+        default="pos",
+        choices=["pos", "neg", "both"],
+        type=str,
+        help="chooses whether to use positive saliency, negative saliency or the sum of them",
+    )
 
     parser.add_argument(
         "--confidence",
@@ -246,17 +253,23 @@ if __name__ == "__main__":
                     continue
             saliencies = {}
             nofile = False
-            for saliency_type in ("pos", "neg"):
+
+            if args.saliency_type in ("all", "both"):
+                saliency_types = ("pos", "neg")
+            else:
+                saliency_types = [args.saliency_type]
+
+            for saliency_type in saliency_types:
                 lab = "" if args.subclf else f"_{label}"
-                sal_file = os.path.join(
+                saliency_file = os.path.join(
                     sal_path,
                     f"{sub}{lab}_{saliency_type}_sal_{args.confidence}confidence.npy",
                 )
-                if os.path.exists(sal_file):
+                if os.path.exists(saliency_file):
                     try:
-                        saliencies[saliency_type] = np.load(sal_file)
+                        saliencies[saliency_type] = np.load(saliency_file)
                     except IOError:
-                        logging.warning(f"Error loading {sal_file}")
+                        logging.warning(f"Error loading {saliency_file}")
                         nofile = True
                         continue
                 else:
@@ -264,8 +277,14 @@ if __name__ == "__main__":
                     continue
             if nofile:
                 continue
-            # TODO look into this line of code: do we want just pos ? pos - neg ? or absolute value / maximum ?
-            sub_saliencies[label] = saliencies["pos"] - saliencies["neg"]
+
+            if args.saliency_type == "pos":
+                sub_saliencies[label] = saliencies["pos"]
+            elif args.saliency_type == "neg":
+                sub_saliencies[label] = saliencies["neg"]
+            else:
+                sub_saliencies[label] = saliencies["pos"] - saliencies["neg"]
+
             if sub_saliencies[label].size == 0:
                 continue
             all_saliencies[label].append(sub_saliencies[label].mean(axis=0))
@@ -288,7 +307,7 @@ if __name__ == "__main__":
                 title=f"saliencies for a single trial of subject {sub}",
                 eventclf=args.eventclf,
                 cmap=cmap,
-                stim_tick=75,
+                stim_tick=stim_tick,
             )
             suffix = f"{sub}_all_trials"
             if args.subclf:
@@ -305,7 +324,7 @@ if __name__ == "__main__":
                 title=f"saliencies for the averaged trials of subject {sub}",
                 eventclf=args.eventclf,
                 cmap=cmap,
-                stim_tick=75,
+                stim_tick=stim_tick,
             )
 
     final_dict = {key: np.mean(val, axis=0) for key, val in all_saliencies.items()}
@@ -318,6 +337,8 @@ if __name__ == "__main__":
     else:
         suffix = "sexclf"
 
+    suffix += f"_{args.saliency_type}"
+
     generate_saliency_figure(
         final_dict,
         save_path=args.save_path,
@@ -326,5 +347,5 @@ if __name__ == "__main__":
         title="saliencies averaged across all subjects",
         eventclf=args.eventclf,
         cmap=cmap,
-        stim_tick=75,
+        stim_tick=stim_tick,
     )
