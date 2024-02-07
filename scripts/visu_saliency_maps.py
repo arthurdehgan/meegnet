@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from meegnet.parsing import parser
-from meegnet.viz import load_info, generate_topomap
+from meegnet.viz import load_info
 import mne
 import seaborn as sns
 
@@ -70,17 +70,13 @@ def generate_saliency_figure(
 
     The function does not handle exceptions that may occur during the plotting process, such as issues with
     file I/O or invalid input data.
-
-    The function uses hardcoded values for certain aspects of the plot, such as the number of bins for
-    histograms and the positions of tick marks. These values may need to be adjusted based
-    on the specific requirements of the data being visualized.
     """
 
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
-    n_blocs = len(sensors)
-    n_lines = len(labels)
-    n_cols = n_blocs * 3 + 1
+    n_blocs = len(sensors)  # number of blocs of figures in a line
+    n_lines = len(saliencies)  # number of lines for the pyplot figure
+    n_cols = n_blocs * 3 + 1  # number of columns for the pyplot figure
     grid = GridSpec(n_lines, n_cols)
     fig = plt.figure(figsize=(n_cols * 2, n_lines * 2))
     plt.title(title)
@@ -91,7 +87,7 @@ def generate_saliency_figure(
         gradient = saliencies[label]
         gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
-        for j, chan in zip(range(0, n_blocs * 3, n_blocs), sensors):
+        for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
             idx = j // 3
             grads = gradient[idx]
             segment_length = grads.shape[1]
@@ -131,7 +127,7 @@ def generate_saliency_figure(
                 axes[-1].yaxis.set_label_position("right")
                 plt.ylabel("sensors")
             if i == 0:
-                plt.title(chan)
+                plt.title(sensor_type)
             if i == 1:
                 plt.xlabel("time (ms)")
             axes.append(fig.add_subplot(grid[i, j + 2]))
@@ -222,12 +218,24 @@ if __name__ == "__main__":
         labels = ["male", "female"]
         all_saliencies = {labels[0]: [], labels[1]: []}
 
-    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
+    #########################
+    ### HARD CODED VALUES ###
+    #########################
 
+    # TODO change design to create an object with info about the dataset and pass it from script to script
+    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
+    cmap = "coolwarm"
+    stim_tick = 75
+
+    # Some tested aletrnatives for the colormap:
     # cmap = sns.color_palette("icefire", as_cmap=True)
     # cmap = sns.color_palette("coolwarm", as_cmap=True, center="dark")
     # cmap = "inferno"
     # cmap = "seismic"
+
+    ######################################
+    ### LOAD DATA AND GENERATE FIGURES ###
+    ######################################
 
     # label contains same information as sub for subclf but we only load files that have label == sub
     for i, sub in enumerate(subjects):
@@ -247,11 +255,7 @@ if __name__ == "__main__":
                 if os.path.exists(sal_file):
                     try:
                         saliencies[saliency_type] = np.load(sal_file)
-                        # if not saliencies[saliency_type]:
-                        #     logging.warning(f"No saliencies found in file : {sal_file}")
-                        #     nofile = True
-                        #     continue
-                    except:
+                    except IOError:
                         logging.warning(f"Error loading {sal_file}")
                         nofile = True
                         continue
@@ -260,12 +264,13 @@ if __name__ == "__main__":
                     continue
             if nofile:
                 continue
-            sub_saliencies[label] = saliencies["pos"]  # - saliencies["neg"]
+            # TODO look into this line of code: do we want just pos ? pos - neg ? or absolute value / maximum ?
+            sub_saliencies[label] = saliencies["pos"] - saliencies["neg"]
             if sub_saliencies[label].size == 0:
                 continue
             all_saliencies[label].append(sub_saliencies[label].mean(axis=0))
             if args.subclf:
-                break  # we only need to add one label per subject so get out of the loop
+                break  # we only need to add one label per subject so we get out of the loop
 
         if i == random_subject:
             suffix = f"{sub}_single_trial"
@@ -275,8 +280,6 @@ if __name__ == "__main__":
                 suffix += "_eventclf"
             else:
                 suffix += "_sexclf"
-            # if not sub_saliencies.values() or list(sub_saliencies.values())[0].size == 0:
-            #     continue
             generate_saliency_figure(
                 {key: val[0] for key, val in sub_saliencies.items()},
                 save_path=args.save_path,
@@ -284,6 +287,8 @@ if __name__ == "__main__":
                 sensors=sensors,
                 title=f"saliencies for a single trial of subject {sub}",
                 eventclf=args.eventclf,
+                cmap=cmap,
+                stim_tick=75,
             )
             suffix = f"{sub}_all_trials"
             if args.subclf:
@@ -299,6 +304,8 @@ if __name__ == "__main__":
                 sensors=sensors,
                 title=f"saliencies for the averaged trials of subject {sub}",
                 eventclf=args.eventclf,
+                cmap=cmap,
+                stim_tick=75,
             )
 
     final_dict = {key: np.mean(val, axis=0) for key, val in all_saliencies.items()}
@@ -318,4 +325,6 @@ if __name__ == "__main__":
         sensors=sensors,
         title="saliencies averaged across all subjects",
         eventclf=args.eventclf,
+        cmap=cmap,
+        stim_tick=75,
     )

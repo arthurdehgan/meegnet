@@ -20,7 +20,7 @@ DEVICE = cuda_check()
 CHANNELS = ("MAG", "PLANAR1", "PLANAR2")
 
 
-def compute_all(sub, sal_path, args):
+def compute_saliency_maps(sub, sal_path, GBP, args):
     # existing_paths = []
     # for j, sal_type in enumerate(("pos", "neg")):
     #     if not args.eventclf:
@@ -42,6 +42,7 @@ def compute_all(sub, sal_path, args):
     #     return
 
     # Load all trials and corresponding labels for a specific subject.
+    # TODO CHANGE DESIGN TO USE AN OBJECT WITH DATA INFO INSTEAD OF ARGS
     data, targets = load_data(
         dataframe.loc[dataframe["sub"] == sub],
         args.data_path,
@@ -142,6 +143,11 @@ def compute_all(sub, sal_path, args):
 
 
 if __name__ == "__main__":
+
+    ################################
+    ### ADDING PARSER PARAMETERS ###
+    ################################
+
     parser.add_argument(
         "--compute-psd",
         action="store_true",
@@ -159,14 +165,11 @@ if __name__ == "__main__":
         default=0.98,
         help="the confidence needed for a trial to be selected for visualisation",
     )
-    parser.add_argument(
-        "--saliency",
-        default="pos",
-        choices=["pos", "neg", "both"],
-        type=str,
-        help="chooses whether to use positive saliency, negative saliency or the sum of them",
-    )
     args = parser.parse_args()
+
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
 
     if args.log:
         log_name = args.model_name
@@ -186,6 +189,10 @@ if __name__ == "__main__":
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
+
+    ###############################
+    ### TRANSLATING PARSER INFO ###
+    ###############################
 
     if args.eventclf:
         labels = ["visual", "auditory"]  # image is label 0 and sound label 1
@@ -239,6 +246,10 @@ if __name__ == "__main__":
     else:
         n_outputs = 2
 
+    ##############################
+    ### PREPARING SAVE FOLDERS ###
+    ##############################
+
     if args.compute_psd:
         psd_path = os.path.join(args.save_path, "saliency_based_psds", name)
         if not os.path.exists(psd_path):
@@ -248,11 +259,14 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
+    #####################################
+    ### LOADING NETWORK AND DATA INFO ###
+    #####################################
+
     model_filepath = os.path.join(args.save_path, name + ".pt")
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
-    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
 
     dataframe = (
         pd.read_csv(
@@ -263,9 +277,11 @@ if __name__ == "__main__":
         .reset_index(drop=True)[: args.max_subj]
     )
     subj_list = dataframe["sub"]
-    # [
-    #     513:
-    # ]  # TODO remove starting point ! did this because the computation were interrupted
 
+    #################
+    ### MAIN LOOP ###
+    #################
+
+    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
     for i, sub in enumerate(subj_list):
-        compute_all(sub, sal_path, args)
+        compute_saliency_maps(sub, sal_path, GBP, args)
