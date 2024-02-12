@@ -15,6 +15,7 @@ TODO:
     add option of not doing epoched with passive and smt data
 
 """
+
 import os
 import logging
 import mne
@@ -22,6 +23,7 @@ import pandas as pd
 import numpy as np
 from joblib import Parallel, delayed
 from meegnet.parsing import parser
+import toml
 
 
 def bad_subj_found(sub: str, info: str, message: str, df_path: str):
@@ -119,18 +121,14 @@ def prepare_data(
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    bad_csv_path = os.path.join(
-        args.save_path, f"bad_participants_info_{args.datatype}.csv"
-    )
+    bad_csv_path = os.path.join(args.save_path, f"bad_participants_info_{args.datatype}.csv")
     bad_subs_df = (
         pd.read_csv(bad_csv_path, index_col=0)
         if os.path.exists(bad_csv_path)
         else pd.DataFrame({}, columns=["sub", "error"])
     )
     bad_subs_df.to_csv(bad_csv_path)
-    good_csv_path = os.path.join(
-        args.save_path, f"participants_info_{args.datatype}.csv"
-    )
+    good_csv_path = os.path.join(args.save_path, f"participants_info_{args.datatype}.csv")
     columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
     if args.datatype != "rest":
         columns.append("event_labels")
@@ -214,6 +212,10 @@ def prepare_data(
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    args_dict = vars(args)
+    toml_string = toml.dumps(args_dict)
+    with open(args.config, "w") as toml_file:
+        toml.dump(args_dict, toml_file)
 
     if args.log:
         logging.basicConfig(
