@@ -1,10 +1,9 @@
 import os
 import logging
-from time import time
-import numpy as np
+import toml
 import torch
+import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
 from meegnet.parsing import parser
 from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, cuda_check
@@ -16,11 +15,23 @@ from meegnet.util_viz import (
 )
 from pytorch_grad_cam import GuidedBackpropReLUModel
 
+# from joblib import Parallel, delayed
+
 DEVICE = cuda_check()
-CHANNELS = ("MAG", "PLANAR1", "PLANAR2")
 
 
-def compute_saliency_maps(sub, sal_path, GBP, args):
+def compute_saliency_maps(
+    data,
+    targets,
+    sal_path,
+    GBP,
+    threshold,
+    w_size,
+    sfreq,
+    eventclf=False,
+    subclf=False,
+    compute_psd=False,
+):
     # existing_paths = []
     # for j, sal_type in enumerate(("pos", "neg")):
     #     if not args.eventclf:
@@ -42,20 +53,7 @@ def compute_saliency_maps(sub, sal_path, GBP, args):
     #     return
 
     # Load all trials and corresponding labels for a specific subject.
-    # TODO CHANGE DESIGN TO USE AN OBJECT WITH DATA INFO INSTEAD OF ARGS
-    data, targets = load_data(
-        dataframe.loc[dataframe["sub"] == sub],
-        args.data_path,
-        epoched=args.epoched,
-        seed=args.seed,
-        s_freq=args.sfreq,
-        chan_index=chan_index,
-        datatype=args.datatype,
-        eventclf=args.eventclf,
-    )
-    if data is None or targets is None:
-        return
-    if args.eventclf:
+    if eventclf:
         target_saliencies = [[[], []], [[], []]]
         target_psd = [[[], []], [[], []]]
     else:
@@ -71,11 +69,11 @@ def compute_saliency_maps(sub, sal_path, GBP, args):
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
         confidence = preds.max()
-        if args.subclf:
+        if subclf:
             label = int(dataframe[dataframe["sub"] == sub].index[0])
 
         # If the confidence reaches desired treshhold (given by args.confidence)
-        if confidence >= args.confidence and pred == label:
+        if confidence >= threshold and pred == label:
             # Compute Guided Back-propagation for given label projected on given data X
             guided_grads = GBP(X.to(DEVICE), label)
             guided_grads = np.rollaxis(guided_grads, 2, 0)
@@ -83,61 +81,53 @@ def compute_saliency_maps(sub, sal_path, GBP, args):
             pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
 
             # Depending on the task, add saliencies in lists
-            if args.eventclf:
+            if eventclf:
                 target_saliencies[label][0].append(pos_saliency)
                 target_saliencies[label][1].append(neg_saliency)
-                if args.compute_psd:
+                if compute_psd:
                     target_psd[label][0].append(
-                        compute_saliency_based_psd(
-                            pos_saliency, trial, args.w_size, args.sfreq
-                        )
+                        compute_saliency_based_psd(pos_saliency, trial, w_size, sfreq)
                     )
                     target_psd[label][1].append(
-                        compute_saliency_based_psd(
-                            neg_saliency, trial, args.w_size, args.sfreq
-                        )
+                        compute_saliency_based_psd(neg_saliency, trial, w_size, sfreq)
                     )
             else:
                 target_saliencies[0].append(pos_saliency)
                 target_saliencies[1].append(neg_saliency)
-                if args.compute_psd:
+                if compute_psd:
                     target_psd[0].append(
-                        compute_saliency_based_psd(
-                            pos_saliency, trial, args.w_size, args.sfreq
-                        )
+                        compute_saliency_based_psd(pos_saliency, trial, w_size, sfreq)
                     )
                     target_psd[1].append(
-                        compute_saliency_based_psd(
-                            neg_saliency, trial, args.w_size, args.sfreq
-                        )
+                        compute_saliency_based_psd(neg_saliency, trial, w_size, sfreq)
                     )
     # With all saliencies computed, we save them in the specified save-path
     for j, sal_type in enumerate(("pos", "neg")):
-        if args.eventclf:
+        if eventclf:
             for i, label in enumerate(labels):
                 sal_filepath = os.path.join(
                     sal_path,
-                    f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
+                    f"{sub}_{labels[i]}_{sal_type}_sal_{threshold}confidence.npy",
                 )
                 np.save(sal_filepath, np.array(target_saliencies[i][j]))
-                if args.compute_psd:
+                if compute_psd:
                     psd_filepath = os.path.join(
                         psd_path,
-                        f"{sub}_{labels[i]}_{sal_type}_psd_{args.confidence}confidence.npy",
+                        f"{sub}_{labels[i]}_{sal_type}_psd_{threshold}confidence.npy",
                     )
                     np.save(psd_filepath, np.array(target_psd[i][j]))
         else:
-            lab = "" if args.subclf else f"_{labels[label]}"
+            lab = "" if subclf else f"_{labels[label]}"
             sal_filepath = os.path.join(
                 sal_path,
-                f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
+                f"{sub}{lab}_{sal_type}_sal_{threshold}confidence.npy",
             )
             np.save(sal_filepath, np.array(target_saliencies[j]))
-            if args.compute_psd:
-                lab = "" if args.subclf else f"_{labels[label]}"
+            if compute_psd:
+                lab = "" if subclf else f"_{labels[label]}"
                 psd_filepath = os.path.join(
                     psd_path,
-                    f"{sub}{lab}_{sal_type}_psd_{args.confidence}confidence.npy",
+                    f"{sub}{lab}_{sal_type}_psd_{threshold}confidence.npy",
                 )
                 np.save(psd_filepath, np.array(target_psd[j]))
 
@@ -163,9 +153,13 @@ if __name__ == "__main__":
         "--confidence",
         type=float,
         default=0.98,
-        help="the confidence needed for a trial to be selected for visualisation",
+        help="the confidence threshold needed for a trial to be selected for visualisation",
     )
     args = parser.parse_args()
+    args_dict = vars(args)
+    toml_string = toml.dumps(args_dict)
+    with open(args.config, "w") as toml_file:
+        toml.dump(args_dict, toml_file)
 
     ######################
     ### LOGGING CONFIG ###
@@ -268,11 +262,10 @@ if __name__ == "__main__":
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
 
+    folder = "psd" if args.feature in ["bins", "bands"] else f"downsampled_{args.sfreq}"
+    csv_file = os.path.join(args.data_path, folder, f"participants_info_{args.datatype}.csv")
     dataframe = (
-        pd.read_csv(
-            os.path.join(args.data_path, f"participants_info_{args.datatype}.csv"),
-            index_col=0,
-        )
+        pd.read_csv(csv_file, index_col=0)
         .sample(frac=1, random_state=args.seed)
         .reset_index(drop=True)[: args.max_subj]
     )
@@ -284,4 +277,27 @@ if __name__ == "__main__":
 
     GBP = GuidedBackpropReLUModel(net, device=DEVICE)
     for i, sub in enumerate(subj_list):
-        compute_saliency_maps(sub, sal_path, GBP, args)
+        data, targets = load_data(
+            dataframe.loc[dataframe["sub"] == sub],
+            args.data_path,
+            epoched=args.epoched,
+            seed=args.seed,
+            s_freq=args.sfreq,
+            chan_index=chan_index,
+            datatype=args.datatype,
+            eventclf=args.eventclf,
+        )
+        if data is None or targets is None:
+            continue
+        compute_saliency_maps(
+            data,
+            targets,
+            sal_path,
+            GBP,
+            args.confidence,
+            args.w_size,
+            args.sfreq,
+            eventclf=args.eventclf,
+            subclf=args.subclf,
+            compute_psd=args.compute_psd,
+        )
