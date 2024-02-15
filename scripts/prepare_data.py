@@ -8,7 +8,7 @@ This script assumes a copy of the cc700 and dataman folders to a data path parse
 through the argparser.
 
 example on how to run the script:
-python prepare_data.py --data-path="/home/user/data/camcan/" --save-path="/home/user/data" --datatype="passive" --epoched
+python prepare_data.py --config="config.toml" --data-path="/home/user/data/camcan/" --save-path="/home/user/data"
 
 TODO:
     add a prompt on the amount of disk space and time required
@@ -21,9 +21,13 @@ import logging
 import mne
 import pandas as pd
 import numpy as np
-from joblib import Parallel, delayed
+import threading
+import multiprocessing
 from meegnet.parsing import parser
 import toml
+import warnings
+
+warnings.filterwarnings("ignore")
 
 
 def bad_subj_found(sub: str, info: str, message: str, df_path: str):
@@ -47,167 +51,163 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
     """
     logging.info(message)
     row = [sub, info]
-    df = pd.read_csv(df_path, index_col=0)
+    with open(df_path, "r") as f:
+        df = pd.read_csv(f, index_col=0)
     df = df._append({key: val for key, val in zip(df.columns, row)}, ignore_index=True)
-    df.to_csv(df_path)
+    with open(df_path, "w") as f:
+        df.to_csv(f)
 
 
-def prepare_data(
+def process_data(args):
+    q, sfreq, datatype = args
+    while True:
+        data, filepath, stop = q.get()
+        if stop is None:
+            break
+        if data is None:
+            continue
+
+        data = data.resample(sfreq=sfreq)
+        data = np.array(
+            [
+                data.get_data(picks="mag"),
+                data.get_data(picks="planar1"),
+                data.get_data(picks="planar2"),
+            ]
+        )
+        if datatype == "passive":
+            data = data.swapaxes(0, 1)
+        np.save(filepath, data)
+
+
+def load_data(
+    q,
+    disk_semaphore,
     sub_folder: str,
     data_path: str,
     save_path: str,
-    s_freq: int = 200,
     datatype: str = "rest",
     epoched: bool = False,
 ):
-    """prepare_data.
+    with disk_semaphore:
+        if datatype == "rest":
+            assert (
+                not epoched
+            ), "Can't load epoched resting state data as there are no events for it"
+        row = None
 
-    Parameters
-    ----------
-    sub_folder : str
-        the subject folder".
-    data_path : str
-        the path to the folder containing the Cam-CAN dataset
-        (with cc700 folder in it) as copied from the CC servers.
-    save_path : str
-        the path where all the data will be saved in subfolder "downsampled_{s_freq}"
-        and the csv file will be saved.
-    s_freq : int
-        the frequency to downsample the data to.
-    datatype : str
-        the type of data to prepare. Must be in ['rest', 'passive', 'smt'].
-    epoched : bool
-        epoch the data based on events found in it or not.
-        Epoching the data will apply baseline correction (mode: mean).
-
-    Returns
-    -------
-    row : list
-        a list of values from the camcan metadata csv file.
-        The row will be added to the participants_info_{datatype}.csv file.
-    """
-    if datatype == "rest":
-        assert (
-            not epoched
-        ), "Can't load epoched resting state data as there are no events for it"
-    row = None
-
-    data_filepath = os.path.join(
-        data_path,
-        "cc700/meg/pipeline/release005/BIDSsep/",
-        f"derivatives_{datatype}",
-        "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
-    )
-    user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
-    source_csv_path = os.path.join(
-        data_path,
-        f"dataman/useraccess/processed/{user}/standard_data.csv",
-    )
-    df = pd.read_csv(source_csv_path)
-
-    fif_file = ""
-    file_list = os.listdir(os.path.join(data_filepath, sub_folder))
-    while not fif_file.endswith(".fif"):
-        fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
-
-    sub = sub_folder.split("-")[1]
-    if epoched:
-        filename = f"{datatype}_{sub}_epoched.npy"
-    else:
-        filename = f"{datatype}_{sub}.npy"
-    out_path = os.path.join(save_path, f"downsampled_{args.sfreq}")
-    out_file = os.path.join(out_path, filename)
-
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-
-    bad_csv_path = os.path.join(args.save_path, f"bad_participants_info_{args.datatype}.csv")
-    bad_subs_df = (
-        pd.read_csv(bad_csv_path, index_col=0)
-        if os.path.exists(bad_csv_path)
-        else pd.DataFrame({}, columns=["sub", "error"])
-    )
-    bad_subs_df.to_csv(bad_csv_path)
-    good_csv_path = os.path.join(args.save_path, f"participants_info_{args.datatype}.csv")
-    columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
-    if args.datatype != "rest":
-        columns.append("event_labels")
-    good_subs_df = (
-        pd.read_csv(good_csv_path, index_col=0)
-        if os.path.exists(good_csv_path)
-        else pd.DataFrame([{}], columns=columns)
-    )
-    good_subs_df.to_csv(good_csv_path)
-
-    if sub in good_subs_df["sub"].tolist() + bad_subs_df["sub"].tolist():
-        return
-
-    raw = mne.io.read_raw_fif(fif_file)
-    bads = raw.info["bads"]
-    if bads == []:
-        channels = []
-        logging.info(sub_folder)
-        logging.info(raw.info)
-        if epoched and datatype in ("passive", "smt"):  # datatype != "rest"
-            try:
-                events = mne.find_events(raw)
-            except ValueError as e:
-                bad_subj_found(
-                    sub=sub,
-                    info="wrong event timings",
-                    message=f"{sub} could not be used because of {e}",
-                    df_path=bad_csv_path,
-                )
-                return
-            unique_events = set(events[:, -1])
-            if unique_events == {6, 7, 8, 9}:
-                event_dict = {
-                    6: "auditory1",
-                    7: "auditory2",
-                    8: "auditory3",
-                    9: "visual",
-                }
-                labels = [event_dict[event] for event in events[:, -1]]
-            else:
-                bad_subj_found(
-                    sub=sub,
-                    info=f"wrong event found: {unique_events}",
-                    message=f"a different event has been found in {sub}: {unique_events}",
-                    df_path=bad_csv_path,
-                )
-                return
-            data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
-        else:
-            data = raw
-
-        data = data.resample(sfreq=s_freq)
-        channels.append(data.get_data(picks="mag"))
-        channels.append(data.get_data(picks="planar1"))
-        channels.append(data.get_data(picks="planar2"))
-        data = np.array(channels)
-        if datatype == "passive":
-            data = data.swapaxes(0, 1)
-        logging.info(data.shape)
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-        np.save(out_file, data)
-        row = df[df["CCID"] == sub].values.tolist()[0]
-        if datatype in ("passive", "smt"):
-            row.append(labels)
-    else:
-        bad_subj_found(
-            sub=sub,
-            info="bad channels",
-            message=f"{sub} was dropped because of bad channels {bads}",
-            df_path=bad_csv_path,
+        data_filepath = os.path.join(
+            data_path,
+            "cc700/meg/pipeline/release005/BIDSsep/",
+            f"derivatives_{datatype}",
+            "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
         )
-        return
+        user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
+        source_csv_path = os.path.join(
+            data_path,
+            f"dataman/useraccess/processed/{user}/standard_data.csv",
+        )
+        with open(source_csv_path, "r") as f:
+            df = pd.read_csv(f)
 
-    good_subs_df = good_subs_df._append(
-        {key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
-    )
-    good_subs_df.to_csv(good_csv_path)
-    return
+        fif_file = ""
+        file_list = os.listdir(os.path.join(data_filepath, sub_folder))
+        while not fif_file.endswith(".fif"):
+            fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
+
+        sub = sub_folder.split("-")[1]
+        if epoched:
+            filename = f"{datatype}_{sub}_epoched.npy"
+        else:
+            filename = f"{datatype}_{sub}.npy"
+        filepath = os.path.join(save_path, filename)
+
+        bad_csv_path = os.path.join(save_path, f"bad_participants_info_{datatype}.csv")
+        if os.path.exists(bad_csv_path):
+            with open(bad_csv_path, "r") as f:
+                bad_subs_df = pd.read_csv(f, index_col=0)
+        else:
+            bad_subs_df = pd.DataFrame({}, columns=["sub", "error"])
+            with open(bad_csv_path, "w") as f:
+                bad_subs_df.to_csv(f)
+
+        good_csv_path = os.path.join(save_path, f"participants_info_{datatype}.csv")
+        columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
+        if datatype != "rest":
+            columns.append("event_labels")
+        if os.path.exists(good_csv_path):
+            with open(good_csv_path, "r") as f:
+                good_subs_df = pd.read_csv(f, index_col=0)
+        else:
+            good_subs_df = pd.DataFrame({}, columns=columns)
+            with open(good_csv_path, "w") as f:
+                good_subs_df.to_csv(f)
+
+        if sub in bad_subs_df["sub"].tolist():
+            q.put((None, None, 0))
+            return
+        elif sub in good_subs_df["sub"].tolist() and os.path.exists(filepath):
+            q.put((None, None, 0))
+            return
+
+        raw = mne.io.read_raw_fif(fif_file, preload=True)
+        bads = raw.info["bads"]
+        if bads == []:
+            if epoched and datatype in ("passive", "smt"):  # datatype != "rest"
+                try:
+                    events = mne.find_events(raw)
+                except ValueError as e:
+                    bad_subj_found(
+                        sub=sub,
+                        info="wrong event timings",
+                        message=f"{sub} could not be used because of {e}",
+                        df_path=bad_csv_path,
+                    )
+                    q.put((None, None, 0))
+                    return
+                unique_events = set(events[:, -1])
+                if unique_events == {6, 7, 8, 9}:
+                    event_dict = {
+                        6: "auditory1",
+                        7: "auditory2",
+                        8: "auditory3",
+                        9: "visual",
+                    }
+                    labels = [event_dict[event] for event in events[:, -1]]
+                else:
+                    bad_subj_found(
+                        sub=sub,
+                        info=f"wrong event found: {unique_events}",
+                        message=f"a different event has been found in {sub}: {unique_events}",
+                        df_path=bad_csv_path,
+                    )
+                    q.put((None, None, 0))
+                    return
+                data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
+            else:
+                data = raw
+
+            row = df[df["CCID"] == sub].values.tolist()[0]
+            if datatype in ("passive", "smt"):
+                row.append(labels)
+        else:
+            bad_subj_found(
+                sub=sub,
+                info="bad channels",
+                message=f"{sub} was dropped because of bad channels {bads}",
+                df_path=bad_csv_path,
+            )
+            q.put((None, None, 0))
+            return
+
+        if not sub in good_subs_df["sub"].tolist():
+            good_subs_df = good_subs_df._append(
+                {key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
+            )
+            with open(good_csv_path, "w") as f:
+                good_subs_df.to_csv(f)
+        q.put((data, filepath, 1))
+        return
 
 
 if __name__ == "__main__":
@@ -216,6 +216,10 @@ if __name__ == "__main__":
     toml_string = toml.dumps(args_dict)
     with open(args.config, "w") as toml_file:
         toml.dump(args_dict, toml_file)
+
+    out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
 
     if args.log:
         logging.basicConfig(
@@ -238,15 +242,48 @@ if __name__ == "__main__":
         f"derivatives_{args.datatype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
+    subj_count = len(os.listdir(data_filepath))
 
-    table = Parallel(n_jobs=1)(
-        delayed(prepare_data)(
-            sub,
-            args.data_path,
-            args.save_path,
-            s_freq=args.sfreq,
-            epoched=args.epoched,
-            datatype=args.datatype,
+    # Define the maximum number of threads that can read from the disk at once
+    MAX_DISK_READERS = 1
+    # Define the maximum size of the queue
+    MAX_QUEUE_SIZE = 3  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 3
+
+    # Create a bounded queue with the maximum size
+    q = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
+    # Create a semaphore with the maximum number of readers
+    disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
+
+    # Start the producer threads
+    threads = []
+    for sub in os.listdir(data_filepath):
+        t = threading.Thread(
+            target=load_data,
+            args=(
+                q,
+                disk_semaphore,
+                sub,
+                args.data_path,
+                out_path,
+                args.datatype,
+                args.epoched,
+            ),
         )
-        for sub in os.listdir(data_filepath)
-    )
+        t.start()
+        threads.append(t)
+
+    # Start the consumer processes
+    with multiprocessing.Pool(processes=NUM_CONSUMERS) as pool:
+        pool.map(process_data, [(q, args.sfreq, args.datatype)] * NUM_CONSUMERS)
+
+    # Wait for all producer threads to finish
+    for t in threads:
+        t.join()
+
+    # Signal the consumer processes to exit
+    for _ in range(NUM_CONSUMERS):
+        q.put((None, None, None))
+
+    pool.close()
+    pool.join()
