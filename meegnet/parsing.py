@@ -232,5 +232,29 @@ parser.add_argument(
     "--nchan",
     default=100,
     type=int,
-    help="the number of channels for the first convolution, the other channel numbers scale with this one",
+    help="the number of channels for the first convolution, the other channel numbers scale with this one.",
+)
+parser.add_argument(
+    "--compute-psd",
+    action="store_true",
+    help="wether or not to to compute psd using saliency windows in the compute_saliency_maps.py script.",
+)
+parser.add_argument(
+    "--w-size",
+    type=int,
+    default=300,
+    help="The window size for saliency based psd computation in the compute_saliency_maps.py script.",
+)
+parser.add_argument(
+    "--confidence",
+    type=float,
+    default=0.98,
+    help="the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.",
+)
+parser.add_argument(
+    "--saliency-type",
+    default="pos",
+    choices=["pos", "neg", "both"],
+    type=str,
+    help="chooses whether to use positive saliency, negative saliency or the sum of them in visu_saliency_maps.py script.",
 )

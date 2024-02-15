@@ -134,27 +134,6 @@ def compute_saliency_maps(
 
 if __name__ == "__main__":
 
-    ################################
-    ### ADDING PARSER PARAMETERS ###
-    ################################
-
-    parser.add_argument(
-        "--compute-psd",
-        action="store_true",
-        help="wether or not to to compute psd using saliency windows",
-    )
-    parser.add_argument(
-        "--w-size",
-        type=int,
-        default=300,
-        help="The window size for saliency based psd computation.",
-    )
-    parser.add_argument(
-        "--confidence",
-        type=float,
-        default=0.98,
-        help="the confidence threshold needed for a trial to be selected for visualisation",
-    )
     args = parser.parse_args()
     args_dict = vars(args)
     toml_string = toml.dumps(args_dict)
@@ -282,7 +261,7 @@ if __name__ == "__main__":
             args.data_path,
             epoched=args.epoched,
             seed=args.seed,
-            s_freq=args.sfreq,
+            sfreq=args.sfreq,
             chan_index=chan_index,
             datatype=args.datatype,
             eventclf=args.eventclf,

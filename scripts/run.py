@@ -248,7 +248,7 @@ if __name__ == "__main__":
     toml_string = toml.dumps(args_dict)
     with open(args.config, "w") as toml_file:
         toml.dump(args_dict, toml_file)
-    with open("default_values.toml") as toml_file:
+    with open("default_values.toml") as tomf_file:
         default_values = toml.load(toml_file)
 
     fold = None if args.fold is None else int(args.fold)
@@ -321,7 +321,7 @@ if __name__ == "__main__":
             epoched=args.epoched,
             datatype=args.datatype,
             testing=args.testsplit,
-            s_freq=args.sfreq,
+            sfreq=args.sfreq,
         )
         # Note: replace testing = testsplit or testing when we add the option to load test set and
         # use it for a test pass.
@@ -340,7 +340,7 @@ if __name__ == "__main__":
             eventclf=args.eventclf,
             epoched=args.epoched,
             testing=args.testsplit,
-            s_freq=args.sfreq,
+            sfreq=args.sfreq,
         )
         n_outputs = 2
         # Note: replace testing = testsplit or testing when we add the option to load test set and
