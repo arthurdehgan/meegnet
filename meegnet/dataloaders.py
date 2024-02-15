@@ -58,9 +58,7 @@ class InfiniteDataLoader:
         An infinite data loader.
     """
 
-    def __init__(
-        self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None
-    ):
+    def __init__(self, dataset, batch_size, num_workers=0, pin_memory=False, weights=None):
         super().__init__()
 
         if weights is not None:
@@ -99,18 +97,16 @@ class InfiniteDataLoader:
 
 def assert_params(band, datatype):
     if datatype not in ["rest", "passive", "task"]:
-        logging.error(
-            f"Incorrect data type: {datatype}. Must be in (rest, passive, task)"
-        )
+        logging.error(f"Incorrect data type: {datatype}. Must be in (rest, passive, task)")
     return
 
 
 def create_datasets(
-    data_folder,
+    data_path,
     train_size,
     max_subj=1000,
     chan_index=[0, 1, 2],
-    s_freq=200,
+    sfreq=200,
     seg=0.8,
     debug=False,
     seed=0,
@@ -129,7 +125,7 @@ def create_datasets(
 
     Parameters
     ----------
-    data_folder : str
+    data_path : str
         Path to the folder containing the data.
     train_size : float
         Fraction of the total dataset to be used for training.
@@ -138,7 +134,7 @@ def create_datasets(
     chan_index : list, optional
         List of channel indices to be considered. Default is [0, 1, 2].
         0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
-    s_freq : int, optional
+    sfreq : int, optional
         Sampling frequency. Default is 200.
     seg : int, optional
         Segment size in seconds. Default is .8.
@@ -193,18 +189,17 @@ def create_datasets(
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    csv_filepath = os.path.join(data_folder, f"participants_info_{datatype}.csv")
+    folder = "psd" if psd else f"downsampled_{sfreq}"
+    csv_file = os.path.join(data_path, folder, f"participants_info_{datatype}.csv")
     participants_df = (
-        pd.read_csv(csv_filepath, index_col=0)
+        pd.read_csv(csv_file, index_col=0)
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
     )
     participants_df["age"] = pd.to_numeric(participants_df["age"])
 
     subs = np.array(
-        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)[
-            "sub"
-        ]
+        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)["sub"]
     )
 
     subs = subs[:max_subj]
@@ -215,9 +210,7 @@ def create_datasets(
         # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
         forbidden_subs = []
         if len(forbidden_subs) > 0:
-            logging.info(
-                f"removed subjects {forbidden_subs}, they were causing problems..."
-            )
+            logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
         for sub in forbidden_subs:
             if sub in subs:
                 subs = np.delete(subs, np.where(subs == sub)[0])
@@ -248,7 +241,7 @@ def create_datasets(
         TensorDataset(
             *load_data(
                 df,
-                data_path=data_folder,
+                data_path=data_path,
                 chan_index=chan_index,
                 printmem=printmem,
                 datatype=datatype,
@@ -257,7 +250,7 @@ def create_datasets(
                 epoched=epoched,
                 eventclf=eventclf,
                 band=band,
-                s_freq=s_freq,
+                sfreq=sfreq,
                 seg=seg,
                 psd=psd,
                 group_id=i * len(df),
@@ -274,7 +267,7 @@ def load_sets(
     n_splits=5,
     offset=0,
     seg=0.8,
-    s_freq=200,
+    sfreq=200,
     n_samples=None,
     chan_index=[0, 1, 2],
     printmem=False,
@@ -300,7 +293,7 @@ def load_sets(
         Offset for the data. Default is 0.
     seg : int, optional
         Segment size in seconds. Default is .8.
-    s_freq : int, optional
+    sfreq : int, optional
         Sampling frequency. Default is 200.
     n_samples : int, optional
         Number of samples to load. Default is None.
@@ -338,22 +331,19 @@ def load_sets(
     """
     assert_params(band, datatype)
 
-    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
+    folder = "psd" if psd else f"downsampled_{sfreq}"
+    csv_file = os.path.join(data_path, folder, f"participants_info_{datatype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
     forbidden_subs = []
     if len(forbidden_subs) > 0:
-        logging.info(
-            f"removed subjects {forbidden_subs}, they were causing problems..."
-        )
+        logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
 
     for sub in forbidden_subs:
         dataframe = dataframe.loc[dataframe["sub"] != sub]
 
-    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[
-        :max_subj
-    ]
+    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[:max_subj]
 
     n_sub = len(dataframe)
     logging.debug(f"Loading {n_sub} subjects data")
@@ -387,7 +377,7 @@ def load_sets(
             datatype=datatype,
             epoched=epoched,
             offset=offset,
-            s_freq=s_freq,
+            sfreq=sfreq,
             seg=seg,
             psd=psd,
         )
@@ -469,7 +459,7 @@ def load_data(
     data_path,
     offset=30,
     seg=0.8,
-    s_freq=200,
+    sfreq=200,
     chan_index=[0, 1, 2],
     printmem=False,
     datatype="rest",
@@ -494,7 +484,7 @@ def load_data(
         Offset for the data. Default is 30.
     seg : int, optional
         Segment size in seconds. Default is .8.
-    s_freq : int, optional
+    sfreq : int, optional
         Sampling frequency. Default is 200.
     chan_index : list, optional
         List of channel indices to be considered. Default is [0, 1, 2].
@@ -568,7 +558,7 @@ def load_data(
             datatype=datatype,
             epoched=epoched,
             offset=offset,
-            s_freq=s_freq,
+            sfreq=sfreq,
             seg=seg,
             psd=psd,
         )
@@ -577,16 +567,12 @@ def load_data(
             continue
 
         if n_samples is not None:
-            random_samples = np.random.choice(
-                np.arange(len(data)), n_samples, replace=False
-            )
+            random_samples = np.random.choice(np.arange(len(data)), n_samples, replace=False)
             data = torch.Tensor(data)[random_samples]
 
         if eventclf:
             events = np.array(
-                literal_eval(
-                    dataframe.loc[dataframe["sub"] == sub]["event_labels"].item()
-                )
+                literal_eval(dataframe.loc[dataframe["sub"] == sub]["event_labels"].item())
             )
             if len(events) != len(data):
                 n_sub -= 1
@@ -611,9 +597,7 @@ def load_data(
     return X, y
 
 
-def load_epoched_sub(
-    data_path, sub, chan_index, datatype="passive", s_freq=500, psd=False
-):
+def load_epoched_sub(data_path, sub, chan_index, datatype="passive", sfreq=500, psd=False):
     """
     Loads epoched data for a particular subject.
 
@@ -628,7 +612,7 @@ def load_epoched_sub(
     datatype : str, optional
         Type of data to be loaded. Default is "passive".
         Other options is "smt".
-    s_freq : int, optional
+    sfreq : int, optional
         Sampling frequency. Default is 500.
     psd : bool, optional
         Whether to load power spectral density data. Default is False.
@@ -648,7 +632,7 @@ def load_epoched_sub(
     This function loads epoched data for a particular subject. The data is loaded from a `.npy` file located in a specific directory depending on whether power spectral density data is requested. The function also performs zero mean normalization on the data if it's not power spectral density data.
     """
     assert datatype in ("passive", "smt"), "cannot load epoched data for resting state"
-    folder = "psd" if psd else f"downsampled_{s_freq}"
+    folder = "psd" if psd else f"downsampled_{sfreq}"
     sub_path = os.path.join(data_path, folder, f"{datatype}_{sub}_epoched.npy")
     try:
         sub_data = np.load(sub_path)[:, chan_index]
@@ -673,7 +657,7 @@ def load_sub(
     datatype="rest",
     epoched=False,
     offset=30,
-    s_freq=200,
+    sfreq=200,
     seg=0.8,
     psd=False,
 ):
@@ -682,7 +666,7 @@ def load_sub(
 
     Parameters
     ----------
-    data_path : str
+    data_path : stl
         Path to the folder containing the data.
     sub : str
         Subject identifier.
@@ -701,7 +685,7 @@ def load_sub(
         Whether to load epoched data. Default is False.
     offset : int, optional
         Offset for the data. Default is 30.
-    s_freq : int, optional
+    sfreq : int, optional
         Sampling frequency. Default is 200.
     seg : int, optional
         Segment size in seconds. Default is .8.
@@ -721,7 +705,7 @@ def load_sub(
     """
     if epoched:
         data = load_epoched_sub(
-            data_path, sub, chan_index, datatype=datatype, s_freq=s_freq, psd=psd
+            data_path, sub, chan_index, datatype=datatype, sfreq=sfreq, psd=psd
         )
     else:
         try:
@@ -734,14 +718,14 @@ def load_sub(
             #     if domain == "cosp":
             #         data = data[:, :, BANDS.index(band)]
             # else:
-            folder = "psd" if psd else f"downsampled_{s_freq}"
+            folder = "psd" if psd else f"downsampled_{sfreq}"
             file_path = os.path.join(data_path, folder, f"{datatype}_{sub}.npy")
             sub_data = np.load(file_path)[chan_index]
             if len(sub_data.shape) < 3:
                 sub_data = sub_data[np.newaxis, :]
             if not psd:
-                step = int(seg * s_freq)
-                start = int(offset * s_freq)
+                step = int(seg * sfreq)
+                start = int(offset * sfreq)
                 data = []
                 for i in range(start, sub_data.shape[-1], step):
                     trial = sub_data[:, :, i : i + step]
