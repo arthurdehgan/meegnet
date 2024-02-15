@@ -1,5 +1,6 @@
 import os
 import logging
+import toml
 import numpy as np
 import pandas as pd
 from scipy.io import loadmat
@@ -15,16 +16,6 @@ from meegnet.parsing import parser
 ####################
 
 DEBUG = {"dropout": 0.5, "dropout_option": "same", "patience": 1}
-
-##################
-# DEFAULT VALUES #
-##################
-
-TRIAL_LENGTH_BINS = 241
-TRIAL_LENGTH_BANDS = 5
-N_CHANNELS_MAG = 102
-N_CHANNELS_GRAD = 204
-N_CHANNELS_OTHER = 306
 
 ##############
 # CUDA CHECK #
@@ -84,9 +75,7 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
         logging.info(f"Training model for fold {fold+1}/{folds}:")
         results = train_evaluate(fold, datasets, net_option, args=args)
         logging.info(f"Finished training for fold {fold+1}/{folds}:")
-        logging.info(
-            f"loss: {results['loss_score']} // accuracy: {results['acc_score']}"
-        )
+        logging.info(f"loss: {results['loss_score']} // accuracy: {results['acc_score']}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
         cv.append(results["acc_score"])
     return cv
@@ -153,9 +142,9 @@ def train_evaluate(
 
     # TODO maybe use a dictionnary in order to store these values or use switch case
     if args.feature == "bins":
-        trial_length = TRIAL_LENGTH_BINS
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
     elif args.feature == "bands":
-        trial_length = TRIAL_LENGTH_BANDS
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
     elif args.feature == "temporal":
         trial_length = TIME_TRIAL_LENGTH
     elif args.feature == "cov":
@@ -168,16 +157,20 @@ def train_evaluate(
         pass
 
     if args.sensors == "MAG":
-        n_channels = N_CHANNELS_MAG
+        n_channels = default_values["N_CHANNELS_MAG"]
     elif args.sensors == "GRAD":
-        n_channels = N_CHANNELS_GRAD
+        n_channels = default_values["N_CHANNELS_GRAD"]
     else:
-        n_channels = N_CHANNELS_OTHER
+        n_channels = default_values["N_CHANNELS_OTHER"]
 
     input_size = (
         (1, n_channels, trial_length)
         if args.flat
-        else (n_channels // N_CHANNELS_MAG, N_CHANNELS_MAG, trial_length)
+        else (
+            n_channels // default_values["N_CHANNELS_MAG"],
+            default_values["N_CHANNELS_MAG"],
+            trial_length,
+        )
     )
 
     if args.mode == "overwrite":
@@ -235,9 +228,7 @@ def train_evaluate(
             _, net_state, _ = load_checkpoint(model_filepath)
             net.load_state_dict(net_state)
         else:
-            logging.warning(
-                f"Error: Can't evaluate model {model_filepath}, file not found."
-            )
+            logging.warning(f"Error: Can't evaluate model {model_filepath}, file not found.")
 
     results = loadmat(model_filepath[:-2] + "mat")
     if os.path.exists(rs_csv_path) and args.randomsearch:
@@ -253,10 +244,15 @@ if __name__ == "__main__":
     ###########
 
     args = parser.parse_args()
+    args_dict = vars(args)
+    toml_string = toml.dumps(args_dict)
+    with open(args.config, "w") as toml_file:
+        toml.dump(args_dict, toml_file)
+    with open("default_values.toml") as toml_file:
+        default_values = toml.load(toml_file)
+
     fold = None if args.fold is None else int(args.fold)
-    assert not (
-        args.eventclf and args.subclf
-    ), "Please choose only one type of classification"
+    assert not (args.eventclf and args.subclf), "Please choose only one type of classification"
     if args.eventclf:
         assert (
             args.datatype != "rest"
@@ -300,13 +296,13 @@ if __name__ == "__main__":
         args.patience = DEBUG["patience"]
 
     if args.sensors == "MAG":
-        n_channels = N_CHANNELS_MAG
+        n_channels = default_values["N_CHANNELS_MAG"]
         chan_index = [0]
     elif args.sensors == "GRAD":
-        n_channels = N_CHANNELS_GRAD
+        n_channels = default_values["N_CHANNELS_GRAD"]
         chan_index = [1, 2]
     else:
-        n_channels = N_CHANNELS_OTHER
+        n_channels = default_values["N_CHANNELS_OTHER"]
         chan_index = [0, 1, 2]
 
     ################
@@ -359,10 +355,14 @@ if __name__ == "__main__":
         if args.testsplit is None:
             for outer_fold in range(5):
                 args.testsplit = outer_fold
-                cv = do_crossval(DEFAULT_FOLDS, datasets, args.net_option, args=args)
+                cv = do_crossval(
+                    default_values["DEFAULT_FOLDS"], datasets, args.net_option, args=args
+                )
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
-            cv = do_crossval(DEFAULT_FOLDS, datasets, args.net_option, args=args)
+            cv = do_crossval(
+                default_values["DEFAULT_FOLDS"], datasets, args.net_option, args=args
+            )
             cv = [score for score in cv if score is not None]
             logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
