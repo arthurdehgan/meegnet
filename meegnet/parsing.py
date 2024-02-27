@@ -134,14 +134,33 @@ parser.add_argument(
     help="The proportion of data to use in the train set",
 )
 parser.add_argument(
+    "--model-path",
+    type=str,
+    default=None,
+    help="The default path to save all computed data, model and visualisations.",
+)
+parser.add_argument(
     "--save-path",
     type=str,
     default=".",
-    help="The path where the model will be saved.",
+    help="The default path to save all computed data, model and visualisations.",
 )
 parser.add_argument(
-    "--data-path",
+    "--raw-path",
     type=str,
+    default=None,
+    help="The path where the raw data can be found.",
+)
+parser.add_argument(
+    "--visu-path",
+    type=str,
+    default=None,
+    help="The path where the visualisation matrices wil be saved to and loaded from.",
+)
+parser.add_argument(
+    "--processed-path",
+    type=str,
+    default=None,
     help="The path where the data samples can be found.",
 )
 parser.add_argument(
@@ -167,6 +186,12 @@ parser.add_argument(
     default=100,
     type=int,
     help="The maximum age of the subjects to be included in the learning and testing process",
+)
+parser.add_argument(
+    "--clf-type",
+    default="",
+    choices=["eventclf", "subclf", "sexclf"],
+    help="The type of classification to run.",
 )
 parser.add_argument(
     "-s",
@@ -253,8 +278,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--saliency-type",
-    default="pos",
-    choices=["pos", "neg", "both"],
+    choices=["pos", "neg", "diff", "sum"],
     type=str,
     help="chooses whether to use positive saliency, negative saliency or the sum of them in visu_saliency_maps.py script.",
 )

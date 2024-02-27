@@ -190,7 +190,7 @@ def create_datasets(
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
     folder = "psd" if psd else f"downsampled_{sfreq}"
-    csv_file = os.path.join(data_path, folder, f"participants_info_{datatype}.csv")
+    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
     participants_df = (
         pd.read_csv(csv_file, index_col=0)
         .sample(frac=1, random_state=seed)
@@ -332,7 +332,7 @@ def load_sets(
     assert_params(band, datatype)
 
     folder = "psd" if psd else f"downsampled_{sfreq}"
-    csv_file = os.path.join(data_path, folder, f"participants_info_{datatype}.csv")
+    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
     # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
     # forbidden_subs = ["CC220901"]
