@@ -150,7 +150,7 @@ if __name__ == "__main__":
             log_name += f"_fold{args.fold}"
         log_name += "_saliency_computations.log"
         logging.basicConfig(
-            filename=os.path.join(args.save_path, log_name),
+            filename=log_name,
             filemode="a",
             level=logging.INFO,
             format="%(asctime)s %(message)s",
@@ -236,13 +236,21 @@ if __name__ == "__main__":
     ### LOADING NETWORK AND DATA INFO ###
     #####################################
 
-    model_filepath = os.path.join(args.save_path, name + ".pt")
+    if args.model_path is None:
+        model_path = os.path.join(args.save_path, args.clf_type)
+    else:
+        model_path = args.model_path
+
+    if not os.path.exists(model_path):
+        logging.info(f"{model_path} does not exist. Creating folders")
+        os.makedirs(model_path)
+
+    model_filepath = os.path.join(model_path, name + ".pt")
     net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
     _, net_state, _ = load_checkpoint(model_filepath)
     net.load_state_dict(net_state)
 
-    folder = "psd" if args.feature in ["bins", "bands"] else f"downsampled_{args.sfreq}"
-    csv_file = os.path.join(args.data_path, folder, f"participants_info_{args.datatype}.csv")
+    csv_file = os.path.join(args.save_path, f"participants_info_{args.datatype}.csv")
     dataframe = (
         pd.read_csv(csv_file, index_col=0)
         .sample(frac=1, random_state=args.seed)
@@ -258,7 +266,7 @@ if __name__ == "__main__":
     for i, sub in enumerate(subj_list):
         data, targets = load_data(
             dataframe.loc[dataframe["sub"] == sub],
-            args.data_path,
+            args.save_path,
             epoched=args.epoched,
             seed=args.seed,
             sfreq=args.sfreq,

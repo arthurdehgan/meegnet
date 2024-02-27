@@ -248,7 +248,7 @@ if __name__ == "__main__":
     toml_string = toml.dumps(args_dict)
     with open(args.config, "w") as toml_file:
         toml.dump(args_dict, toml_file)
-    with open("default_values.toml") as tomf_file:
+    with open("default_values.toml") as toml_file:
         default_values = toml.load(toml_file)
 
     fold = None if args.fold is None else int(args.fold)
@@ -269,13 +269,15 @@ if __name__ == "__main__":
         if fold is not None:
             log_name += f"_fold{args.fold}"
         log_name += ".log"
+        log_file = os.path.join(args.save_path, log_name)
         logging.basicConfig(
-            filename=os.path.join(args.save_path, log_name),
+            filename=log_file,
             filemode="a",
             level=logging.INFO,
             format="%(asctime)s %(message)s",
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
+        logging.info(f"Logging in {log_file}")
     else:
         logging.basicConfig(
             level=logging.INFO,
@@ -312,7 +314,7 @@ if __name__ == "__main__":
     # We create loaders and datasets (see dataloaders.py)
     if args.subclf:
         n_outputs, datasets = load_sets(
-            args.data_path,
+            args.save_path,
             n_samples=args.n_samples,
             max_subj=args.max_subj,
             chan_index=chan_index,
@@ -327,7 +329,7 @@ if __name__ == "__main__":
         # use it for a test pass.
     else:
         datasets = create_datasets(
-            args.data_path,
+            args.save_path,
             args.train_size,
             args.max_subj,
             chan_index,

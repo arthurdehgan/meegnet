@@ -117,10 +117,14 @@ def load_data(
 
         sub = sub_folder.split("-")[1]
         if epoched:
+            assert args.datatype != "rest", "Cannot generate epochs for resting-state data"
             filename = f"{datatype}_{sub}_epoched.npy"
         else:
             filename = f"{datatype}_{sub}.npy"
-        filepath = os.path.join(save_path, filename)
+        out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+        if not os.path.exists(out_path):
+            os.makedirs(out_path)
+        filepath = os.path.join(out_path, filename)
 
         bad_csv_path = os.path.join(save_path, f"bad_participants_info_{datatype}.csv")
         if os.path.exists(bad_csv_path):
@@ -214,16 +218,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args_dict = vars(args)
     toml_string = toml.dumps(args_dict)
+    if not os.path.exists(args.config):
+        os.path.copy("default_values.toml", args.config)
     with open(args.config, "w") as toml_file:
         toml.dump(args_dict, toml_file)
 
-    out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-
     if args.log:
         logging.basicConfig(
-            filename=args.save_path + "prepare_data.log",
+            filename=os.path.join(args.save_path, "prepare_data.log"),
             filemode="a",
             level=logging.INFO,
             format="%(asctime)s %(message)s",
@@ -236,8 +238,21 @@ if __name__ == "__main__":
             datefmt="%m/%d/%Y %I:%M:%S %p",
         )
 
+    ########################
+    ### ASSERTION CHECKS ###
+    ########################
+
+    assert args.raw_path is not None, "The --raw-path parameter has to be set."
+    assert os.path.exists(
+        args.raw_path
+    ), f'The --raw-path "{args.raw_path}" parameter doesnt exist.'
+    check_path = os.listdir(args.raw_path)
+    assert (
+        "cc700" in check_path and "dataman" in check_path
+    ), "The --raw-path must contain the cc700 and dataman folders in order for this script to work properly."
+
     data_filepath = os.path.join(
-        args.data_path,
+        args.raw_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
         f"derivatives_{args.datatype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
@@ -264,8 +279,8 @@ if __name__ == "__main__":
                 q,
                 disk_semaphore,
                 sub,
-                args.data_path,
-                out_path,
+                args.raw_path,
+                args.save_path,
                 args.datatype,
                 args.epoched,
             ),
