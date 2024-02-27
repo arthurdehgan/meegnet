@@ -1,5 +1,6 @@
 import os
 import logging
+import toml
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -7,6 +8,27 @@ from meegnet.parsing import parser
 from meegnet.viz import load_info
 import mne
 import seaborn as sns
+
+
+def avg_range(arr: list):
+    length = int(len(arr) / 2)
+    return rec_avg_range(list(arr), length)
+
+
+def rec_avg_range(arr: list, length: int):
+    if len(arr) <= 1:
+        return 0
+    argmax = np.argmax(arr)
+    max = arr.pop(argmax)
+    argmin = np.argmin(arr)
+    min = arr.pop(argmin)
+    range = (max - min) / length
+    return range + rec_avg_range(arr, length)
+
+
+def _unit_test_avg_range():
+    liste = [18, -8, -6, 3, -10, 15, 0]
+    assert avg_range(liste) == 20
 
 
 def generate_saliency_figure(
@@ -17,6 +39,7 @@ def generate_saliency_figure(
     sensors: list = [""],
     eventclf=False,
     sfreq=500,
+    edge=50,
     cmap="coolwarm",
     stim_tick=75,
 ):
@@ -72,6 +95,7 @@ def generate_saliency_figure(
     file I/O or invalid input data.
     """
 
+    stim_tick -= int(edge / 2)
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
     n_blocs = len(sensors)  # number of blocs of figures in a line
@@ -85,16 +109,26 @@ def generate_saliency_figure(
     tick_ratio = int(1000 / sfreq)
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label]
-        gradient -= gradient.mean()
         gradient /= np.abs(gradient).max()
         for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
             idx = j // 3
-            grads = gradient[idx]
+            # grads = gradient[idx]
+            # In an attempt to remove the edge effect:
+            # We remove the first and last edge points -> therefore tick is moved to 25 (was 75)
+            grads = gradient[idx][:, edge:-edge]
+
             segment_length = grads.shape[1]
+            # We add the mid_slice variable in an attempt to tackle the edge effects by removing mean from center values for example
+            # But it was uneffective. This could still be useful so we leave it here...
+            mid_slice = (0, segment_length)
+            # mid_slice = (int(segment_length / 4), int(3 * segment_length / 4))
+            gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
+            grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
             n_sensors = grads.shape[0]
             vmax = grads.max()
             vmin = grads.min()
-            max_idx = np.argmax(np.mean(np.abs(grads), axis=0))
+            max_idx = np.argmax([avg_range(arr) for arr in grads.T])
+            # max_idx = np.argmax(np.mean(grads, axis=0))
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
             plt.imshow(
                 grads,
@@ -113,8 +147,8 @@ def generate_saliency_figure(
                     [0, stim_tick, int(segment_length / 2), segment_length] + [max_idx]
                 )
                 ticks_values = [(x_tick - stim_tick) * tick_ratio for x_tick in x_ticks]
-                plt.axvline(x=stim_tick, color="black", linestyle="--", linewidth=1)
                 plt.axvline(x=max_idx, color="green", linestyle="--", linewidth=1)
+                plt.axvline(x=stim_tick, color="black", linestyle="--", linewidth=1)
             else:
                 x_ticks = [0, int(segment_length / tick_ratio), segment_length]
                 ticks_values = [x_tick * tick_ratio for x_tick in x_ticks]
@@ -131,7 +165,10 @@ def generate_saliency_figure(
             if i == 1:
                 plt.xlabel("time (ms)")
             axes.append(fig.add_subplot(grid[i, j + 2]))
-            data = grads[:, max_idx]
+            if eventclf:
+                data = grads[:, max_idx]
+            else:
+                data = gradmeans
             info = load_info()
 
             im, _ = mne.viz.plot_topomap(
@@ -142,7 +179,6 @@ def generate_saliency_figure(
                 vlim=(vmin, vmax) if vmax > vmin else (None, None),
                 show=False,
                 contours=1,
-                extrapolate="local",
                 axes=axes[-1],
             )
             if idx == n_blocs - 1:
@@ -156,36 +192,21 @@ def generate_saliency_figure(
                 )
                 axes[-1].axis("off")
 
+    out_path = os.path.join(save_path, f"{suffix}saliencies.png")
     plt.tight_layout()
-    plt.savefig(os.path.join(save_path, f"{suffix}saliencies.png"), dpi=300)
+    plt.savefig(out_path, dpi=300)
+    logging.info(f"Figure generated: {out_path}")
     plt.close()
 
 
 if __name__ == "__main__":
     mne.set_log_level(False)
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(message)s",
-        datefmt="%m/%d/%Y %I:%M:%S %p",
-    )
-    parser.add_argument(
-        "--saliency-type",
-        default="pos",
-        choices=["pos", "neg", "both"],
-        type=str,
-        help="chooses whether to use positive saliency, negative saliency or the sum of them",
-    )
-
-    parser.add_argument(
-        "--confidence",
-        type=float,
-        default=0.98,
-        help="the confidence needed for a trial to be selected for visualisation",
-    )
     args = parser.parse_args()
-
-    random_subject = args.seed
+    args_dict = vars(args)
+    toml_string = toml.dumps(args_dict)
+    with open(args.config, "w") as toml_file:
+        toml.dump(args_dict, toml_file)
 
     #################################################
     ### Create network name depending on the args ###
@@ -196,7 +217,15 @@ if __name__ == "__main__":
     else:
         fold = 1
     name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
-    suffixes = ""
+
+    if args.subclf:
+        clftype = "subclf"
+    elif args.eventclf:
+        clftype = "eventclf"
+    else:
+        clftype = "sexclf"
+
+    suffixes = clftype
     if args.net_option == "custom_net":
         if args.batchnorm:
             suffixes += "_BN"
@@ -210,27 +239,39 @@ if __name__ == "__main__":
     ### Get saliencies found in data-path ###
     #########################################
 
-    sal_path = os.path.join(args.data_path, "saliency_maps", name)
+    visu_path = os.path.join(args.save_path, "visualizations")
+    if not os.path.exists(visu_path):
+        os.makedirs(visu_path)
+    sal_path = os.path.join(args.save_path, "saliency_maps", name)
     file_list = os.listdir(sal_path)
-    # TODO might want to use participants.csv for subject list :
-    subjects = np.unique([file.split("_")[0] for file in file_list])[: args.max_subj]
 
     if args.eventclf:
         labels = ["visual", "auditory"]
         all_saliencies = {labels[0]: [], labels[1]: []}
-    elif args.subclf:
-        labels = subjects
-        all_saliencies = {sub: [] for sub in subjects}
-    else:
+    elif not args.subclf:
         labels = ["male", "female"]
         all_saliencies = {labels[0]: [], labels[1]: []}
+
+    subjects = np.unique(
+        [
+            file.split("_")[0]
+            for file in file_list
+            if set(file.split("_")).intersection(set(labels)) != set()
+        ]
+    )[: args.max_subj]
+    random_subject = np.random.randint(len(subjects))
+
+    # TODO CURRENTLY NOT WORKING FOR SUBCLF !
+    # if args.subclf:
+    #     labels = subjects
+    #     all_saliencies = {sub: [] for sub in subjects}
 
     #########################
     ### HARD CODED VALUES ###
     #########################
 
-    # TODO change design to create an object with info about the dataset and pass it from script to script
-    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
+    # TODO add those to a TOML file, either config or default_values
+    sensors = ["MAG"]  # , "PLANNAR1", "PLANNAR2"]
     cmap = "coolwarm"
     stim_tick = 75
 
@@ -239,6 +280,20 @@ if __name__ == "__main__":
     # cmap = sns.color_palette("coolwarm", as_cmap=True, center="dark")
     # cmap = "inferno"
     # cmap = "seismic"
+
+    ###############
+    ### LOGGING ###
+    ###############
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+    )
+
+    logging.info(f"Generating figure for sensors: {sensors}")
+    logging.info(f"With saliency type: {args.saliency_type}")
+    logging.info(f"For the {clftype} classification")
 
     ######################################
     ### LOAD DATA AND GENERATE FIGURES ###
@@ -254,7 +309,7 @@ if __name__ == "__main__":
             saliencies = {}
             nofile = False
 
-            if args.saliency_type in ("all", "both"):
+            if args.saliency_type in ("sum", "diff"):
                 saliency_types = ("pos", "neg")
             else:
                 saliency_types = [args.saliency_type]
@@ -282,8 +337,10 @@ if __name__ == "__main__":
                 sub_saliencies[label] = saliencies["pos"]
             elif args.saliency_type == "neg":
                 sub_saliencies[label] = saliencies["neg"]
-            else:
+            elif args.saliency_type == "diff":
                 sub_saliencies[label] = saliencies["pos"] - saliencies["neg"]
+            elif args.saliency_type == "sum":
+                sub_saliencies[label] = saliencies["pos"] + saliencies["neg"]
 
             if sub_saliencies[label].size == 0:
                 continue
@@ -291,37 +348,30 @@ if __name__ == "__main__":
             if args.subclf:
                 break  # we only need to add one label per subject so we get out of the loop
 
+        skip = False
         if i == random_subject:
-            suffix = f"{sub}_single_trial"
-            if args.subclf:
-                suffix += "_subclf"
-            elif args.eventclf:
-                suffix += "_eventclf"
-            else:
-                suffix += "_sexclf"
+            for val in sub_saliencies.values():
+                if val.size == 0:
+                    skip = True
+            if skip:
+                random_subject += 1
+                continue
             generate_saliency_figure(
                 {key: val[0] for key, val in sub_saliencies.items()},
-                save_path=args.save_path,
-                suffix=suffix,
+                save_path=visu_path,
+                suffix=f"{clftype}_{sub}_single_trial_{args.saliency_type}",
                 sensors=sensors,
-                title=f"saliencies for a single trial of subject {sub}",
+                title=f"{args.saliency_type} saliencies for a single trial of subject {sub}",
                 eventclf=args.eventclf,
                 cmap=cmap,
                 stim_tick=stim_tick,
             )
-            suffix = f"{sub}_all_trials"
-            if args.subclf:
-                suffix += "_subclf"
-            elif args.eventclf:
-                suffix += "_eventclf"
-            else:
-                suffix += "_sexclf"
             generate_saliency_figure(
                 {key: np.mean(val, axis=0) for key, val in sub_saliencies.items()},
-                save_path=args.save_path,
-                suffix=suffix,
+                save_path=visu_path,
+                suffix=f"{clftype}_{sub}_all_trials_{args.saliency_type}",
                 sensors=sensors,
-                title=f"saliencies for the averaged trials of subject {sub}",
+                title=f"{args.saliency_type} saliencies for the averaged trials of subject {sub}",
                 eventclf=args.eventclf,
                 cmap=cmap,
                 stim_tick=stim_tick,
@@ -331,20 +381,13 @@ if __name__ == "__main__":
     if args.subclf:
         final_dict = {"all_subj": np.mean(list(final_dict.values()), axis=0)}
         labels = ["all_subj"]
-        suffix = "subclf"
-    elif args.eventclf:
-        suffix = "eventclf"
-    else:
-        suffix = "sexclf"
-
-    suffix += f"_{args.saliency_type}"
 
     generate_saliency_figure(
         final_dict,
-        save_path=args.save_path,
-        suffix=suffix,
+        save_path=visu_path,
+        suffix=f"{clftype}_{args.saliency_type}",
         sensors=sensors,
-        title="saliencies averaged across all subjects",
+        title=f"{args.saliency_type} saliencies averaged across all subjects",
         eventclf=args.eventclf,
         cmap=cmap,
         stim_tick=stim_tick,
