@@ -23,7 +23,7 @@ import pandas as pd
 import numpy as np
 import threading
 import multiprocessing
-from meegnet.parsing import parser
+from meegnet.parsing import parser, save_config
 import toml
 import warnings
 
@@ -136,7 +136,7 @@ def load_data(
                 bad_subs_df.to_csv(f)
 
         good_csv_path = os.path.join(save_path, f"participants_info_{datatype}.csv")
-        columns = ["sub", "age", "sex", "hand", "Coil", "MT_TR"]
+        columns = ["sub", "age", "label", "hand", "Coil", "MT_TR"]
         if datatype != "rest":
             columns.append("event_labels")
         if os.path.exists(good_csv_path):
@@ -216,12 +216,10 @@ def load_data(
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    args_dict = vars(args)
-    toml_string = toml.dumps(args_dict)
-    if not os.path.exists(args.config):
-        os.path.copy("default_values.toml", args.config)
-    with open(args.config, "w") as toml_file:
-        toml.dump(args_dict, toml_file)
+    save_config(vars(args), args.config)
+
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
 
     if args.log:
         logging.basicConfig(
@@ -251,6 +249,10 @@ if __name__ == "__main__":
         "cc700" in check_path and "dataman" in check_path
     ), "The --raw-path must contain the cc700 and dataman folders in order for this script to work properly."
 
+    #######################
+    ### FIXING UP PATHS ###
+    #######################
+
     data_filepath = os.path.join(
         args.raw_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
@@ -258,6 +260,10 @@ if __name__ == "__main__":
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
     subj_count = len(os.listdir(data_filepath))
+
+    #######################
+    ### PRODUCE CONSUME ###
+    #######################
 
     # Define the maximum number of threads that can read from the disk at once
     MAX_DISK_READERS = 1

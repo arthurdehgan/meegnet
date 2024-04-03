@@ -9,7 +9,7 @@ from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.dataloaders import create_loader, create_datasets, load_sets
 from meegnet.network import create_net
 from meegnet.utils import train, load_checkpoint, cuda_check, evaluate
-from meegnet.parsing import parser
+from meegnet.parsing import parser, save_config
 
 ####################
 # DEBUG PARAMETERS #
@@ -244,16 +244,10 @@ if __name__ == "__main__":
     ###########
 
     args = parser.parse_args()
-    args_dict = vars(args)
-    toml_string = toml.dumps(args_dict)
-    with open(args.config, "w") as toml_file:
-        toml.dump(args_dict, toml_file)
-    with open("default_values.toml") as toml_file:
-        default_values = toml.load(toml_file)
+    save_config(vars(args), args.config)
 
-    fold = None if args.fold is None else int(args.fold)
-    assert not (args.eventclf and args.subclf), "Please choose only one type of classification"
-    if args.eventclf:
+    fold = None if args.fold == -1 else int(args.fold)
+    if args.clf_type == "eventclf":
         assert (
             args.datatype != "rest"
         ), "datatype must be set to passive in order to run eventclf"
@@ -312,10 +306,11 @@ if __name__ == "__main__":
     ################
 
     # We create loaders and datasets (see dataloaders.py)
+    n_samples = None if args.n_samples == -1 else args.n_samples
     if args.subclf:
         n_outputs, datasets = load_sets(
             args.save_path,
-            n_samples=args.n_samples,
+            n_samples=n_samples,
             max_subj=args.max_subj,
             chan_index=chan_index,
             seed=args.seed,
@@ -337,7 +332,7 @@ if __name__ == "__main__":
             debug=args.debug,
             printmem=args.printmem,
             ages=ages,
-            n_samples=args.n_samples,
+            n_samples=n_samples,
             datatype=args.datatype,
             eventclf=args.eventclf,
             epoched=args.epoched,
@@ -374,7 +369,7 @@ if __name__ == "__main__":
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
 
     else:
-        fold = 0 if fold is None else fold
+        fold = 0 if fold == -1 else fold
         logging.info("Training model:")
         train_evaluate(fold, datasets, args.net_option, args=args)
         # logging.info("Evaluating model:")

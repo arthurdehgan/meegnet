@@ -1,10 +1,12 @@
+import threading
+import multiprocessing
 import os
 import logging
 import toml
 import torch
 import numpy as np
 import pandas as pd
-from meegnet.parsing import parser
+from meegnet.parsing import parser, save_config
 from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, cuda_check
 from meegnet.network import create_net
@@ -15,45 +17,72 @@ from meegnet.util_viz import (
 )
 from pytorch_grad_cam import GuidedBackpropReLUModel
 
-# from joblib import Parallel, delayed
 
 DEVICE = cuda_check()
+
+
+def produce_data(queue, sub, args, disk_semaphore):
+    with disk_semaphore:
+        data, targets = load_data(
+            dataframe.loc[dataframe["sub"] == sub],
+            args.save_path,
+            epoched=args.epoched,
+            seed=args.seed,
+            sfreq=args.sfreq,
+            chan_index=chan_index,
+            datatype=args.datatype,
+            clf_type=args.clf_type,
+            n_samples=None if args.n_samples == -1 else args.n_samples,
+        )
+        if data is None:
+            logging.info(f"data from {sub} is empty.")
+            queue.put(tuple([None] * 3 + [0]))
+            return
+        else:
+            queue.put((data, targets, sub, 1))
+            return
+
+
+def process_data(arguments):
+    queue, labels, sal_path, net, args = arguments
+    while True:
+        data, targets, sub, stop = queue.get()
+        if stop is None:
+            break
+        if data is None:
+            continue
+        compute_saliency_maps(
+            data,
+            targets,
+            labels,
+            sub,
+            sal_path,
+            net,
+            args.confidence,
+            args.w_size,
+            args.sfreq,
+            args.clf_type,
+            args.compute_psd,
+        )
 
 
 def compute_saliency_maps(
     data,
     targets,
+    labels,
+    sub,
     sal_path,
-    GBP,
+    net,
     threshold,
     w_size,
     sfreq,
-    eventclf=False,
-    subclf=False,
+    clf_type="",
     compute_psd=False,
 ):
-    # existing_paths = []
-    # for j, sal_type in enumerate(("pos", "neg")):
-    #     if not args.eventclf:
-    #         for label in labels:
-    #             lab = "" if args.subclf else f"_{label}"
-    #             sal_filepath = os.path.join(
-    #                 sal_path,
-    #                 f"{sub}{lab}_{sal_type}_sal_{args.confidence}confidence.npy",
-    #             )
-    #             existing_paths.append(os.path.exists(sal_filepath))
-    #     else:
-    #         for i, label in enumerate(labels):
-    #             sal_filepath = os.path.join(
-    #                 sal_path,
-    #                 f"{sub}_{labels[i]}_{sal_type}_sal_{args.confidence}confidence.npy",
-    #             )
-    #             existing_paths.append(os.path.exists(sal_filepath))
-    # if all(existing_paths):
-    #     return
+    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
 
     # Load all trials and corresponding labels for a specific subject.
-    if eventclf:
+    if clf_type == "eventclf":
         target_saliencies = [[[], []], [[], []]]
         target_psd = [[[], []], [[], []]]
     else:
@@ -69,7 +98,7 @@ def compute_saliency_maps(
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
         confidence = preds.max()
-        if subclf:
+        if clf_type == "subclf":
             label = int(dataframe[dataframe["sub"] == sub].index[0])
 
         # If the confidence reaches desired treshhold (given by args.confidence)
@@ -81,7 +110,7 @@ def compute_saliency_maps(
             pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
 
             # Depending on the task, add saliencies in lists
-            if eventclf:
+            if clf_type == "eventclf":
                 target_saliencies[label][0].append(pos_saliency)
                 target_saliencies[label][1].append(neg_saliency)
                 if compute_psd:
@@ -103,7 +132,7 @@ def compute_saliency_maps(
                     )
     # With all saliencies computed, we save them in the specified save-path
     for j, sal_type in enumerate(("pos", "neg")):
-        if eventclf:
+        if clf_type == "eventclf":
             for i, label in enumerate(labels):
                 sal_filepath = os.path.join(
                     sal_path,
@@ -117,14 +146,14 @@ def compute_saliency_maps(
                     )
                     np.save(psd_filepath, np.array(target_psd[i][j]))
         else:
-            lab = "" if subclf else f"_{labels[label]}"
+            lab = "" if clf_type == "subclf" else f"_{labels[label]}"
             sal_filepath = os.path.join(
                 sal_path,
                 f"{sub}{lab}_{sal_type}_sal_{threshold}confidence.npy",
             )
             np.save(sal_filepath, np.array(target_saliencies[j]))
             if compute_psd:
-                lab = "" if subclf else f"_{labels[label]}"
+                lab = "" if clf_type == "subclf" else f"_{labels[label]}"
                 psd_filepath = os.path.join(
                     psd_path,
                     f"{sub}{lab}_{sal_type}_psd_{threshold}confidence.npy",
@@ -135,10 +164,7 @@ def compute_saliency_maps(
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    args_dict = vars(args)
-    toml_string = toml.dumps(args_dict)
-    with open(args.config, "w") as toml_file:
-        toml.dump(args_dict, toml_file)
+    save_config(vars(args), args.config)
 
     ######################
     ### LOGGING CONFIG ###
@@ -146,7 +172,7 @@ if __name__ == "__main__":
 
     if args.log:
         log_name = args.model_name
-        if args.fold is not None:
+        if args.fold != -1:
             log_name += f"_fold{args.fold}"
         log_name += "_saliency_computations.log"
         logging.basicConfig(
@@ -167,9 +193,9 @@ if __name__ == "__main__":
     ### TRANSLATING PARSER INFO ###
     ###############################
 
-    if args.eventclf:
+    if args.clf_type == "eventclf":
         labels = ["visual", "auditory"]  # image is label 0 and sound label 1
-    elif args.subclf:
+    elif args.clf_type == "subclf":
         labels = []
     else:
         labels = ["male", "female"]
@@ -199,7 +225,7 @@ if __name__ == "__main__":
 
     input_size = (n_channels // 102, 102, trial_length)
 
-    if args.fold is not None:
+    if args.fold != -1:
         fold = args.fold + 1
     else:
         fold = 1
@@ -214,7 +240,7 @@ if __name__ == "__main__":
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
 
-    if args.subclf:
+    if args.clf_type == "subclf":
         n_outputs = min(643, args.max_subj)
     else:
         n_outputs = 2
@@ -237,7 +263,7 @@ if __name__ == "__main__":
     #####################################
 
     if args.model_path is None:
-        model_path = os.path.join(args.save_path, args.clf_type)
+        model_path = args.save_path
     else:
         model_path = args.model_path
 
@@ -258,33 +284,47 @@ if __name__ == "__main__":
     )
     subj_list = dataframe["sub"]
 
-    #################
-    ### MAIN LOOP ###
-    #################
+    #######################
+    ### PRODUCE CONSUME ###
+    #######################
 
-    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
-    for i, sub in enumerate(subj_list):
-        data, targets = load_data(
-            dataframe.loc[dataframe["sub"] == sub],
-            args.save_path,
-            epoched=args.epoched,
-            seed=args.seed,
-            sfreq=args.sfreq,
-            chan_index=chan_index,
-            datatype=args.datatype,
-            eventclf=args.eventclf,
+    # Setting start method to spawn for CUDA compatibility.
+    multiprocessing.set_start_method("spawn")
+    # Define the maximum number of threads that can read from the disk at once
+    MAX_DISK_READERS = 1
+    # Define the maximum size of the queue
+    MAX_QUEUE_SIZE = 20  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 6
+
+    # Create a bounded queue with the maximum size
+    queue = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
+    # Create a semaphore with the maximum number of readers
+    disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
+
+    # Start the producer threads
+    threads = []
+    for sub in subj_list:
+        t = threading.Thread(
+            target=produce_data,
+            args=(queue, sub, args, disk_semaphore),
         )
-        if data is None or targets is None:
-            continue
-        compute_saliency_maps(
-            data,
-            targets,
-            sal_path,
-            GBP,
-            args.confidence,
-            args.w_size,
-            args.sfreq,
-            eventclf=args.eventclf,
-            subclf=args.subclf,
-            compute_psd=args.compute_psd,
+        t.start()
+        threads.append(t)
+
+    # Start the consumer processes
+    with multiprocessing.Pool(processes=NUM_CONSUMERS) as pool:
+        pool.map(
+            process_data,
+            [(queue, labels, sal_path, net, args)] * NUM_CONSUMERS,
         )
+
+    # Wait for all producer threads to finish
+    for t in threads:
+        t.join()
+
+    # Signal the consumer processes to exit
+    for _ in range(NUM_CONSUMERS):
+        queue.put(tuple([None] * 4))
+
+    pool.close()
+    pool.join()
