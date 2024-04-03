@@ -115,7 +115,7 @@ def create_datasets(
     datatype="rest",
     band="",
     n_samples=None,
-    eventclf=False,
+    clf_type="",
     epoched=False,
     testing=None,
     psd=False,
@@ -154,8 +154,8 @@ def create_datasets(
         Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
     n_samples : int, optional
         Number of samples to load. Default is None.
-    eventclf : bool, optional
-        Whether to perform event-wise classification. Default is False.
+    clf_type : str, optional
+        if set to "eventclf", perform event-wise classification.
     epoched : bool, optional
         Whether to epoch the data. Default is False.
     testing : int, optional
@@ -171,7 +171,7 @@ def create_datasets(
     Raises
     ------
     ValueError
-        If `eventclf` is set to True and `epoched` is set to False. We need to use epoched data around stimuli
+        If clf_type == "eventclf" and `epoched` is set to False. We need to use epoched data around stimuli
         in order to perform event classification
 
     Notes
@@ -180,7 +180,7 @@ def create_datasets(
     The division ratio is determined by the `train_size` parameter. The function also handles the removal of subjects that cause issues
     during data loading.
     """
-    if eventclf and not epoched:
+    if clf_type == "eventclf" and not epoched:
         logging.warning(
             "Event classification can only be performed with epoched data. And epoched has bot been set to True. Setting epoched to True."
         )
@@ -248,7 +248,7 @@ def create_datasets(
                 n_samples=n_samples,
                 seed=seed,
                 epoched=epoched,
-                eventclf=eventclf,
+                clf_type=clf_type,
                 band=band,
                 sfreq=sfreq,
                 seg=seg,
@@ -267,7 +267,7 @@ def load_sets(
     n_splits=5,
     offset=0,
     seg=0.8,
-    sfreq=200,
+    sfreq=500,
     n_samples=None,
     chan_index=[0, 1, 2],
     printmem=False,
@@ -459,14 +459,14 @@ def load_data(
     data_path,
     offset=30,
     seg=0.8,
-    sfreq=200,
+    sfreq=500,
     chan_index=[0, 1, 2],
     printmem=False,
     datatype="rest",
     n_samples=None,
     seed=0,
     epoched=False,
-    eventclf=False,
+    clf_type="",
     band="",
     psd=False,
     group_id=None,
@@ -500,8 +500,8 @@ def load_data(
         Random seed for reproducibility. Default is 0.
     epoched : bool, optional
         Whether to epoch the data. Default is False.
-    eventclf : bool, optional
-        Whether to perform event-wise classification. Default is False.
+    clf_type : str, optional
+        if set to "eventclf", perform event-wise classification.
     band : str, optional
         Frequency band to be considered. Default is "".
         Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
@@ -518,11 +518,11 @@ def load_data(
     Notes
     -----
     The function loads data subject by subject and assigns labels according to the task.
-    If `eventclf` is set to True, it uses labels from the events. Otherwise, it uses sex as the default label.
+    If clf_type == "eventclf", use labels from the events. Otherwise we use whatever is in the dataframe as default label.
     """
 
     assert_params(band, datatype)
-    if eventclf:
+    if clf_type == "eventclf":
         assert (
             datatype != "rest"
         ), "We can not perform event classification on resting state data as it contains no events and therefore can not be epoched."
@@ -547,8 +547,7 @@ def load_data(
             else:
                 logging.debug(memstate)
 
-        # TODO Add option to change the label from sex to some other column of the dataframe
-        sub, lab = row[1]["sub"], row[1]["sex"]
+        sub, lab = row[1]["sub"], row[1]["label"]
         data = load_sub(
             data_path,
             sub,
@@ -570,14 +569,14 @@ def load_data(
             random_samples = np.random.choice(np.arange(len(data)), n_samples, replace=False)
             data = torch.Tensor(data)[random_samples]
 
-        if eventclf:
+        if clf_type == "eventclf":
             events = np.array(
                 literal_eval(dataframe.loc[dataframe["sub"] == sub]["event_labels"].item())
             )
             if len(events) != len(data):
                 n_sub -= 1
                 continue
-            y += [0 if e == "visual" else 1 for e in events]
+            y += [0 if e == "visual" else int(e[-1]) for e in events]
         else:
             y += [1 if lab == "FEMALE" else 0] * len(data)
         if group_id is not None:
@@ -590,6 +589,8 @@ def load_data(
         X = torch.cat(X, 0)
     else:
         return None, None
+    if len(X.shape) != 4:  # Will happen if only one sensor channel is selected (eg MAG)
+        X = X[:, np.newaxis]
     y = torch.as_tensor(y)
     if group_id is not None:
         groups = torch.as_tensor(groups)
@@ -657,7 +658,7 @@ def load_sub(
     datatype="rest",
     epoched=False,
     offset=30,
-    sfreq=200,
+    sfreq=500,
     seg=0.8,
     psd=False,
 ):
@@ -738,7 +739,7 @@ def load_sub(
                     random_samples = np.random.choice(
                         np.arange(len(data)), n_samples, replace=False
                     )
-                    data = torch.Tensor(data)[random_samples]
+                    data = torch.Tensor(np.array(data))[random_samples]
             else:
                 data = sub_data
 

@@ -33,11 +33,11 @@ def extract_bands(data: np.array, f: list = None) -> np.array:
         bands are defined as follow:
             delta: .5 to 4 Hz
             theta: 4 to 8 Hz
-            alpha: 12 to 30 Hz
-            beta: 30 to 60 Hz
-            gamma1: 30 to 60 Hz
-            gamma2: 60 to 90 Hz
-            gamma3: 90 to 120 Hz
+            alpha: 8 to 12 Hz
+            beta1: 12 to 30 Hz
+            beta2: 30 to 60 Hz
+            gamma1: 60 to 90 Hz
+            gamma2: 90 to 120 Hz
 
     """
     if f is None:

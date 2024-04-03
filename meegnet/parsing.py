@@ -1,250 +1,257 @@
-from toml_argparse import argparse
+import configparser
+import configargparse
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
+parser = configargparse.ArgParser()
+
+
+def save_config(args: dict, config_filepath: str = "config.ini"):
+    """Saves a dictionnary to a given path.
+
+    Args:
+        args (dict): The argument dictionnary to be saved to the config filepath.
+        config_filepath (str): The filepath to be used to save the config file.
+    """
+    with open(config_filepath, "w") as conf:
+        config_object = configparser.ConfigParser()
+        config_object.add_section("config")
+        for key, value in args.items():
+            config_object.set("config", key.replace("_", "-"), str(value))
+        config_object.write(conf)
+    return
+
+
+parser.add(
+    "-c", "--config", is_config_file=True, default="../default.ini", help="config file path"
+)
+parser.add(
     "--testsplit",
     type=int,
-    default=None,
-    choices=[0, 1, 2, 3, 4, None],
+    default=-1,
     help="Will remove the 20% holdout set by default and usit for cross-val. Using 5-Fold instead of 4-Fold.",
 )
-parser.add_argument(
+parser.add(
     "--flat",
     action="store_true",
     help="will flatten sensors dimension",
 )
-parser.add_argument(
+parser.add(
     "--epoched",
     action="store_true",
     help="will load epoched data instead of the whole signal for each subject. This option only works for passive and smt data in which there are events that we use to generate epochs.",
 )
-parser.add_argument(
+parser.add(
     "--randomsearch",
     action="store_true",
     help="Launches one cross-val on a subset of data or full random search depending on testsplit parameter",
 )
-parser.add_argument(
+parser.add(
     "--fold",
-    default=None,
+    default=-1,
     type=int,
     help="will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true",
 )
-parser.add_argument(
+parser.add(
     "--net-option",
     default="best_net",
     choices=["custom_net", "best_net", "EEGNet", "VGG", "vanPutNet", "MLP"],
     help="cNet is the custom net.",
 )
-parser.add_argument(
+parser.add(
     "--datatype",
     default="rest",
     choices=["rest", "smt", "passive"],
     help="the type of data to be loaded",
 )
-parser.add_argument(
-    "--eventclf",
-    action="store_true",
-    help="launches event classification instead of gender classification.",
-)
-parser.add_argument(
-    "--subclf",
-    action="store_true",
-    help="launches subject classification instead of gender classification.",
-)
-parser.add_argument(
+parser.add(
     "--crossval",
     action="store_true",
     help="wether to do a 4-FOLD cross-validation on the train+valid set.",
 )
-parser.add_argument(
+parser.add(
     "--n-samples",
     type=int,
-    default=None,
+    default=-1,
     help="limit of number of samples per subjects",
 )
-parser.add_argument(
-    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
-)
-parser.add_argument(
+parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
+parser.add(
     "--sfreq",
     type=int,
     default=500,
     help="The sampling frequency of the data, mainly for loading the correct data",
 )
-parser.add_argument(
+parser.add(
     "--maxpool",
     type=int,
     default=0,
     help="adds a maxpool layer in between conv layers",
 )
-parser.add_argument(
+parser.add(
     "--batchnorm",
     action="store_true",
     help="adds a batchnorm layer in between conv layers",
 )
-parser.add_argument(
+parser.add(
     "--permute-labels",
     action="store_true",
     help="Permutes the labesl in order to test for chance level",
 )
-parser.add_argument(
+parser.add(
     "--printmem",
     action="store_true",
     help="Shows RAM information before and during the data loading process.",
 )
-parser.add_argument(
+parser.add(
     "--log",
     action="store_true",
     help="stores all prints in a logfile instead of printing them",
 )
-parser.add_argument(
+parser.add(
     "--lr",
     type=float,
     default=0.00001,
     help="the starting learning rate of the optimizer",
 )
-parser.add_argument(
+parser.add(
     "--hlayers",
     type=int,
     default=1,
     help="number of hidden layers",
 )
-parser.add_argument(
+parser.add(
     "--patience",
     type=int,
     default=20,
     help="patience for early stopping",
 )
-parser.add_argument(
+parser.add(
     "--model-name",
     type=str,
     default="net",
     help="Name of the network for file_save",
 )
-parser.add_argument(
+parser.add(
     "--num-workers",
     type=int,
     default=4,
     help="number of workers to load data while gpu is processing",
 )
-parser.add_argument(
+parser.add(
     "--train-size",
     type=float,
     default=0.8,
     help="The proportion of data to use in the train set",
 )
-parser.add_argument(
+parser.add(
     "--model-path",
     type=str,
     default=None,
     help="The default path to save all computed data, model and visualisations.",
 )
-parser.add_argument(
+parser.add(
     "--save-path",
     type=str,
     default=".",
     help="The default path to save all computed data, model and visualisations.",
 )
-parser.add_argument(
+parser.add(
     "--raw-path",
     type=str,
     default=None,
     help="The path where the raw data can be found.",
 )
-parser.add_argument(
+parser.add(
     "--visu-path",
     type=str,
     default=None,
     help="The path where the visualisation matrices wil be saved to and loaded from.",
 )
-parser.add_argument(
+parser.add(
     "--processed-path",
     type=str,
     default=None,
     help="The path where the data samples can be found.",
 )
-parser.add_argument(
+parser.add(
     "--seed",
     default=42,
     type=int,
     help="Seed to use for random splits.",
 )
-parser.add_argument(
+parser.add(
     "--max-subj",
     default=1000,
     type=int,
     help="maximum number of subjects to use (1000 uses all subjects)",
 )
-parser.add_argument(
+parser.add(
     "--age-min",
     default=1,
     type=int,
     help="The minimum age of the subjects to be included in the learning and testing process",
 )
-parser.add_argument(
+parser.add(
     "--age-max",
     default=100,
     type=int,
     help="The maximum age of the subjects to be included in the learning and testing process",
 )
-parser.add_argument(
+parser.add(
     "--clf-type",
     default="",
     choices=["eventclf", "subclf", "sexclf"],
     help="The type of classification to run.",
 )
-parser.add_argument(
+parser.add(
     "-s",
     "--sensors",
     default="MAG",
     choices=["GRAD", "MAG", "ALL"],
     help="The type of sensors to keep, default=MAG",
 )
-parser.add_argument(
+parser.add(
     "--feature",
     default="temporal",
     choices=["temporal", "bands", "bins"],
     help="Data type to use.",
 )
-parser.add_argument(
+parser.add(
     "-b",
     "--batch-size",
     default=128,
     type=int,
     help="The batch size used for learning.",
 )
-parser.add_argument(
+parser.add(
     "-d",
     "--dropout",
     default=0.25,
     type=float,
     help="The dropout rate of the linear layers",
 )
-parser.add_argument(
+parser.add(
     "--times",
     action="store_true",
     help="Instead of running the training etc, run a series of test in order to choose best set of workers and batch sizes to get faster epochs.",
 )
-parser.add_argument(
+parser.add(
     "--chunkload",
     action="store_true",
     help="Chunks the data and loads data batch per batch. Will be slower but is necessary when RAM size is too low to handle whole dataset.",
 )
-parser.add_argument(
+parser.add(
     "--debug",
     action="store_true",
     help="loads dummy data in the net to ensure everything is working fine",
 )
-parser.add_argument(
+parser.add(
     "--dropout-option",
     default="same",
     choices=["same", "double", "inverted"],
     help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
 )
-parser.add_argument(
-    "-l", "--linear", default=100, type=int, help="The size of the second linear layer"
-)
-parser.add_argument(
+parser.add("-l", "--linear", default=100, type=int, help="The size of the second linear layer")
+parser.add(
     "-m",
     "--mode",
     type=str,
@@ -252,33 +259,27 @@ parser.add_argument(
     default="continue",
     help="Changes the mode the script is run for: overwrite will restart from scratch and overwrite any files with the same name; continue will load previous state and continue from last checkpoint; empty_run will run the training and testing without saving anything; evaluate will load the model to evaluate it on the test set.",
 )
-parser.add_argument(
+parser.add(
     "-n",
     "--nchan",
     default=100,
     type=int,
     help="the number of channels for the first convolution, the other channel numbers scale with this one.",
 )
-parser.add_argument(
+parser.add(
     "--compute-psd",
     action="store_true",
     help="wether or not to to compute psd using saliency windows in the compute_saliency_maps.py script.",
 )
-parser.add_argument(
+parser.add(
     "--w-size",
     type=int,
     default=300,
     help="The window size for saliency based psd computation in the compute_saliency_maps.py script.",
 )
-parser.add_argument(
+parser.add(
     "--confidence",
     type=float,
     default=0.98,
     help="the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.",
-)
-parser.add_argument(
-    "--saliency-type",
-    choices=["pos", "neg", "diff", "sum"],
-    type=str,
-    help="chooses whether to use positive saliency, negative saliency or the sum of them in visu_saliency_maps.py script.",
 )
