@@ -1,33 +1,32 @@
 import os
+import toml
 import logging
-from time import time
 import numpy as np
 import torch
 import cv2
 import pandas as pd
 from PIL import Image
 import matplotlib.pyplot as plt
-from joblib import Parallel, delayed
 from meegnet.parsing import parser, save_config
-from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, cuda_check
 from meegnet.network import create_net
 from meegnet.dataloaders import load_data
 from meegnet.viz import plot_masked_epoch
 import cv2
-from pytorch_grad_cam import GuidedBackpropReLUModel
-from pytorch_grad_cam import (
-    GradCAM,
-    HiResCAM,
-    ScoreCAM,
-    GradCAMPlusPlus,
-    AblationCAM,
-    XGradCAM,
-    EigenCAM,
-    FullGrad,
-)
-from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image
+
+# from pytorch_grad_cam import GuidedBackpropReLUModel
+from pytorch_grad_cam import GradCAM
+
+#     HiResCAM,
+#     ScoreCAM,
+#     GradCAMPlusPlus,
+#     AblationCAM,
+#     XGradCAM,
+#     EigenCAM,
+#     FullGrad,
+# )
+# from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+# from pytorch_grad_cam.utils.image import show_cam_on_image
 
 DEVICE = cuda_check()
 
@@ -35,8 +34,9 @@ DEVICE = cuda_check()
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    logging.info(parser.format_values())
     save_config(vars(args), args.config)
+    with open("default_values.toml", "r") as f:
+        default_values = toml.load(f)
 
     ######################
     ### LOGGING CONFIG ###
@@ -76,20 +76,20 @@ if __name__ == "__main__":
         labels = []
 
     if args.feature == "bins":
-        trial_length = 241
-    if args.feature == "bands":
-        trial_length = 5
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
+    elif args.feature == "bands":
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
     elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
+        trial_length = default_values["TRIAL_LENGTH_TIME"]
 
     if args.sensors == "MAG":
-        n_channels = 102
-        chan_index = 0
+        n_channels = default_values["N_CHANNELS_MAG"]
+        chan_index = [0]
     elif args.sensors == "GRAD":
-        n_channels = 204
+        n_channels = default_values["N_CHANNELS_GRAD"]
         chan_index = [1, 2]
-    elif args.sensors == "ALL":
-        n_channels = 306
+    else:
+        n_channels = default_values["N_CHANNELS_OTHER"]
         chan_index = [0, 1, 2]
 
     input_size = (n_channels // 102, 102, trial_length)

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from scipy.io import loadmat
 from torch.utils.data import ConcatDataset
-from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.dataloaders import create_loader, create_datasets, load_sets
 from meegnet.network import create_net
 from meegnet.utils import train, load_checkpoint, cuda_check, evaluate
@@ -49,7 +48,7 @@ def get_df_status(file_path, args) -> pd.DataFrame:
     ]
 
 
-def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
+def do_crossval(folds: int, datasets: list, net_option: str, input_size, args) -> list:
     """Will call train_evaluate function a folds amount of times and return a list of
     each fold accuracies.
 
@@ -73,7 +72,7 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
     cv = []
     for fold in range(folds):
         logging.info(f"Training model for fold {fold+1}/{folds}:")
-        results = train_evaluate(fold, datasets, net_option, args=args)
+        results = train_evaluate(fold, datasets, net_option, input_size, args=args)
         logging.info(f"Finished training for fold {fold+1}/{folds}:")
         logging.info(f"loss: {results['loss_score']} // accuracy: {results['acc_score']}")
         logging.info(f"best epoch: {results['best_epoch']}/{results['n_epochs']}\n")
@@ -82,7 +81,12 @@ def do_crossval(folds: int, datasets: list, net_option: str, args) -> list:
 
 
 def train_evaluate(
-    fold: int, datasets: list, net_option: str, args, skip_done: bool = False
+    fold: int,
+    datasets: list,
+    net_option: str,
+    input_size: tuple,
+    args,
+    skip_done: bool = False,
 ) -> dict:
     """Trains and evaluate a specified network based on the selected network option.
     This function will also update the randomsearch.py generated csv if one exists with the
@@ -99,6 +103,9 @@ def train_evaluate(
     net_option : str
         A network option for the prepare_net function to return a network object. Must be in
         ['MLP', 'custom_net', 'VGG', 'EEGNet', 'vanPutNet']
+    input_size: tuple
+        tuple of integers describing the data shape of a single example.
+
     args :
         Args should be args = parser.parse_args() when using parser from the parsing file.
     skip_done : bool
@@ -139,39 +146,6 @@ def train_evaluate(
 
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
-
-    # TODO maybe use a dictionnary in order to store these values or use switch case
-    if args.feature == "bins":
-        trial_length = default_values["TRIAL_LENGTH_BINS"]
-    elif args.feature == "bands":
-        trial_length = default_values["TRIAL_LENGTH_BANDS"]
-    elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
-    elif args.feature == "cov":
-        # TODO
-        pass
-    elif args.feature == "cosp":
-        # TODO
-        pass
-    else:
-        pass
-
-    if args.sensors == "MAG":
-        n_channels = default_values["N_CHANNELS_MAG"]
-    elif args.sensors == "GRAD":
-        n_channels = default_values["N_CHANNELS_GRAD"]
-    else:
-        n_channels = default_values["N_CHANNELS_OTHER"]
-
-    input_size = (
-        (1, n_channels, trial_length)
-        if args.flat
-        else (
-            n_channels // default_values["N_CHANNELS_MAG"],
-            default_values["N_CHANNELS_MAG"],
-            trial_length,
-        )
-    )
 
     if args.mode == "overwrite":
         save = True
@@ -245,14 +219,42 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
+    with open("default_values.toml", "r") as f:
+        default_values = toml.load(f)
 
     fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":
         assert (
             args.datatype != "rest"
-        ), "datatype must be set to passive in order to run eventclf"
+        ), "datatype must be set to passive in order to run event classification"
     ages = (args.age_min, args.age_max)
 
+    if args.feature == "bins":
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
+    elif args.feature == "bands":
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
+    elif args.feature == "temporal":
+        trial_length = default_values["TRIAL_LENGTH_TIME"]
+
+    if args.sensors == "MAG":
+        n_channels = default_values["N_CHANNELS_MAG"]
+        chan_index = [0]
+    elif args.sensors == "GRAD":
+        n_channels = default_values["N_CHANNELS_GRAD"]
+        chan_index = [1, 2]
+    else:
+        n_channels = default_values["N_CHANNELS_OTHER"]
+        chan_index = [0, 1, 2]
+
+    input_size = (
+        (1, n_channels, trial_length)
+        if args.flat
+        else (
+            n_channels // default_values["N_CHANNELS_MAG"],
+            default_values["N_CHANNELS_MAG"],
+            trial_length,
+        )
+    )
     ################
     # Starting log #
     ################
@@ -291,16 +293,6 @@ if __name__ == "__main__":
         args.dropout_option = DEBUG["droupt_option"]
         args.patience = DEBUG["patience"]
 
-    if args.sensors == "MAG":
-        n_channels = default_values["N_CHANNELS_MAG"]
-        chan_index = [0]
-    elif args.sensors == "GRAD":
-        n_channels = default_values["N_CHANNELS_GRAD"]
-        chan_index = [1, 2]
-    else:
-        n_channels = default_values["N_CHANNELS_OTHER"]
-        chan_index = [0, 1, 2]
-
     ################
     # Loading data #
     ################
@@ -334,7 +326,7 @@ if __name__ == "__main__":
             ages=ages,
             n_samples=n_samples,
             datatype=args.datatype,
-            eventclf=args.eventclf,
+            clf_type=args.clf_type,
             epoched=args.epoched,
             testing=args.testsplit,
             sfreq=args.sfreq,
@@ -353,24 +345,30 @@ if __name__ == "__main__":
             for outer_fold in range(5):
                 args.testsplit = outer_fold
                 cv = do_crossval(
-                    default_values["DEFAULT_FOLDS"], datasets, args.net_option, args=args
+                    default_values["DEFAULT_FOLDS"],
+                    datasets,
+                    args.net_option,
+                    input_size,
+                    args=args,
                 )
                 logging.info(f"\nAverage accuracy: {np.mean(cv)}")
         else:
             cv = do_crossval(
-                default_values["DEFAULT_FOLDS"], datasets, args.net_option, args=args
+                default_values["DEFAULT_FOLDS"],
+                datasets,
+                args.net_option,
+                input_size,
+                args=args,
             )
             cv = [score for score in cv if score is not None]
             logging.info(f"\nAverage accuracy: {np.mean(cv)}")
-
     elif args.crossval:
         folds = 5 if args.testsplit is None else DEFAULT_FOLDS
-        cv = do_crossval(folds, datasets, args.net_option, args)
+        cv = do_crossval(folds, datasets, args.net_option, input_size, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
-
     else:
         fold = 0 if fold == -1 else fold
         logging.info("Training model:")
-        train_evaluate(fold, datasets, args.net_option, args=args)
+        train_evaluate(fold, datasets, args.net_option, input_size=input_size, args=args)
         # logging.info("Evaluating model:")
         # evaluate(fold, datasets, args.net_option, args=args)

@@ -387,7 +387,7 @@ def generate_saliency_figure(
     """
     Generates a figure visualizing saliency maps for MEG data.
 
-    This function creates a grid of images showing the saliency maps for different
+    This function creates a grid of images showing the saliency maps for
     types of stimuli (e.g., image and sound) and sensor channels (e.g., MAG, GRAD1, GRAD2).
     It also plots a topomap for the maximum saliency index along with a color bar.
 
@@ -407,7 +407,7 @@ def generate_saliency_figure(
     sensors : list, optional
         List of sensor types to include in the visualization. Default is [""].
     clf_type : str, optional
-        Flag indicating whether the saliency maps are for event classification if set to "eventclf".
+        Flag indicating whether the saliency maps are for event classification if set to "clf".
         the y-axis ticks and labels are adjusted accordingly.
     sfreq : int, optional
         Sampling frequency for computation of  xticks. Default is  500.

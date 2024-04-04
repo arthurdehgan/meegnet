@@ -7,7 +7,6 @@ import torch
 import numpy as np
 import pandas as pd
 from meegnet.parsing import parser, save_config
-from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, cuda_check
 from meegnet.network import create_net
 from meegnet.dataloaders import load_data
@@ -165,6 +164,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
+    with open("default_values.toml", "r") as f:
+        default_values = toml.load(f)
 
     ######################
     ### LOGGING CONFIG ###
@@ -194,33 +195,32 @@ if __name__ == "__main__":
     ###############################
 
     if args.clf_type == "eventclf":
-        labels = ["visual", "auditory"]  # image is label 0 and sound label 1
+        labels = [
+            "visual",
+            "auditory1",
+            "auditory2",
+            "auditory3",
+        ]  # image is label 0 and sound label 1
     elif args.clf_type == "subclf":
         labels = []
     else:
         labels = ["male", "female"]
 
     if args.feature == "bins":
-        trial_length = 241
-    if args.feature == "bands":
-        trial_length = 5
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
+    elif args.feature == "bands":
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
     elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
-    elif args.feature == "cov":
-        # TODO
-        pass
-    elif args.feature == "cosp":
-        # TODO
-        pass
+        trial_length = default_values["TRIAL_LENGTH_TIME"]
 
     if args.sensors == "MAG":
-        n_channels = 102
-        chan_index = 0
+        n_channels = default_values["N_CHANNELS_MAG"]
+        chan_index = [0]
     elif args.sensors == "GRAD":
-        n_channels = 204
+        n_channels = default_values["N_CHANNELS_GRAD"]
         chan_index = [1, 2]
-    elif args.sensors == "ALL":
-        n_channels = 306
+    else:
+        n_channels = default_values["N_CHANNELS_OTHER"]
         chan_index = [0, 1, 2]
 
     input_size = (n_channels // 102, 102, trial_length)

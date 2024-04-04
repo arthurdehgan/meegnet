@@ -1,4 +1,5 @@
 import os
+import toml
 from collections.abc import Iterable
 import torch
 import matplotlib.pyplot as plt
@@ -11,7 +12,6 @@ from mne.viz import plot_topomap
 
 # from scipy.signal import welch
 from meegnet.parsing import parser, save_config
-from meegnet.params import TIME_TRIAL_LENGTH
 from meegnet.utils import load_checkpoint, compute_psd, cuda_check
 from meegnet.dataloaders import BANDS, load_data
 from pytorch_grad_cam import GuidedBackpropReLUModel
@@ -81,35 +81,41 @@ def generate_topograd_map(
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    logging.info(parser.format_values())
     save_config(vars(args), args.config)
+    with open("default_values.toml", "r") as f:
+        default_values = toml.load(f)
 
     ###############################
     ### EXTRACTING PARSER INFO ###
     ###############################
 
     if args.clf_type == "eventclf":
-        labels = ["visual", "auditory1", "auditory2", "auditory3"]  # image is label 0 and sound label 1
+        labels = [
+            "visual",
+            "auditory1",
+            "auditory2",
+            "auditory3",
+        ]  # image is label 0 and sound label 1
     elif args.clf_type == "subclf":
         labels = []
     else:
         labels = ["male", "female"]
 
     if args.feature == "bins":
-        trial_length = 241
-    if args.feature == "bands":
-        trial_length = 5
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
+    elif args.feature == "bands":
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
     elif args.feature == "temporal":
-        trial_length = TIME_TRIAL_LENGTH
+        trial_length = default_values["TRIAL_LENGTH_TIME"]
 
     if args.sensors == "MAG":
-        n_channels = 102
-        chan_index = 0
+        n_channels = default_values["N_CHANNELS_MAG"]
+        chan_index = [0]
     elif args.sensors == "GRAD":
-        n_channels = 204
+        n_channels = default_values["N_CHANNELS_GRAD"]
         chan_index = [1, 2]
-    elif args.sensors == "ALL":
-        n_channels = 306
+    else:
+        n_channels = default_values["N_CHANNELS_OTHER"]
         chan_index = [0, 1, 2]
 
     if args.fold != -1:

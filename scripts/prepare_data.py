@@ -24,7 +24,6 @@ import numpy as np
 import threading
 import multiprocessing
 from meegnet.parsing import parser, save_config
-import toml
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -64,20 +63,20 @@ def process_data(args):
         data, filepath, stop = q.get()
         if stop is None:
             break
-        if data is None:
+        elif data is not None:
+            data = data.resample(sfreq=sfreq)
+            data = np.array(
+                [
+                    data.get_data(picks="mag"),
+                    data.get_data(picks="planar1"),
+                    data.get_data(picks="planar2"),
+                ]
+            )
+            if datatype == "passive":
+                data = data.swapaxes(0, 1)
+            np.save(filepath, data)
+        else:
             continue
-
-        data = data.resample(sfreq=sfreq)
-        data = np.array(
-            [
-                data.get_data(picks="mag"),
-                data.get_data(picks="planar1"),
-                data.get_data(picks="planar2"),
-            ]
-        )
-        if datatype == "passive":
-            data = data.swapaxes(0, 1)
-        np.save(filepath, data)
 
 
 def load_data(
@@ -265,11 +264,11 @@ if __name__ == "__main__":
     ### PRODUCE CONSUME ###
     #######################
 
-    # Define the maximum number of threads that can read from the disk at once
+    # Define the maximum number of threads that can access the disk at once
     MAX_DISK_READERS = 1
     # Define the maximum size of the queue
-    MAX_QUEUE_SIZE = 3  # Adjust this value based on your memory constraints
-    NUM_CONSUMERS = 3
+    MAX_QUEUE_SIZE = 15  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 15
 
     # Create a bounded queue with the maximum size
     q = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
