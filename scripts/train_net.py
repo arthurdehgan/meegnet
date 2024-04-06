@@ -299,7 +299,7 @@ if __name__ == "__main__":
 
     # We create loaders and datasets (see dataloaders.py)
     n_samples = None if args.n_samples == -1 else args.n_samples
-    if args.subclf:
+    if args.clf_type == "subclf":
         n_outputs, datasets = load_sets(
             args.save_path,
             n_samples=n_samples,
