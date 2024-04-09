@@ -311,6 +311,7 @@ if __name__ == "__main__":
             datatype=args.datatype,
             testing=args.testsplit,
             sfreq=args.sfreq,
+            seg=args.segment_length,
         )
         # Note: replace testing = testsplit or testing when we add the option to load test set and
         # use it for a test pass.
