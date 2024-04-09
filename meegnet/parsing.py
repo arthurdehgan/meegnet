@@ -76,7 +76,7 @@ parser.add(
 parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
 parser.add(
     "--segment-length",
-    type=int,
+    type=float,
     default=2,
     help="The length (in seconds) of the segment to consider for resting-state data.",
 )
