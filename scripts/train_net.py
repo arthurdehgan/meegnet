@@ -368,7 +368,7 @@ if __name__ == "__main__":
         cv = do_crossval(folds, datasets, args.net_option, input_size, args)
         logging.info(f"\nAverage accuracy: {np.mean(cv)}")
     else:
-        fold = 0 if fold == -1 else fold
+        fold = 0 if fold is None else fold
         logging.info("Training model:")
         train_evaluate(fold, datasets, args.net_option, input_size=input_size, args=args)
         # logging.info("Evaluating model:")
