@@ -290,7 +290,7 @@ if __name__ == "__main__":
         logging.debug("ENTERING DEBUG MODE")
         # args.max_subj = 20
         args.dropout = DEBUG["dropout"]
-        args.dropout_option = DEBUG["droupt_option"]
+        args.dropout_option = DEBUG["dropout_option"]
         args.patience = DEBUG["patience"]
 
     ################
