@@ -1,36 +1,19 @@
-from PIL import Image
+import os
 import mne
-import torch
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from scipy.io import loadmat
 from mne.viz import plot_topomap
-import os
-from time import time
 import copy
-import numpy as np
-from PIL import Image, ImageFilter
-import matplotlib.cm as mpl_color_map
-from collections.abc import Iterable
-from joblib import Parallel, delayed
 import torch
 from torch.autograd import Variable
 from torchvision import models
-from meegnet.utils import compute_psd
+import numpy as np
+from PIL import Image
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-import os
-from time import time
-import copy
-import numpy as np
-from PIL import Image, ImageFilter
+import matplotlib.pyplot as plt
 import matplotlib.cm as mpl_color_map
+from matplotlib.gridspec import GridSpec
 from collections.abc import Iterable
 from joblib import Parallel, delayed
-import torch
-from pytorch_grad_cam import GuidedBackpropReLUModel
-from torch.autograd import Variable
-from torchvision import models
 from meegnet.utils import compute_psd
 
 
@@ -947,36 +930,3 @@ def load_info(data_path, datatype):
     # TODO check if we are correct to do this for grad topoplots, maybe use planar
     # (planar1 doesnt work and for grad they do a different computation)
     return raw.pick_types(meg="mag").info
-
-
-def generate_topomap(
-    data,
-    info,
-    vmin=None,
-    vmax=None,
-    res=128,
-    cmap="viridis",
-    colorbar=False,
-    tight_layout=False,
-    mask=None,
-):
-    if colorbar:
-        fig, ax = plt.subplots()
-    im, cn = plot_topomap(
-        data.ravel(),
-        info,
-        res=128,
-        cmap=cmap,
-        vmax=data.max() if vmax is None else vmax,
-        vmin=data.min() if vmin is None else vmin,
-        show=False,
-        show_names=False,
-        contours=1,
-        extrapolate="local",
-    )
-
-    if colorbar:
-        _ = fig.colorbar(im)
-    if tight_layout:
-        mne.viz.tight_layout()
-    return im

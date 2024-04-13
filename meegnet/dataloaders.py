@@ -4,13 +4,10 @@ import random
 import logging
 from ast import literal_eval
 import torch
-import psutil
 import pandas as pd
 import numpy as np
 from scipy.stats import zscore
 from torch.utils.data import DataLoader, random_split, TensorDataset
-
-BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
 
 
 # From Domainbed, modified for my use case
@@ -95,30 +92,18 @@ class InfiniteDataLoader:
 # End of domainBed code
 
 
-def assert_params(band, datatype):
-    if datatype not in ["rest", "passive", "task"]:
-        logging.error(f"Incorrect data type: {datatype}. Must be in (rest, passive, task)")
-    return
-
-
 def create_datasets(
     data_path,
     train_size,
     max_subj=1000,
-    chan_index=[0, 1, 2],
     sfreq=200,
     seg=0.8,
-    debug=False,
     seed=0,
-    printmem=False,
-    ages=(0, 100),
     datatype="rest",
-    band="",
     n_samples=None,
     clf_type="",
     epoched=False,
     testing=None,
-    psd=False,
 ):
     """
     Create dataloader iterators.
@@ -131,27 +116,15 @@ def create_datasets(
         Fraction of the total dataset to be used for training.
     max_subj : int, optional
         Maximum number of subjects to be included in the dataset. Default is 1000.
-    chan_index : list, optional
-        List of channel indices to be considered. Default is [0, 1, 2].
-        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
     sfreq : int, optional
         Sampling frequency. Default is 200.
     seg : int, optional
         Segment size in seconds. Default is .8.
-    debug : bool, optional
-        Whether to enable debugging mode. Default is False.
     seed : int, optional
         Random seed for reproducibility. Default is 0.
-    printmem : bool, optional
-        Whether to print memory usage. Default is False.
-    ages : tuple, optional
-        Age range of the participants to be included in the dataset. Default is (0, 100).
     datatype : str, optional
         Type of data to be loaded. Default is "rest".
         other options are "passive" and "smt"
-    band : str, optional
-        Frequency band to be considered. Default is "".
-        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
     n_samples : int, optional
         Number of samples to load. Default is None.
     clf_type : str, optional
@@ -160,8 +133,6 @@ def create_datasets(
         Whether to epoch the data. Default is False.
     testing : int, optional
         If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
-    psd : bool, optional
-        Whether to calculate power spectral density. Default is False.
 
     Returns
     -------
@@ -189,7 +160,7 @@ def create_datasets(
     # Using trials_df ensures we use the correct subjects that do not give errors since
     # it is created by reading the data. It is therefore better than SUB_DF previously used
     # We now use trials_df_clean that contains one less subjects that contained nans
-    folder = "psd" if psd else f"downsampled_{sfreq}"
+    folder = f"downsampled_{sfreq}"
     csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
     participants_df = (
         pd.read_csv(csv_file, index_col=0)
@@ -198,22 +169,7 @@ def create_datasets(
     )
     participants_df["age"] = pd.to_numeric(participants_df["age"])
 
-    subs = np.array(
-        participants_df[participants_df["age"].between(*ages)].drop(["age"], axis=1)["sub"]
-    )
-
-    subs = subs[:max_subj]
-
-    # We noticed that specific subjects were the reason why we couldn't
-    # learn anything from the data: TODO we might remove those now that we updated dataset
-    if datatype == "passive":
-        # forbidden_subs = ["CC620526", "CC220335", "CC320478", "CC410113", "CC620785"]
-        forbidden_subs = []
-        if len(forbidden_subs) > 0:
-            logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
-        for sub in forbidden_subs:
-            if sub in subs:
-                subs = np.delete(subs, np.where(subs == sub)[0])
+    subs = np.array(participants_df["sub"])[:max_subj]
     N = len(subs)
     train_size = int(N * train_size)
 
@@ -230,7 +186,7 @@ def create_datasets(
         participants_df.loc[participants_df["sub"].isin(subs[index])]
         .sample(frac=1, random_state=seed)
         .reset_index(drop=True)
-        for i, index in enumerate(indexes)
+        for _, index in enumerate(indexes)
     ]
 
     if testing is not None:
@@ -242,17 +198,13 @@ def create_datasets(
             *load_data(
                 df,
                 data_path=data_path,
-                chan_index=chan_index,
-                printmem=printmem,
                 datatype=datatype,
                 n_samples=n_samples,
                 seed=seed,
                 epoched=epoched,
                 clf_type=clf_type,
-                band=band,
                 sfreq=sfreq,
                 seg=seg,
-                psd=psd,
                 group_id=i * len(df),
             )
         )
@@ -269,14 +221,10 @@ def load_sets(
     seg=0.8,
     sfreq=500,
     n_samples=None,
-    chan_index=[0, 1, 2],
-    printmem=False,
     datatype="rest",
     epoched=False,
     seed=0,
-    band="",
     testing=None,
-    psd=False,
 ):
     """
     Load data subject per subject.
@@ -297,11 +245,6 @@ def load_sets(
         Sampling frequency. Default is 200.
     n_samples : int, optional
         Number of samples to load. Default is None.
-    chan_index : list, optional
-        List of channel indices to be considered. Default is [0, 1, 2].
-        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
-    printmem : bool, optional
-        Whether to print memory usage. Default is False.
     datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
@@ -309,13 +252,8 @@ def load_sets(
         Whether to epoch the data. Default is False.
     seed : int, optional
         Random seed for reproducibility. Default is 0.
-    band : str, optional
-        Frequency band to be considered. Default is "".
-        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
     testing : int, optional
         If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
-    psd : bool, optional
-        Whether to calculate power spectral density. Default is False.
 
     Returns
     -------
@@ -329,57 +267,32 @@ def load_sets(
     This function loads data subject by subject. It divides the data into a specified number of splits. Each subject's data is loaded into a separate split.
     The function also handles the removal of subjects that cause issues during data loading.
     """
-    assert_params(band, datatype)
 
-    folder = "psd" if psd else f"downsampled_{sfreq}"
+    folder = f"downsampled_{sfreq}"
     csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
     dataframe = pd.read_csv(csv_file, index_col=0)
-    # For some reason this subject makes un unable to learn #TODO might remove those since we changed dataset
-    # forbidden_subs = ["CC220901"]
-    forbidden_subs = []
-    if len(forbidden_subs) > 0:
-        logging.info(f"removed subjects {forbidden_subs}, they were causing problems...")
-
-    for sub in forbidden_subs:
-        dataframe = dataframe.loc[dataframe["sub"] != sub]
 
     dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[:max_subj]
 
     n_sub = len(dataframe)
-    logging.debug(f"Loading {n_sub} subjects data")
-    if printmem:
-        totmem = psutil.virtual_memory().total / 10**9
-        logging.info(f"Total Available memory: {totmem:.3f} Go")
 
     final_n_splits = n_splits - 1 if testing is not None else n_splits
     X_sets = [[] for _ in range(final_n_splits)]
     y_sets = [[] for _ in range(final_n_splits)]
-    logging.debug(list(dataframe["sub"]))
     for i, row in enumerate(dataframe.iterrows()):
         random.seed(seed)
         torch.manual_seed(seed)
-        if printmem:
-            usedmem = psutil.virtual_memory().used / 10**9
-            memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
-            if n_sub > 10:
-                if i % (n_sub // 10) == 0:
-                    logging.debug(memstate)
-            else:
-                logging.debug(memstate)
 
         sub = row[1]["sub"]
         data = load_sub(
             data_path,
             sub,
             n_samples=n_samples,
-            band=band,
-            chan_index=chan_index,
             datatype=datatype,
             epoched=epoched,
             offset=offset,
             sfreq=sfreq,
             seg=seg,
-            psd=psd,
         )
         if data is None:
             n_sub -= 1
@@ -460,15 +373,11 @@ def load_data(
     offset=30,
     seg=0.8,
     sfreq=500,
-    chan_index=[0, 1, 2],
-    printmem=False,
     datatype="rest",
     n_samples=None,
     seed=0,
     epoched=False,
     clf_type="",
-    band="",
-    psd=False,
     group_id=None,
 ):
     """
@@ -486,11 +395,6 @@ def load_data(
         Segment size in seconds. Default is .8.
     sfreq : int, optional
         Sampling frequency. Default is 200.
-    chan_index : list, optional
-        List of channel indices to be considered. Default is [0, 1, 2].
-        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
-    printmem : bool, optional
-        Whether to print memory usage. Default is False.
     datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
@@ -502,11 +406,6 @@ def load_data(
         Whether to epoch the data. Default is False.
     clf_type : str, optional
         if set to "eventclf", perform event-wise classification.
-    band : str, optional
-        Frequency band to be considered. Default is "".
-        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
-    psd : bool, optional
-        Whether to calculate power spectral density. Default is False.
     group_id : int, optional
         Group ID for grouping the data. Default is None.
 
@@ -521,7 +420,6 @@ def load_data(
     If clf_type == "eventclf", use labels from the events. Otherwise we use whatever is in the dataframe as default label.
     """
 
-    assert_params(band, datatype)
     if clf_type == "eventclf":
         assert (
             datatype != "rest"
@@ -529,37 +427,22 @@ def load_data(
 
     n_sub = len(dataframe)
     X, y, groups = [], [], []
-    logging.debug(f"Loading {n_sub} subjects data")
-    if printmem:
-        # subj_sizes = [] # assigned but never used ?
-        totmem = psutil.virtual_memory().total / 10**9
-        logging.info(f"Total Available memory: {totmem:.3f} Go")
+
     for i, row in enumerate(dataframe.iterrows()):
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
-        if printmem:
-            usedmem = psutil.virtual_memory().used / 10**9
-            memstate = f"Used memory: {usedmem:.3f} / {totmem:.3f} Go."
-            if n_sub > 10:
-                if i % (n_sub // 10) == 0:
-                    logging.debug(memstate)
-            else:
-                logging.debug(memstate)
 
         sub, lab = row[1]["sub"], row[1]["label"]
         data = load_sub(
             data_path,
             sub,
             n_samples=n_samples,
-            band=band,
-            chan_index=chan_index,
             datatype=datatype,
             epoched=epoched,
             offset=offset,
             sfreq=sfreq,
             seg=seg,
-            psd=psd,
         )
         if data is None:
             n_sub -= 1
@@ -571,12 +454,13 @@ def load_data(
 
         if clf_type == "eventclf":
             events = np.array(
-                literal_eval(dataframe.loc[dataframe["sub"] == sub]["event_labels"].item())
+                literal_eval(dataframe.loc[dataframe["sub"] == sub]["label"].item())
             )
             if len(events) != len(data):
                 n_sub -= 1
                 continue
-            y += [0 if e == "visual" else int(e[-1]) for e in events]
+            # y += [0 if e == "visual" else int(e[-1]) for e in events]
+            y += [0 if e == "visual" else 1 for e in events]
         else:
             y += [1 if lab == "FEMALE" else 0] * len(data)
         if group_id is not None:
@@ -598,7 +482,7 @@ def load_data(
     return X, y
 
 
-def load_epoched_sub(data_path, sub, chan_index, datatype="passive", sfreq=500, psd=False):
+def load_epoched_sub(data_path, sub, datatype="passive", sfreq=500):
     """
     Loads epoched data for a particular subject.
 
@@ -608,15 +492,11 @@ def load_epoched_sub(data_path, sub, chan_index, datatype="passive", sfreq=500, 
         Path to the folder containing the data.
     sub : str
         Subject identifier.
-    chan_index : list
-        List of channel indices to be considered.
     datatype : str, optional
         Type of data to be loaded. Default is "passive".
         Other options is "smt".
     sfreq : int, optional
         Sampling frequency. Default is 500.
-    psd : bool, optional
-        Whether to load power spectral density data. Default is False.
 
     Returns
     -------
@@ -633,12 +513,11 @@ def load_epoched_sub(data_path, sub, chan_index, datatype="passive", sfreq=500, 
     This function loads epoched data for a particular subject. The data is loaded from a `.npy` file located in a specific directory depending on whether power spectral density data is requested. The function also performs zero mean normalization on the data if it's not power spectral density data.
     """
     assert datatype in ("passive", "smt"), "cannot load epoched data for resting state"
-    folder = "psd" if psd else f"downsampled_{sfreq}"
+    folder = f"downsampled_{sfreq}"
     sub_path = os.path.join(data_path, folder, f"{datatype}_{sub}_epoched.npy")
     try:
-        sub_data = np.load(sub_path)[:, chan_index]
-        if not psd:
-            sub_data = np.array(list(map(lambda x: zscore(x, axis=-1), sub_data)))
+        sub_data = np.load(sub_path)
+        sub_data = np.array(list(map(lambda x: zscore(x, axis=-1), sub_data)))
     except IOError:
         logging.warning(f"There was a problem loading subject {sub_path}")
         return None
@@ -653,14 +532,11 @@ def load_sub(
     data_path,
     sub,
     n_samples=None,
-    band="",
-    chan_index=[0, 1, 2],
     datatype="rest",
     epoched=False,
     offset=30,
     sfreq=500,
     seg=0.8,
-    psd=False,
 ):
     """
     Loads data for a particular subject.
@@ -673,12 +549,6 @@ def load_sub(
         Subject identifier.
     n_samples : int, optional
         Number of samples to load. Default is None.
-    band : str, optional
-        Frequency band to be considered. Default is "".
-        Frequency band must be one of ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"].
-    chan_index : list, optional
-        List of channel indices to be considered. Default is [0, 1, 2].
-        0 being MAG channel, 1 the first GRAD channel and 2 the second GRAD channel.
     datatype : str, optional
         Type of data to be loaded. Default is "rest".
         Other options are "passive" and "smt".
@@ -690,8 +560,6 @@ def load_sub(
         Sampling frequency. Default is 200.
     seg : int, optional
         Segment size in seconds. Default is .8.
-    psd : bool, optional
-        Whether to load power spectral density data. Default is False.
 
     Returns
     -------
@@ -705,41 +573,30 @@ def load_sub(
     The function also performs zero mean normalization on the data if it's not power spectral density data.
     """
     if epoched:
-        data = load_epoched_sub(
-            data_path, sub, chan_index, datatype=datatype, sfreq=sfreq, psd=psd
-        )
+        data = load_epoched_sub(data_path, sub, datatype=datatype, sfreq=sfreq)
     else:
         try:
-            # if domain in ("cov", "cosp"):  # TODO Deprecated
-            #     file_path = os.path.join(
-            #         data_path, "covariances", f"{sub}_{datatype}_{domain}.npy"
-            #     )
-            #     data = np.load(file_path)[chan_index]
-            #     data = np.swapaxes(data, 0, 1)
-            #     if domain == "cosp":
-            #         data = data[:, :, BANDS.index(band)]
-            # else:
-            folder = "psd" if psd else f"downsampled_{sfreq}"
+            folder = f"downsampled_{sfreq}"
             file_path = os.path.join(data_path, folder, f"{datatype}_{sub}.npy")
-            sub_data = np.load(file_path)[chan_index]
+            sub_data = np.load(file_path)
             if len(sub_data.shape) < 3:
                 sub_data = sub_data[np.newaxis, :]
-            if not psd:
-                step = int(seg * sfreq)
-                start = int(offset * sfreq)
-                data = []
-                for i in range(start, sub_data.shape[-1], step):
-                    trial = sub_data[:, :, i : i + step]
-                    if trial.shape[-1] == step:
-                        if not np.isnan(trial).any():
-                            data.append(zscore(trial, axis=-1))
-                if len(data) < 50:
-                    return None
-                if n_samples is not None and n_samples <= len(data):
-                    random_samples = np.random.choice(
-                        np.arange(len(data)), n_samples, replace=False
-                    )
-                    data = torch.Tensor(np.array(data))[random_samples]
+            step = int(seg * sfreq)
+            start = int(offset * sfreq)
+            data = []
+            for i in range(start, sub_data.shape[-1], step):
+                trial = sub_data[:, :, i : i + step]
+                if trial.shape[-1] == step:
+                    if not np.isnan(trial).any():
+                        data.append(zscore(trial, axis=-1))
+            if len(data) < 50:
+                return None
+            if n_samples is not None and n_samples <= len(data):
+                random_samples = np.random.choice(
+                    np.arange(len(data)), n_samples, replace=False
+                )
+                data = torch.Tensor(np.array(data))[random_samples]
+
             else:
                 data = sub_data
 

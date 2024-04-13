@@ -4,3 +4,4 @@ TRIAL_LENGTH_TIME = 400
 N_CHANNELS_MAG = 102
 N_CHANNELS_GRAD = 204
 N_CHANNELS_OTHER = 306
+BANDS = ["delta", "theta", "alpha", "beta", "gamma1", "gamma2", "gamma3"]
