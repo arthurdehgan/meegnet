@@ -1,55 +1,46 @@
+import os
+from collections import defaultdict
 import logging
 import torch
-from torch import nn
+from torch import nn, optim
+from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from scipy.io import loadmat, savemat
 import numpy as np
 
 
-def create_net(net_option, name, input_size, n_outputs, device, args):
+def create_net(net_option, input_size, n_outputs, net_params=None):
     if net_option == "MLP":
         return MLP(
-            name=name,
             input_size=input_size,
             n_outputs=n_outputs,
             hparams={
-                "mlp_width": args.linear,
-                "mlp_depth": args.hlayers,
-                "mlp_dropout": args.dropout,
+                "mlp_width": net_params["linear"],
+                "mlp_depth": net_params["hlayers"],
+                "mlp_dropout": net_params["dropout"],
             },
-        ).to(device)
+        )
     elif net_option == "best_net":
-        return my_net(name, input_size, n_outputs).to(device)
+        return my_net(input_size, n_outputs)
     elif net_option == "custom_net":
         return FullNet(
-            name,
             input_size,
             n_outputs,
-            args.hlayers,
-            args.filters,
-            args.nchan,
-            args.linear,
-            args.dropout,
-            args.batchnorm,
-            args.maxpool,
-        ).to(device)
+            net_params["hlayers"],
+            net_params["filters"],
+            net_params["nchan"],
+            net_params["linear"],
+            net_params["dropout"],
+            net_params["batchnorm"],
+            net_params["maxpool"],
+        )
     elif net_option == "VGG":
-        return VGG16_NET(
-            name,
-            input_size,
-            n_outputs,
-        ).to(device)
+        return VGG16_NET(input_size, n_outputs)
     elif net_option == "EEGNet":
-        return EEGNet(
-            name,
-            input_size,
-            n_outputs,
-        ).to(device)
+        return EEGNet(input_size, n_outputs)
     elif net_option == "vanPutNet":
-        return vanPutNet(
-            name,
-            input_size,
-            n_outputs,
-        ).to(device)
+        return vanPutNet(input_size, n_outputs)
 
 
 class Flatten(nn.Module):
@@ -67,7 +58,7 @@ class DepthwiseConv2d(nn.Module):
             in_channels * depthwise_multiplier,
             kernel_size,
             groups=in_channels,
-            **kwargs
+            **kwargs,
         )
 
     def forward(self, x):
@@ -85,10 +76,9 @@ class SeparableConv2d(nn.Module):
 
 
 class customNet(nn.Module):
-    def __init__(self, name, input_size, n_outputs):
+    def __init__(self, input_size, n_outputs):
         super(customNet, self).__init__()
         self.input_size = input_size
-        self.name = name
         self.n_outputs = n_outputs
 
     def forward(self, x):
@@ -103,17 +93,15 @@ class customNet(nn.Module):
 class EEGNet(customNet):
     def __init__(
         self,
-        name,
         input_size,
         n_outputs,
         filter_size=64,
         n_filters=16,
-        n_linear=150,
         dropout=0.5,
         dropout_option="Dropout",
         depthwise_multiplier=2,
     ):
-        customNet.__init__(self, name, input_size, n_outputs)
+        customNet.__init__(self, input_size, n_outputs)
         if dropout_option == "SpatialDropout2D":
             dropoutType = nn.Dropout2d
         elif dropout_option == "Dropout":
@@ -149,9 +137,7 @@ class EEGNet(customNet):
             nn.ELU(),
             nn.AvgPool2d((1, 4)),
             dropoutType(dropout),
-            SeparableConv2d(
-                n_filters * 2, n_filters * 2, (1, 16), padding=(1, 8), bias=False
-            ),
+            SeparableConv2d(n_filters * 2, n_filters * 2, (1, 16), padding=(1, 8), bias=False),
             nn.BatchNorm2d(n_filters * 2),
             nn.ELU(),
             nn.AvgPool2d((1, 8)),
@@ -181,8 +167,8 @@ class EEGNet(customNet):
 
 # This implementation is rather common and found on various blogs/github repos
 class VGG16_NET(customNet):
-    def __init__(self, name, input_size, n_outputs):
-        super(VGG16_NET, self).__init__(name, input_size, n_outputs)
+    def __init__(self, input_size, n_outputs):
+        super(VGG16_NET, self).__init__(input_size, n_outputs)
 
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         layer_list = [
@@ -226,11 +212,10 @@ class VGG16_NET(customNet):
 
 
 class MLP(customNet):
-    """Just  an MLP"""
+    """Just an MLP"""
 
-    def __init__(self, name, input_size, n_outputs, hparams):
-        customNet.__init__(self, name, input_size, n_outputs)
-        self.name = name
+    def __init__(self, input_size, n_outputs, hparams):
+        customNet.__init__(self, input_size, n_outputs)
         n_inputs = np.prod(input_size)
         self.flatten = Flatten()
         self.input = nn.Linear(n_inputs, hparams["mlp_width"])
@@ -260,13 +245,12 @@ class MLP(customNet):
 class my_net(customNet):
     def __init__(
         self,
-        name,
         input_size,
         n_outputs,
         n_linear=2000,
         dropout=0.5,
     ):
-        super(my_net, self).__init__(name, input_size, n_outputs)
+        super(my_net, self).__init__(input_size, n_outputs)
         self.maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
         layer_list = [
             nn.Conv2d(input_size[0], 100, (input_size[1], 1)),
@@ -301,7 +285,6 @@ class my_net(customNet):
 class FullNet(nn.Module):
     def __init__(
         self,
-        name,
         input_size,
         n_outputs,
         hlayers=2,
@@ -314,7 +297,6 @@ class FullNet(nn.Module):
     ):
         super(FullNet, self).__init__()
         self.input_size = input_size
-        self.name = name
 
         layer_list = [
             nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
@@ -377,8 +359,8 @@ class FullNet(nn.Module):
 
 
 class vanPutNet(customNet):
-    def __init__(self, model_name, input_size, n_output, dropout=0.25):
-        customNet.__init__(self, model_name, input_size, n_output)
+    def __init__(self, input_size, n_output, dropout=0.25):
+        customNet.__init__(self, input_size, n_output)
         layers = nn.ModuleList(
             [
                 nn.Conv2d(1, 100, 3),
@@ -411,10 +393,9 @@ class vanPutNet(customNet):
 class AutoEncoder(customNet):
     def __init__(
         self,
-        model_name,
         input_size,
     ):
-        customNet.__init__(self, model_name, input_size)
+        customNet.__init__(self, input_size)
 
         lin_size = input_size[0] * input_size[1] * input_size[2]
 
@@ -434,3 +415,217 @@ class AutoEncoder(customNet):
     def forward(self, x):
         x = self.encoder(x)
         return self.decoder(x)
+
+
+class Model:
+    def __init__(
+        self,
+        name,
+        net_option,
+        input_size,
+        n_outputs,
+        save_path=None,
+        learning_rate=0.00001,
+        optimizer=optim.Adam,
+        criterion=nn.CrossEntropyLoss(),
+        n_folds=5,
+        device="cuda",
+    ):
+        self.name = name
+        self.input_size = input_size  # TODO here put assertions on the shape
+        self.net = create_net(net_option, input_size, n_outputs)
+        self.n_folds = n_folds
+        self.criterion = criterion
+        self.save_path = save_path
+        self.lr = learning_rate
+        self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
+        self.results = defaultdict(lambda: 0)
+        self.checkpoint = defaultdict(lambda: 0)
+
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif device == "cuda":
+            logging.warning(
+                "Warning: gpu device requested but unavailable. Setting device to CPU"
+            )
+            self.device = "cpu"
+        self.net.to(self.device)
+
+    def train(
+        self,
+        dataset,
+        batch_size=128,
+        patience=20,
+        max_epoch=None,
+        model_path=None,
+        num_workers=4,
+        load=False,
+    ):
+        train_accs = []
+        valid_accs = []
+        train_losses = []
+        valid_losses = []
+        best_vloss = float("inf")
+        best_vacc = 0.5
+        best_epoch = 0
+        patience_state = self.results["current_patience"]
+        epoch = self.checkpoint["epoch"]
+        self.net.train()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+        logging.info("Creating DataLoaders...")
+        train_index, valid_index, test_index = dataset.data_split(0.8, 0.1, 0.1)
+        trainloader = DataLoader(
+            dataset.torchDataset(train_index),
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=True,
+            pin_memory=True,
+        )
+        validloader = DataLoader(
+            dataset.torchDataset(valid_index),
+            batch_size=batch_size,
+            num_workers=num_workers,
+            shuffle=True,
+            pin_memory=True,
+        )
+
+        if load:
+            logging.info("Loading previous network state...")
+            self.load(model_path)
+
+        logging.info("Starting Training with:")
+        logging.info(f"batch size: {batch_size}")
+        logging.info(f"learning rate: {self.lr}")
+        logging.info(f"patience: {patience}")
+        while patience_state < patience:
+            epoch += 1
+            n_batches = len(trainloader)
+            for i, batch in enumerate(trainloader):
+                self.optimizer.zero_grad()
+                if len(batch) > 2:
+                    X, y, groups = batch
+                else:
+                    X, y = batch
+                y = y.view(-1).to(self.device)
+                X = X.view(-1, *self.input_size).to(self.device)
+                out = self.net.forward(X.float())
+                loss = self.criterion(out, Variable(y.long()))
+                loss.backward()
+                self.optimizer.step()
+                progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
+                if n_batches > 10:
+                    if i % (n_batches // 10) == 0:
+                        logging.info(progress)
+                else:
+                    logging.info(progress)
+            train_loss, train_acc = self.evaluate(trainloader)
+            valid_loss, valid_acc = self.evaluate(validloader)
+            train_accs.append(train_acc)
+            valid_accs.append(valid_acc)
+            train_losses.append(train_loss)
+            valid_losses.append(valid_loss)
+
+            if valid_loss < best_vloss:
+                best_vacc = valid_acc
+                best_vloss = valid_loss
+                best_epoch = epoch
+                patience_state = 0
+                self.results = {
+                    "acc_score": [best_vacc],
+                    "loss_score": [best_vloss],
+                    "acc": valid_accs,
+                    "train_acc": train_accs,
+                    "valid_loss": valid_losses,
+                    "train_loss": train_losses,
+                    "best_epoch": best_epoch,
+                    "patience": patience,
+                    "current_patience": patience_state,
+                }
+                self.checkpoint = {
+                    "epoch": epoch + 1,
+                    "state_dict": self.net.state_dict(),
+                    "optimizer": self.optimizer.state_dict(),
+                }
+                if self.save_path is not None:
+                    self.save(model_path)
+            else:
+                patience_state += 1
+            logging.info("Epoch: {}".format(epoch))
+            logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
+            logging.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+            if max_epoch is not None:
+                if epoch == max_epoch:
+                    logging.info("Max number of epoch reached. Stopping training.")
+                    break
+
+    def fit(self, *args, **kwargs):
+        return self.train(args, *kwargs)
+
+    def evaluate(self, dataloader):
+        with torch.no_grad():
+            losses = 0
+            accuracy = 0
+            counter = 0
+            for batch in dataloader:
+                if len(batch) > 2:
+                    X, y, _ = batch
+                else:
+                    X, y = batch
+                y = y.view(-1).to(self.device)
+                X = X.view(-1, *self.input_size).to(self.device)
+                out = self.net.forward(X.float())
+                loss = self.criterion(out, Variable(y.long()))
+                acc = self.compute_accuracy(out, y)
+                n = y.size(0)
+                losses += loss.detach().sum().data.cpu().numpy() * n
+                accuracy += acc.sum().data.cpu().numpy() * n
+                counter += n
+            floss = losses / float(counter)
+            faccuracy = accuracy / float(counter)
+        return floss, faccuracy
+
+    def test(self, dataset):
+        _, _, test_index = dataset.data_split(0.8, 0.1, 0.1)
+        test_loader = DataLoader(
+            dataset.torchDataset(test_index),
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+            pin_memory=True,
+        )
+        test_loss, test_acc = self.evaluate(test_loader)
+        logging.info(f" [LOSS] TEST {test_loss}")
+        logging.info(f" [ACC] TEST {test_acc}")
+        return test_loss, test_acc
+
+    def load(self, model_path=None):
+        if model_path is None:
+            model_path = os.path.join(self.save_path, self.name + ".pt")
+        if os.path.exists(model_path):
+            logging.info("=> loading checkpoint '{}'".format(model_path))
+            checkpoint = torch.load(model_path)
+            net_state = checkpoint["state_dict"]
+            optimizer_state = checkpoint["optimizer"]
+            self.net.load_state_dict(net_state)
+            self.optimizer.load_state_dict(optimizer_state)
+        mat_path = model_path[:-2] + "mat"
+        if os.path.exists(mat_path):
+            self.results = loadmat(mat_path)
+        else:
+            logging.warning(
+                f"Warning: Couldn't find any checkpoint named {self.name}.pt in {self.save_path}"
+            )
+
+    def save(self, model_path=None):
+        if model_path is None:
+            model_path = os.path.join(self.save_path, self.name + ".pt")
+        mat_path = model_path[:-2] + "mat"
+        torch.save(self.checkpoint, model_path)
+        savemat(mat_path, self.results)
+
+    def compute_accuracy(self, y_pred, target):
+        # Compute accuracy from 2 vectors of labels.
+        correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
+        return correct / len(target)

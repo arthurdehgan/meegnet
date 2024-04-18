@@ -116,7 +116,9 @@ def load_data(
 
         sub = sub_folder.split("-")[1]
         if epoched:
-            assert args.datatype != "rest", "Cannot generate epochs for resting-state data"
+            assert (
+                args.datatype != "rest"
+            ), "Cannot generate epochs for resting-state data"
             filename = f"{datatype}_{sub}_epoched.npy"
         else:
             filename = f"{datatype}_{sub}.npy"
@@ -125,7 +127,7 @@ def load_data(
             os.makedirs(out_path)
         filepath = os.path.join(out_path, filename)
 
-        bad_csv_path = os.path.join(save_path, f"bad_participants_info_{datatype}.csv")
+        bad_csv_path = os.path.join(save_path, f"bad_participants_info.csv")
         if os.path.exists(bad_csv_path):
             with open(bad_csv_path, "r") as f:
                 bad_subs_df = pd.read_csv(f, index_col=0)
@@ -134,7 +136,7 @@ def load_data(
             with open(bad_csv_path, "w") as f:
                 bad_subs_df.to_csv(f)
 
-        good_csv_path = os.path.join(save_path, f"participants_info_{datatype}.csv")
+        good_csv_path = os.path.join(save_path, f"participants_info.csv")
         columns = ["sub", "age", "label", "hand", "Coil", "MT_TR"]
         if datatype != "rest":
             columns.append("event_labels")
@@ -205,7 +207,8 @@ def load_data(
 
         if not sub in good_subs_df["sub"].tolist():
             good_subs_df = good_subs_df._append(
-                {key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
+                {key: val for key, val in zip(good_subs_df.columns, row)},
+                ignore_index=True,
             )
             with open(good_csv_path, "w") as f:
                 good_subs_df.to_csv(f)
@@ -267,8 +270,8 @@ if __name__ == "__main__":
     # Define the maximum number of threads that can access the disk at once
     MAX_DISK_READERS = 1
     # Define the maximum size of the queue
-    MAX_QUEUE_SIZE = 15  # Adjust this value based on your memory constraints
-    NUM_CONSUMERS = 15
+    MAX_QUEUE_SIZE = 5  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 5
 
     # Create a bounded queue with the maximum size
     q = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)

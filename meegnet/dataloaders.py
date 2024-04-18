@@ -1,16 +1,14 @@
-from __future__ import print_function, division
 import os
 import random
 import logging
-from ast import literal_eval
-import torch
 import pandas as pd
 import numpy as np
+import torch
+from torch.utils.data import random_split
 from scipy.stats import zscore
-from torch.utils.data import DataLoader, random_split, TensorDataset
+from meegnet.utils import strip_string
 
 
-# From Domainbed, modified for my use case
 class _InfiniteSampler(torch.utils.data.Sampler):
     """
     Wraps another Sampler to yield an infinite stream.
@@ -89,518 +87,211 @@ class InfiniteDataLoader:
         raise ValueError
 
 
-# End of domainBed code
+def string_to_int(array):
+    array = np.array(array)
+    for i, element in enumerate(np.unique(array)):
+        array[array == element] = i
+    return array.astype(int)
 
 
-def create_datasets(
-    data_path,
-    train_size,
-    max_subj=1000,
-    sfreq=200,
-    seg=0.8,
-    seed=0,
-    datatype="rest",
-    n_samples=None,
-    clf_type="",
-    epoched=False,
-    testing=None,
-):
-    """
-    Create dataloader iterators.
+class Dataset:
+    def __init__(
+        self,
+        sfreq=500,
+        n_subjects=None,
+        zscore=True,
+        n_samples=None,
+        sensortype=None,
+        lso=False,
+        random_state=0,
+    ):
+        self.sfreq = sfreq
+        self.n_subjects = n_subjects
+        self.zscore = zscore
+        self.n_samples = n_samples
+        self.lso = lso
+        self.random_state = random_state
+        self.sensors = self._select_sensors(sensortype)
 
-    Parameters
-    ----------
-    data_path : str
-        Path to the folder containing the data.
-    train_size : float
-        Fraction of the total dataset to be used for training.
-    max_subj : int, optional
-        Maximum number of subjects to be included in the dataset. Default is 1000.
-    sfreq : int, optional
-        Sampling frequency. Default is 200.
-    seg : int, optional
-        Segment size in seconds. Default is .8.
-    seed : int, optional
-        Random seed for reproducibility. Default is 0.
-    datatype : str, optional
-        Type of data to be loaded. Default is "rest".
-        other options are "passive" and "smt"
-    n_samples : int, optional
-        Number of samples to load. Default is None.
-    clf_type : str, optional
-        if set to "eventclf", perform event-wise classification.
-    epoched : bool, optional
-        Whether to epoch the data. Default is False.
-    testing : int, optional
-        If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
+        self.data = []
+        self.labels = []
+        self.groups = []
 
-    Returns
-    -------
-    list
-        A list of TensorDatasets.
-
-    Raises
-    ------
-    ValueError
-        If clf_type == "eventclf" and `epoched` is set to False. We need to use epoched data around stimuli
-        in order to perform event classification
-
-    Notes
-    -----
-    The function creates dataloader iterators for a given dataset. The dataset is divided into training, validation, and test sets.
-    The division ratio is determined by the `train_size` parameter. The function also handles the removal of subjects that cause issues
-    during data loading.
-    """
-    if clf_type == "eventclf" and not epoched:
-        logging.warning(
-            "Event classification can only be performed with epoched data. And epoched has bot been set to True. Setting epoched to True."
+    def _load_csv(self, data_path, csv_name="participants_info.csv"):
+        csv_file = os.path.join(data_path, csv_name)
+        participants_df = (
+            pd.read_csv(csv_file, index_col=0)
+            .sample(frac=1, random_state=self.random_state)
+            .reset_index(drop=True)[: self.n_subjects]
         )
-        epoched = True
-    torch.manual_seed(seed)
-    # Using trials_df ensures we use the correct subjects that do not give errors since
-    # it is created by reading the data. It is therefore better than SUB_DF previously used
-    # We now use trials_df_clean that contains one less subjects that contained nans
-    folder = f"downsampled_{sfreq}"
-    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
-    participants_df = (
-        pd.read_csv(csv_file, index_col=0)
-        .sample(frac=1, random_state=seed)
-        .reset_index(drop=True)
-    )
-    participants_df["age"] = pd.to_numeric(participants_df["age"])
+        return participants_df
 
-    subs = np.array(participants_df["sub"])[:max_subj]
-    N = len(subs)
-    train_size = int(N * train_size)
-
-    # We use train_size of the data for model selection and use test_size data for evaluating best model.
-    # train_size data will be split in 4 folds and used to choose the model through 4-Fold CV.
-    fold_size = int(train_size / 4)
-    test_size = N - fold_size * 4
-    indexes = random_split(np.arange(N), [*[fold_size] * 4, test_size])
-    logging.info(
-        f"Using {N} subjects: {fold_size*3} for train, {fold_size} for validation, and {test_size} for test"
-    )
-
-    dataframes = [
-        participants_df.loc[participants_df["sub"].isin(subs[index])]
-        .sample(frac=1, random_state=seed)
-        .reset_index(drop=True)
-        for _, index in enumerate(indexes)
-    ]
-
-    if testing is not None:
-        dataframes = dataframes[:testing] + dataframes[testing + 1 :]
-
-    logging.info("Loading Train Set")
-    datasets = [
-        TensorDataset(
-            *load_data(
-                df,
-                data_path=data_path,
-                datatype=datatype,
-                n_samples=n_samples,
-                seed=seed,
-                epoched=epoched,
-                clf_type=clf_type,
-                sfreq=sfreq,
-                seg=seg,
-                group_id=i * len(df),
-            )
-        )
-        for i, df in enumerate(dataframes)
-    ]
-    return datasets
-
-
-def load_sets(
-    data_path,
-    max_subj=1000,
-    n_splits=5,
-    offset=0,
-    seg=0.8,
-    sfreq=500,
-    n_samples=None,
-    datatype="rest",
-    epoched=False,
-    seed=0,
-    testing=None,
-):
-    """
-    Load data subject per subject.
-
-    Parameters
-    ----------
-    data_path : str
-        Path to the folder containing the data.
-    max_subj : int, optional
-        Maximum number of subjects to be included in the dataset. Default is 1000.
-    n_splits : int, optional
-        Number of splits to make for the data. Default is 5.
-    offset : int, optional
-        Offset for the data. Default is 0.
-    seg : int, optional
-        Segment size in seconds. Default is .8.
-    sfreq : int, optional
-        Sampling frequency. Default is 200.
-    n_samples : int, optional
-        Number of samples to load. Default is None.
-    datatype : str, optional
-        Type of data to be loaded. Default is "rest".
-        Other options are "passive" and "smt".
-    epoched : bool, optional
-        Whether to epoch the data. Default is False.
-    seed : int, optional
-        Random seed for reproducibility. Default is 0.
-    testing : int, optional
-        If set to an integer between 0 and 4, it will leave out 20% of the dataset. Useful for random search. Default is None.
-
-    Returns
-    -------
-    int
-        Number of subjects successfully loaded.
-    list
-        A list of TensorDatasets.
-
-    Notes
-    -----
-    This function loads data subject by subject. It divides the data into a specified number of splits. Each subject's data is loaded into a separate split.
-    The function also handles the removal of subjects that cause issues during data loading.
-    """
-
-    folder = f"downsampled_{sfreq}"
-    csv_file = os.path.join(data_path, f"participants_info_{datatype}.csv")
-    dataframe = pd.read_csv(csv_file, index_col=0)
-
-    dataframe = dataframe.sample(frac=1, random_state=seed).reset_index(drop=True)[:max_subj]
-
-    n_sub = len(dataframe)
-
-    final_n_splits = n_splits - 1 if testing is not None else n_splits
-    X_sets = [[] for _ in range(final_n_splits)]
-    y_sets = [[] for _ in range(final_n_splits)]
-    for i, row in enumerate(dataframe.iterrows()):
-        random.seed(seed)
-        torch.manual_seed(seed)
-
-        sub = row[1]["sub"]
-        data = load_sub(
-            data_path,
-            sub,
-            n_samples=n_samples,
-            datatype=datatype,
-            epoched=epoched,
-            offset=offset,
-            sfreq=sfreq,
-            seg=seg,
-        )
-        if data is None:
-            n_sub -= 1
-            continue
-
-        N = len(data)
-        fold_size = int(N / n_splits)
-        test_size = N - fold_size * (n_splits - 1)
-        indexes = random_split(
-            np.arange(N),
-            [*[fold_size] * (n_splits - 1), test_size],
-            generator=torch.Generator().manual_seed(seed),
-        )
-        if testing is not None:
-            indexes.pop(testing)
-        random.shuffle(data)
-        labels = np.array([i for _ in range(N)])
-        for j, index in enumerate(indexes):
-            X_sets[j].append(torch.Tensor(np.array(data))[index])
-            y_sets[j].append(torch.Tensor(labels)[index])
-
-    logging.info(
-        f"Loaded {final_n_splits} subsets of {fold_size} trials succesfully for {n_sub} subjects\n"
-    )
-
-    datasets = []
-    for i in range(final_n_splits):
-        datasets.append(TensorDataset(torch.cat(X_sets[i], 0), torch.cat(y_sets[i], 0)))
-
-    return n_sub, datasets
-
-
-def create_loader(
-    dataset,
-    infinite=False,
-    **kwargs,
-):
-    """
-    Creates a DataLoader or InfiniteDataLoader based on the specified conditions.
-
-    Parameters
-    ----------
-    dataset : Dataset
-        The dataset to be loaded.
-    infinite : bool, optional
-        If set to True, creates an InfiniteDataLoader; otherwise, creates a regular DataLoader. Default is False.
-    **kwargs : dict, optional
-        Additional keyword arguments to pass to the DataLoader or InfiniteDataLoader constructor.
-
-    Returns
-    -------
-    DataLoader or InfiniteDataLoader
-        The created DataLoader or InfiniteDataLoader.
-
-    Notes
-    -----
-    This function is useful when you want to create a DataLoader that can loop over the dataset indefinitely.
-    """
-    if infinite:
-        loader = InfiniteDataLoader
-    else:
-        loader = DataLoader
-
-    return loader(dataset, **kwargs)
-
-
-def create_loaders(**kwargs):
-    datasets = create_datasets(**kwargs)
-    loaders = []
-    for dataset in datasets:
-        loaders.append(create_loader(dataset, **kwargs))
-    return loaders
-
-
-def load_data(
-    dataframe,
-    data_path,
-    offset=30,
-    seg=0.8,
-    sfreq=500,
-    datatype="rest",
-    n_samples=None,
-    seed=0,
-    epoched=False,
-    clf_type="",
-    group_id=None,
-):
-    """
-    Loads data subject per subject and returns labels according to the task.
-
-    Parameters
-    ----------
-    dataframe : DataFrame
-        DataFrame containing information about the data.
-    data_path : str
-        Path to the folder containing the data.
-    offset : int, optional
-        Offset for the data. Default is 30.
-    seg : int, optional
-        Segment size in seconds. Default is .8.
-    sfreq : int, optional
-        Sampling frequency. Default is 200.
-    datatype : str, optional
-        Type of data to be loaded. Default is "rest".
-        Other options are "passive" and "smt".
-    n_samples : int, optional
-        Number of samples to load. Default is None.
-    seed : int, optional
-        Random seed for reproducibility. Default is 0.
-    epoched : bool, optional
-        Whether to epoch the data. Default is False.
-    clf_type : str, optional
-        if set to "eventclf", perform event-wise classification.
-    group_id : int, optional
-        Group ID for grouping the data. Default is None.
-
-    Returns
-    -------
-    tuple
-        A tuple containing the loaded data, labels, and group IDs (if applicable).
-
-    Notes
-    -----
-    The function loads data subject by subject and assigns labels according to the task.
-    If clf_type == "eventclf", use labels from the events. Otherwise we use whatever is in the dataframe as default label.
-    """
-
-    if clf_type == "eventclf":
-        assert (
-            datatype != "rest"
-        ), "We can not perform event classification on resting state data as it contains no events and therefore can not be epoched."
-
-    n_sub = len(dataframe)
-    X, y, groups = [], [], []
-
-    for i, row in enumerate(dataframe.iterrows()):
-        np.random.seed(seed)
-        random.seed(seed)
-        torch.manual_seed(seed)
-
-        sub, lab = row[1]["sub"], row[1]["label"]
-        data = load_sub(
-            data_path,
-            sub,
-            n_samples=n_samples,
-            datatype=datatype,
-            epoched=epoched,
-            offset=offset,
-            sfreq=sfreq,
-            seg=seg,
-        )
-        if data is None:
-            n_sub -= 1
-            continue
-
-        if n_samples is not None:
-            random_samples = np.random.choice(np.arange(len(data)), n_samples, replace=False)
-            data = torch.Tensor(data)[random_samples]
-
-        if clf_type == "eventclf":
-            events = np.array(
-                literal_eval(dataframe.loc[dataframe["sub"] == sub]["label"].item())
-            )
-            if len(events) != len(data):
-                n_sub -= 1
-                continue
-            # y += [0 if e == "visual" else int(e[-1]) for e in events]
-            y += [0 if e == "visual" else 1 for e in events]
+    def load(self, data_path, csv_path=None):
+        if csv_path is not None and os.path.exists(csv_path):
+            dataframe = pd.read_csv(csv_path, index_col=0)
         else:
-            y += [1 if lab == "FEMALE" else 0] * len(data)
-        if group_id is not None:
-            groups += [group_id + i] * len(data)
+            dataframe = self._load_csv(data_path)
+        logging.info(f"Logging subjects and labels from {data_path}...")
+        subject_list = list(dataframe["sub"])
+        logging.info(f"Found {len(subject_list)} subjects to load.")
+        data_folder = f"downsampled_{self.sfreq}"
+        numpy_filepath = os.path.join(data_path, data_folder)
+        for file in os.listdir(numpy_filepath):
+            np.random.seed(self.random_state)
+            random.seed(self.random_state)
+            torch.manual_seed(self.random_state)
+            sub = file.split("_")[0]
+            if sub in subject_list:
+                row = dataframe.loc[dataframe["sub"] == sub]
+                sub_data = self._load_sub(os.path.join(numpy_filepath, file))
+                if self.sensors is not None:
+                    sub_data = sub_data[:, self.sensors, :, :]
+                if sub_data is None:
+                    continue
+                labels = list(map(strip_string, row["label"].item().split(", ")))
+                if len(labels) == 1:
+                    labels = [labels[0]] * len(sub_data)
+                if len(labels) != len(sub_data):
+                    logging.warning(
+                        "Length of label vector different from number "
+                        f"of data samples for subject {sub}. Skipping."
+                    )
+                    continue
+                if self.n_samples is not None:
+                    if self.n_samples > len(sub_data):
+                        logging.warning(
+                            f"Number of available samples for {file} "
+                            f"below the requested amount ({self.n_samples})",
+                        )
+                    random_samples = np.random.choice(
+                        np.arange(len(sub_data)),
+                        self.n_samples,
+                        replace=False,
+                    )
+                    sub_data = sub_data[random_samples]
+                    labels = np.array(labels)[random_samples]
 
-        X.append(torch.as_tensor(np.array(data)))
-    logging.info(f"Loaded {n_sub} subjects succesfully\n")
+                self.data.append(torch.Tensor(sub_data))
+                self.labels.append(np.array(labels))
+                self.groups += [sub] * len(labels)
 
-    if len(X) > 0:
-        X = torch.cat(X, 0)
-    else:
-        return None, None
-    if len(X.shape) != 4:  # Will happen if only one sensor channel is selected (eg MAG)
-        X = X[:, np.newaxis]
-    y = torch.as_tensor(y)
-    if group_id is not None:
-        groups = torch.as_tensor(groups)
-        return X, y, groups
-    return X, y
+        self.data = torch.cat(self.data, 0)
+        if len(self.data.shape) != 4:
+            self.data = self.data[:, np.newaxis]
 
+        self.labels = np.concatenate(self.labels, axis=0)
+        if type(self.labels[0]) != int:
+            self.labels = string_to_int(self.labels)
+        self.labels = torch.as_tensor(self.labels)
 
-def load_epoched_sub(data_path, sub, datatype="passive", sfreq=500):
-    """
-    Loads epoched data for a particular subject.
+        if type(self.groups[0]) != int:
+            self.groups = string_to_int(self.groups)
+        self.groups = torch.as_tensor(self.groups)
 
-    Parameters
-    ----------
-    data_path : str
-        Path to the folder containing the data.
-    sub : str
-        Subject identifier.
-    datatype : str, optional
-        Type of data to be loaded. Default is "passive".
-        Other options is "smt".
-    sfreq : int, optional
-        Sampling frequency. Default is 500.
+        self.n_subjects = len(np.unique(self.groups))
 
-    Returns
-    -------
-    ndarray or None
-        The loaded epoched data for the subject, or None if an error occurred.
+    def __len__(self):
+        return len(self.data)
 
-    Raises
-    ------
-    AssertionError
-        If `datatype` is not "passive" or "smt".
-
-    Notes
-    -----
-    This function loads epoched data for a particular subject. The data is loaded from a `.npy` file located in a specific directory depending on whether power spectral density data is requested. The function also performs zero mean normalization on the data if it's not power spectral density data.
-    """
-    assert datatype in ("passive", "smt"), "cannot load epoched data for resting state"
-    folder = f"downsampled_{sfreq}"
-    sub_path = os.path.join(data_path, folder, f"{datatype}_{sub}_epoched.npy")
-    try:
-        sub_data = np.load(sub_path)
-        sub_data = np.array(list(map(lambda x: zscore(x, axis=-1), sub_data)))
-    except IOError:
-        logging.warning(f"There was a problem loading subject {sub_path}")
-        return None
-    except:
-        logging.warning(f"An error occured while loading {sub_path}")
-        return None
-
-    return sub_data
-
-
-def load_sub(
-    data_path,
-    sub,
-    n_samples=None,
-    datatype="rest",
-    epoched=False,
-    offset=30,
-    sfreq=500,
-    seg=0.8,
-):
-    """
-    Loads data for a particular subject.
-
-    Parameters
-    ----------
-    data_path : stl
-        Path to the folder containing the data.
-    sub : str
-        Subject identifier.
-    n_samples : int, optional
-        Number of samples to load. Default is None.
-    datatype : str, optional
-        Type of data to be loaded. Default is "rest".
-        Other options are "passive" and "smt".
-    epoched : bool, optional
-        Whether to load epoched data. Default is False.
-    offset : int, optional
-        Offset for the data. Default is 30.
-    sfreq : int, optional
-        Sampling frequency. Default is 200.
-    seg : int, optional
-        Segment size in seconds. Default is .8.
-
-    Returns
-    -------
-    ndarray or None
-        The loaded data for the subject, or None if an error occurred.
-
-    Notes
-    -----
-    This function loads data for a particular subject.
-    The data is loaded from a `.npy` file located in a specific directory.
-    The function also performs zero mean normalization on the data if it's not power spectral density data.
-    """
-    if epoched:
-        data = load_epoched_sub(data_path, sub, datatype=datatype, sfreq=sfreq)
-    else:
+    def _load_sub(self, filepath):
         try:
-            folder = f"downsampled_{sfreq}"
-            file_path = os.path.join(data_path, folder, f"{datatype}_{sub}.npy")
-            sub_data = np.load(file_path)
+            data = np.load(filepath)
+        except IOError:
+            logging.warning(f"There was a problem loading subject {filepath}")
+            return None
+        if self.zscore:
+            data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
+        return torch.Tensor(np.array(data))
+
+    def _select_sensors(self, sensortype):
+        if sensortype == "MAG":
+            return [0]
+        elif sensortype in ["GRAD", "plannar"]:
+            return [1, 2]
+        elif sensortype in ["GRAD1", "plannar1"]:
+            return [1]
+        elif sensortype in ["GRAD2", "plannar2"]:
+            return [2]
+        else:
+            return None
+
+    def _assert_sizes(self, train_size, valid_size, test_size=None):
+        if test_size is None:
+            test_size = 0
+        assert (
+            sum((train_size, valid_size, test_size)) == 1
+        ), "sum of data ratios must be equal to 1"
+
+    def _within_subject_split(self, sizes, generator):
+        indexes = []
+        index_groups = [[] for _ in range(self.n_subjects)]
+        for index, group in enumerate(self.groups):
+            index_groups[group].append(index)
+        for group in index_groups:
+            indexes.append(random_split(group, sizes, generator))
+        # logging.info(
+        #     f"Using {self.n_subjects} subjects: {train_size} for train, "
+        #     f"{valid_size} for validation, and {test_size} for test"
+        # )
+        return (sum([list(index[i]) for index in indexes], []) for i in range(3))
+
+    def data_split(self, train_size, valid_size, test_size=None):
+        # TODO add stratification for the data splits
+        self._assert_sizes(train_size, valid_size, test_size)
+        generator = torch.Generator().manual_seed(self.random_state)
+        if self.lso:
+            return self._within_subject_split((train_size, valid_size, test_size), generator)
+        else:
+            return random_split(
+                np.arange(len(self)), [train_size, valid_size, test_size], generator
+            )
+
+    def torchDataset(self, index):
+        return torch.utils.data.TensorDataset(self.data[index], self.labels[index])
+
+
+class RestDataset(Dataset):
+    def __init__(
+        self,
+        window=2,
+        overlap=0,
+        offset=10,
+        sfreq=500,
+        n_subjects=None,
+        zscore=True,
+        n_samples=None,
+        sensortype=None,
+        lso=False,
+        random_state=0,
+    ):
+        Dataset.__init__(
+            self, sfreq, n_subjects, zscore, n_samples, sensortype, lso, random_state
+        )
+
+        assert 0 <= overlap < 1, "Overlap must be between 0 and 1."
+        self.window = window
+        self.overlap = overlap
+        self.offset = offset
+
+    def _load_sub(self, filepath):
+        try:
+            step = int(self.window * self.sfreq * (1 - self.overlap))
+            start = int(self.offset * self.sfreq)
+            sub_data = np.load(filepath)
             if len(sub_data.shape) < 3:
                 sub_data = sub_data[np.newaxis, :]
-            step = int(seg * sfreq)
-            start = int(offset * sfreq)
             data = []
             for i in range(start, sub_data.shape[-1], step):
                 trial = sub_data[:, :, i : i + step]
                 if trial.shape[-1] == step:
                     if not np.isnan(trial).any():
-                        data.append(zscore(trial, axis=-1))
-            if len(data) < 50:
-                return None
-            if n_samples is not None and n_samples <= len(data):
-                random_samples = np.random.choice(
-                    np.arange(len(data)), n_samples, replace=False
-                )
-                data = torch.Tensor(np.array(data))[random_samples]
-
-            else:
-                data = sub_data
-
+                        if self.zscore:
+                            trial = zscore(trial, axis=-1)
+                        data.append(trial)
         except IOError:
-            logging.warning(f"There was a problem loading subject file for {sub}")
+            logging.warning(f"There was a problem loading subject {filepath}")
             return None
-    return data
+        except ValueError:
+            logging.warning(f"There was a problem loading subject {filepath}")
+            return None
+        return torch.Tensor(np.array(data))

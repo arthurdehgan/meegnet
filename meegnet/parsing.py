@@ -191,18 +191,6 @@ parser.add(
     help="maximum number of subjects to use (1000 uses all subjects)",
 )
 parser.add(
-    "--age-min",
-    default=1,
-    type=int,
-    help="The minimum age of the subjects to be included in the learning and testing process",
-)
-parser.add(
-    "--age-max",
-    default=100,
-    type=int,
-    help="The maximum age of the subjects to be included in the learning and testing process",
-)
-parser.add(
     "--clf-type",
     default="",
     choices=["eventclf", "subclf", "sexclf"],
@@ -258,14 +246,6 @@ parser.add(
 )
 parser.add("-l", "--linear", default=100, type=int, help="The size of the second linear layer")
 parser.add(
-    "-m",
-    "--mode",
-    type=str,
-    choices=["overwrite", "continue", "empty_run", "evaluate"],
-    default="continue",
-    help="Changes the mode the script is run for: overwrite will restart from scratch and overwrite any files with the same name; continue will load previous state and continue from last checkpoint; empty_run will run the training and testing without saving anything; evaluate will load the model to evaluate it on the test set.",
-)
-parser.add(
     "-n",
     "--nchan",
     default=100,
@@ -282,6 +262,12 @@ parser.add(
     type=int,
     default=300,
     help="The window size for saliency based psd computation in the compute_saliency_maps.py script.",
+)
+parser.add(
+    "--overlap",
+    type=float,
+    default=0,
+    help="the overlap value between segments for continous data.",
 )
 parser.add(
     "--confidence",
