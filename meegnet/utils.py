@@ -11,6 +11,8 @@ from scipy.io import loadmat
 from scipy.signal import welch
 from path import Path as path
 
+LOG = logging.getLogger("meegnet")
+
 
 def extract_bands(data: np.array, f: list = None) -> np.array:
     """extract_bands.
@@ -87,9 +89,9 @@ def cuda_check():
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type == "cuda":
-        logging.info("CUDA is available! Training on GPU.")
+        LOG.info("CUDA is available! Training on GPU.")
     else:
-        logging.info("CUDA is not available. Training on CPU.")
+        LOG.info("CUDA is not available. Training on CPU.")
     return device
 
 
@@ -117,7 +119,7 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
         try:
             psd.append(loadmat(file_path)["data"].ravel())
         except IOError:
-            logging.info(sub, "Not Found")
+            LOG.info(sub, "Not Found")
     return np.array(psd), np.array(labels)
 
 

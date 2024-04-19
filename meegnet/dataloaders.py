@@ -8,6 +8,8 @@ from torch.utils.data import random_split
 from scipy.stats import zscore
 from meegnet.utils import strip_string
 
+LOG = logging.getLogger("meegnet")
+
 
 class _InfiniteSampler(torch.utils.data.Sampler):
     """
@@ -131,9 +133,9 @@ class Dataset:
             dataframe = pd.read_csv(csv_path, index_col=0)
         else:
             dataframe = self._load_csv(data_path)
-        logging.info(f"Logging subjects and labels from {data_path}...")
+        LOG.info(f"Logging subjects and labels from {data_path}...")
         subject_list = list(dataframe["sub"])
-        logging.info(f"Found {len(subject_list)} subjects to load.")
+        LOG.info(f"Found {len(subject_list)} subjects to load.")
         data_folder = f"downsampled_{self.sfreq}"
         numpy_filepath = os.path.join(data_path, data_folder)
         for file in os.listdir(numpy_filepath):
@@ -152,14 +154,14 @@ class Dataset:
                 if len(labels) == 1:
                     labels = [labels[0]] * len(sub_data)
                 if len(labels) != len(sub_data):
-                    logging.warning(
+                    LOG.warning(
                         "Length of label vector different from number "
                         f"of data samples for subject {sub}. Skipping."
                     )
                     continue
                 if self.n_samples is not None:
                     if self.n_samples > len(sub_data):
-                        logging.warning(
+                        LOG.warning(
                             f"Number of available samples for {file} "
                             f"below the requested amount ({self.n_samples})",
                         )
@@ -197,7 +199,7 @@ class Dataset:
         try:
             data = np.load(filepath)
         except IOError:
-            logging.warning(f"There was a problem loading subject {filepath}")
+            LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         if self.zscore:
             data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
@@ -289,9 +291,9 @@ class RestDataset(Dataset):
                             trial = zscore(trial, axis=-1)
                         data.append(trial)
         except IOError:
-            logging.warning(f"There was a problem loading subject {filepath}")
+            LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         except ValueError:
-            logging.warning(f"There was a problem loading subject {filepath}")
+            LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         return torch.Tensor(np.array(data))

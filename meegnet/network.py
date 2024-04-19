@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 import numpy as np
 
+LOG = logging.getLogger("meegnet")
+
 
 def create_net(net_option, input_size, n_outputs, net_params=None):
     if net_option == "MLP":
@@ -445,9 +447,7 @@ class Model:
         if torch.cuda.is_available():
             self.device = "cuda"
         elif device == "cuda":
-            logging.warning(
-                "Warning: gpu device requested but unavailable. Setting device to CPU"
-            )
+            LOG.warning("Warning: gpu device requested but unavailable. Setting device to CPU")
             self.device = "cpu"
         self.net.to(self.device)
 
@@ -474,7 +474,7 @@ class Model:
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        logging.info("Creating DataLoaders...")
+        LOG.info("Creating DataLoaders...")
         train_index, valid_index, test_index = dataset.data_split(0.8, 0.1, 0.1)
         trainloader = DataLoader(
             dataset.torchDataset(train_index),
@@ -492,13 +492,13 @@ class Model:
         )
 
         if load:
-            logging.info("Loading previous network state...")
+            LOG.info("Loading previous network state...")
             self.load(model_path)
 
-        logging.info("Starting Training with:")
-        logging.info(f"batch size: {batch_size}")
-        logging.info(f"learning rate: {self.lr}")
-        logging.info(f"patience: {patience}")
+        LOG.info("Starting Training with:")
+        LOG.info(f"batch size: {batch_size}")
+        LOG.info(f"learning rate: {self.lr}")
+        LOG.info(f"patience: {patience}")
         while patience_state < patience:
             epoch += 1
             n_batches = len(trainloader)
@@ -517,9 +517,9 @@ class Model:
                 progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
                 if n_batches > 10:
                     if i % (n_batches // 10) == 0:
-                        logging.info(progress)
+                        LOG.info(progress)
                 else:
-                    logging.info(progress)
+                    LOG.info(progress)
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
             train_accs.append(train_acc)
@@ -552,12 +552,12 @@ class Model:
                     self.save(model_path)
             else:
                 patience_state += 1
-            logging.info("Epoch: {}".format(epoch))
-            logging.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-            logging.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+            LOG.info("Epoch: {}".format(epoch))
+            LOG.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
+            LOG.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
             if max_epoch is not None:
                 if epoch == max_epoch:
-                    logging.info("Max number of epoch reached. Stopping training.")
+                    LOG.info("Max number of epoch reached. Stopping training.")
                     break
 
     def fit(self, *args, **kwargs):
@@ -596,15 +596,15 @@ class Model:
             pin_memory=True,
         )
         test_loss, test_acc = self.evaluate(test_loader)
-        logging.info(f" [LOSS] TEST {test_loss}")
-        logging.info(f" [ACC] TEST {test_acc}")
+        LOG.info(f" [LOSS] TEST {test_loss}")
+        LOG.info(f" [ACC] TEST {test_acc}")
         return test_loss, test_acc
 
     def load(self, model_path=None):
         if model_path is None:
             model_path = os.path.join(self.save_path, self.name + ".pt")
         if os.path.exists(model_path):
-            logging.info("=> loading checkpoint '{}'".format(model_path))
+            LOG.info("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
             net_state = checkpoint["state_dict"]
             optimizer_state = checkpoint["optimizer"]
@@ -614,7 +614,7 @@ class Model:
         if os.path.exists(mat_path):
             self.results = loadmat(mat_path)
         else:
-            logging.warning(
+            LOG.warning(
                 f"Warning: Couldn't find any checkpoint named {self.name}.pt in {self.save_path}"
             )
 

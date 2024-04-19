@@ -5,6 +5,13 @@ from meegnet.dataloaders import Dataset, RestDataset
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 
+LOG = logging.getLogger("meegnet")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+
 
 if __name__ == "__main__":
     ###########
@@ -48,31 +55,19 @@ if __name__ == "__main__":
             trial_length,
         )
     )
+
     ################
     # Starting log #
     ################
 
-    logging.root.setLevel(logging.INFO)
     if args.log:
-        log_name = args.model_name
+        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
         if fold is not None:
             log_name += f"_fold{args.fold}"
         log_name += ".log"
         log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(
-            filename=log_file,
-            filemode="a",
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
-        logging.info(f"Logging in {log_file}")
-    else:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
     ################
     # Loading data #
@@ -111,7 +106,7 @@ if __name__ == "__main__":
 
     dataset.load(args.save_path)
 
-    logging.info("Training model:")
+    LOG.info("Training model:")
     name = f"{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
@@ -125,10 +120,10 @@ if __name__ == "__main__":
 
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
 
-    logging.info(my_model.name)
-    logging.info(my_model.net)
+    LOG.info(my_model.name)
+    LOG.info(my_model.net)
 
     my_model.train(dataset)
     my_model.test(dataset)
-    # logging.info("Evaluating model:")
+    # LOG.info("Evaluating model:")
     # evaluate(fold, datasets, args.net_option, args=args)

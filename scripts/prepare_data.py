@@ -28,6 +28,13 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+LOG = logging.getLogger("meegnet")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+
 
 def bad_subj_found(sub: str, info: str, message: str, df_path: str):
     """
@@ -48,7 +55,7 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
     -------
     None
     """
-    logging.info(message)
+    LOG.info(message)
     row = [sub, info]
     with open(df_path, "r") as f:
         df = pd.read_csv(f, index_col=0)
@@ -116,9 +123,7 @@ def load_data(
 
         sub = sub_folder.split("-")[1]
         if epoched:
-            assert (
-                args.datatype != "rest"
-            ), "Cannot generate epochs for resting-state data"
+            assert args.datatype != "rest", "Cannot generate epochs for resting-state data"
             filename = f"{datatype}_{sub}_epoched.npy"
         else:
             filename = f"{datatype}_{sub}.npy"
@@ -223,20 +228,14 @@ if __name__ == "__main__":
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 
+    ################
+    # Starting log #
+    ################
+
     if args.log:
-        logging.basicConfig(
-            filename=os.path.join(args.save_path, "prepare_data.log"),
-            filemode="a",
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
-    else:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
+        log_file = os.path.join(args.save_path, "prepare_data.log")
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
     ########################
     ### ASSERTION CHECKS ###
