@@ -118,6 +118,9 @@ class Dataset:
         self.data = []
         self.labels = []
         self.groups = []
+        self.subject_list = []
+        self.targets = self.labels
+        self.data_path = None
 
     def _load_csv(self, data_path, csv_name="participants_info.csv"):
         csv_file = os.path.join(data_path, csv_name)
@@ -128,31 +131,48 @@ class Dataset:
         )
         return participants_df
 
-    def load(self, data_path, csv_path=None):
+    def preload(self, data_path, csv_path=None):
         if csv_path is not None and os.path.exists(csv_path):
             dataframe = pd.read_csv(csv_path, index_col=0)
         else:
             dataframe = self._load_csv(data_path)
         LOG.info(f"Logging subjects and labels from {data_path}...")
-        subject_list = list(dataframe["sub"])
-        LOG.info(f"Found {len(subject_list)} subjects to load.")
+        self.data_path = data_path
+        self.subject_list = list(dataframe["sub"])
+        return dataframe
+
+    def load(self, data_path=None, csv_path=None, one_sub=None):
+        assert self.data_path is not None or data_path is not None, "data_path must be set."
+        if self.data_path is None:
+            self.data_path = data_path
+        dataframe = self.preload(self.data_path, csv_path)
+        if one_sub is None:
+            LOG.info(f"Found {len(self.subject_list)} subjects to load.")
+        else:
+            LOG.info(f"Loading subject {one_sub}")
         data_folder = f"downsampled_{self.sfreq}"
-        numpy_filepath = os.path.join(data_path, data_folder)
+        numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):
             np.random.seed(self.random_state)
             random.seed(self.random_state)
             torch.manual_seed(self.random_state)
             sub = file.split("_")[0]
-            if sub in subject_list:
+            if one_sub is not None:
+                if sub != one_sub:
+                    continue
+            if sub in self.subject_list:
                 row = dataframe.loc[dataframe["sub"] == sub]
                 sub_data = self._load_sub(os.path.join(numpy_filepath, file))
-                if self.sensors is not None:
-                    sub_data = sub_data[:, self.sensors, :, :]
                 if sub_data is None:
                     continue
+                if self.sensors is not None:
+                    sub_data = sub_data[:, self.sensors, :, :]
                 labels = list(map(strip_string, row["label"].item().split(", ")))
                 if len(labels) == 1:
-                    labels = [labels[0]] * len(sub_data)
+                    if labels[0] in self.subject_list:
+                        labels = [self.subject_list.index(labels[0])] * len(sub_data)
+                    else:
+                        labels = [labels[0]] * len(sub_data)
                 if len(labels) != len(sub_data):
                     LOG.warning(
                         "Length of label vector different from number "
@@ -177,18 +197,25 @@ class Dataset:
                 self.labels.append(np.array(labels))
                 self.groups += [sub] * len(labels)
 
-        self.data = torch.cat(self.data, 0)
+        if len(self) == 0:
+            return
+        elif len(self) == 1:
+            self.data = self.data[0]
+            self.labels = self.labels[0]
+        else:
+            self.data = torch.cat(self.data, 0)
+            self.labels = np.concatenate(self.labels, axis=0)
+
         if len(self.data.shape) != 4:
             self.data = self.data[:, np.newaxis]
 
-        self.labels = np.concatenate(self.labels, axis=0)
-        if type(self.labels[0]) != int:
+        if type(self.labels[0]) == str:
             self.labels = string_to_int(self.labels)
-        self.labels = torch.as_tensor(self.labels)
+        self.labels = torch.Tensor(self.labels)
 
         if type(self.groups[0]) != int:
             self.groups = string_to_int(self.groups)
-        self.groups = torch.as_tensor(self.groups)
+        self.groups = torch.Tensor(self.groups)
 
         self.n_subjects = len(np.unique(self.groups))
 

@@ -89,9 +89,9 @@ def cuda_check():
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type == "cuda":
-        LOG.info("CUDA is available! Training on GPU.")
+        LOG.info("CUDA is available! Using GPU.")
     else:
-        LOG.info("CUDA is not available. Training on CPU.")
+        LOG.info("CUDA is not available. Using CPU.")
     return device
 
 
