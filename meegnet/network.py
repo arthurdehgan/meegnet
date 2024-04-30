@@ -615,7 +615,7 @@ class Model:
             self.results = loadmat(mat_path)
         else:
             LOG.warning(
-                f"Warning: Couldn't find any checkpoint named {self.name}.pt in {self.save_path}"
+                f"Warning: Couldn't find any checkpoint named {self.name}.pt in {self.model_path}"
             )
 
     def save(self, model_path=None):
