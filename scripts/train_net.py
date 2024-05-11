@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
-    with open("default_values.toml", "r") as f:
+    with open("/home/kikuko/meegnet/default_values.toml", "r") as f:
         default_values = toml.load(f)
 
     fold = None if args.fold == -1 else int(args.fold)
@@ -121,7 +121,9 @@ if __name__ == "__main__":
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
 
-    my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
+    my_model = Model(
+        name, args.net_option, input_size, n_outputs, save_path=args.save_path
+    )
 
     LOG.info(my_model.name)
     LOG.info(my_model.net)
