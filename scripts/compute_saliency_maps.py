@@ -121,7 +121,6 @@ def compute_saliency_maps(
         pred = preds.argmax().item()
         confidence = preds.max()
         label = int(label)
-        print(label, pred)
 
         # If the confidence reaches desired treshhold (given by args.confidence)
         if confidence >= threshold and pred == label:
@@ -286,7 +285,7 @@ if __name__ == "__main__":
         name += suffixes
 
     if args.clf_type == "subclf":
-        n_outputs = min(643, args.max_subj)
+        n_outputs = min(642, args.max_subj)
     else:
         n_outputs = 2
 
@@ -346,8 +345,8 @@ if __name__ == "__main__":
     # Define the maximum number of threads that can read from the disk at once
     MAX_DISK_READERS = 1
     # Define the maximum size of the queue
-    MAX_QUEUE_SIZE = 1  # Adjust this value based on your memory constraints
-    NUM_CONSUMERS = 1
+    MAX_QUEUE_SIZE = 12  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 6
 
     # Create a bounded queue with the maximum size
     queue = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
@@ -363,7 +362,6 @@ if __name__ == "__main__":
         )
         t.start()
         threads.append(t)
-        break
 
     # Start the consumer processes
     with multiprocessing.Pool(processes=NUM_CONSUMERS) as pool:

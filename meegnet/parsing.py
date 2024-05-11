@@ -21,7 +21,11 @@ def save_config(args: dict, config_filepath: str = "config.ini"):
 
 
 parser.add(
-    "-c", "--config", is_config_file=True, default="../default.ini", help="config file path"
+    "-c",
+    "--config",
+    is_config_file=True,
+    default="../default.ini",
+    help="config file path",
 )
 parser.add(
     "--testsplit",
@@ -73,7 +77,9 @@ parser.add(
     default=-1,
     help="limit of number of samples per subjects",
 )
-parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
+parser.add(
+    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
+)
 parser.add(
     "--segment-length",
     type=float,
@@ -193,7 +199,7 @@ parser.add(
 parser.add(
     "--clf-type",
     default="",
-    choices=["eventclf", "subclf", "sexclf"],
+    choices=["eventclf", "subclf", "toneclf"],
     help="The type of classification to run.",
 )
 parser.add(
@@ -244,7 +250,9 @@ parser.add(
     choices=["same", "double", "inverted"],
     help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
 )
-parser.add("-l", "--linear", default=100, type=int, help="The size of the second linear layer")
+parser.add(
+    "-l", "--linear", default=100, type=int, help="The size of the second linear layer"
+)
 parser.add(
     "-n",
     "--nchan",
