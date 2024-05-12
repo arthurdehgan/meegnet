@@ -209,7 +209,7 @@ class Dataset:
         if len(self.data.shape) != 4:
             self.data = self.data[:, np.newaxis]
 
-        if type(self.labels[0]) == str:
+        if type(self.labels[0]) in (str, np.str_):
             self.labels = string_to_int(self.labels)
         self.labels = torch.Tensor(self.labels)
 
@@ -255,7 +255,7 @@ class Dataset:
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
         for index, group in enumerate(self.groups):
-            index_groups[group].append(index)
+            index_groups[int(group)].append(index)
         for group in index_groups:
             indexes.append(random_split(group, sizes, generator))
         # logging.info(
