@@ -4,11 +4,16 @@ TODO
 
 # Installation instruction
 
-## User-friendly installation
+## Installation
 
 ```
-pip install meegnet
+git clone https://github.com/arthurdehgan/meegnet.git
+cd meegnet
+pip install -r requirements.txt
+pip install .
 ```
+
+The package will be added to pipy in the future (removing the need to clone the repo)
 
 ## Install from scratch
 
@@ -19,16 +24,13 @@ python -m venv $VENV_PATH\meegnet
 source $VENV_PATH\meegnet/bin/activate
 ```
 
-Once the environment is created and activated, it is possible to install requirements:
-```
-pip install meegnet
-```
+Once the environment is created and activated, it is possible to install as instructed in the previous section.
 
 # Features
 
-TODO
+WIP
 
-# How to use
+# How to use (WIP)
 
 ## scripts/prepare_data.py
 
@@ -41,7 +43,3 @@ websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataac
 This script assumes a copy of the cc700 and dataman folders to a data path parsed
 through the argparser.
 
-Example on how to run the script:
-```
-python prepare_data.py --data-path="/home/user/data/camcan/" --save-path="/home/user/data" --user="Firstname_Name_1160" --dattype="passive" --epoched
-```

@@ -3,7 +3,6 @@ torch
 numpy
 scipy
 pandas
-psutil
 toml
 scikit-learn
 configargparse
