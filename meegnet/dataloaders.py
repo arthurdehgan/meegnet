@@ -97,6 +97,64 @@ def string_to_int(array):
 
 
 class Dataset:
+    """Creates a dataset
+
+    Parameters
+    ----------
+    sfreq : int, optional
+        The sampling frequency, by default 500.
+    n_subjects : int, optional
+        The number of subjects. Default value is None, which means all subjects are processed.
+    zscore : bool, optional
+        If True, z-scoring is applied to the data, by default True.
+    n_samples : int, optional
+        The number of samples to include, by default None.
+    sensortype : str, optional
+        The type of sensor to use, by default None.
+    lso : bool, optional
+        Leave subjects out. If False, within-subject splitting is used, by default False.
+    random_state : int, optional
+        The random state for reproducibility, by default 0.
+
+    Attributes
+    ----------
+    sfreq : int
+        The sampling frequency.
+    n_subjects : int
+        The number of subjects.
+    n_samples : int
+        The number of samples for each subject.
+    data : torch.Tensor
+        The data.
+    labels : torch.Tensor
+        The labels.
+    groups : list
+        The groups.
+    subject_list : list
+        The subject list.
+
+    Methods
+    -------
+    preload(data_path, csv_path=None)
+        loads the subject list from a csv file (participants_info.csv in the data_folder by default).
+    load(data_path=None, csv_path=None, one_sub=None)
+        Loads the data from the "downsamples_[sfreq]" folder in the data_path.
+    __len__()
+        Returns the length of the dataset (total number of data examples).
+    _load_sub(filepath)
+        Loads a subject's data.
+    _select_sensors(sensortype)
+        For MEG data only. Selects the sensors assuming the sensors are MAG, PLANNAR1, PLANNAR2.
+    _assert_sizes(train_size, valid_size, test_size=None)
+        Asserts that the sum of the data ratios is equal to 1.
+    _within_subject_split(sizes, generator)
+        Splits the data within each subject using the specified sizes and generator.
+    data_split(train_size, valid_size, test_size=None)
+        Splits the data into training, validation, and test sets based on the specified sizes and stratification (if desired).
+    torchDataset(index)
+        Returns a Torch dataset instance of the torch Dataset class for the given index.
+    """
+
     def __init__(
         self,
         sfreq=500,
@@ -209,9 +267,7 @@ class Dataset:
         if len(self.data.shape) != 4:
             self.data = self.data[:, np.newaxis]
 
-        if type(self.labels[0]) == str:
-            self.labels = string_to_int(self.labels)
-        self.labels = torch.Tensor(self.labels)
+        self.set_labels(self.labels)
 
         if type(self.groups[0]) != int:
             self.groups = string_to_int(self.groups)
@@ -278,8 +334,68 @@ class Dataset:
     def torchDataset(self, index):
         return torch.utils.data.TensorDataset(self.data[index], self.labels[index])
 
+    def set_labels(self, labels):
+        if type(labels[0]) in (str, np.str_):
+            labels = string_to_int(labels)
+        self.labels = torch.Tensor(labels, dtype=torch.int32)
+
 
 class RestDataset(Dataset):
+    """
+    Creates a dataset for deep learning models from REST data with windowing.
+
+    Parameters
+    ----------
+    window : int, optional
+        The window size in seconds, by default 2.
+    overlap : float, optional
+        The overlap between windows, by default 0.
+    offset : int, optional
+        The offset in seconds, by default 10.
+    sfreq : int, optional
+        The sampling frequency, by default 500.
+    n_subjects : int, optional
+        The number of subjects. Default value is None, which means all subjects are processed.
+    zscore : bool, optional
+        If True, z-scoring is applied to the data, by default True.
+    n_samples : int, optional
+        The number of samples to include, by default None.
+    sensortype : str, optional
+        The type of sensor to use, by default None.
+    lso : bool, optional
+        Leave subjects out. If False, within-subject splitting is used, by default False.
+    random_state : int, optional
+        The random state for reproducibility, by default 0.
+
+    Attributes
+    ----------
+    window : int
+        The window size in seconds.
+    overlap : float
+        The overlap between windows.
+    offset : int
+        The offset in seconds.
+    sfreq : int
+        The sampling frequency.
+    n_subjects : int
+        The number of subjects.
+    n_samples : int
+        The number of samples for each subject.
+    data : torch.Tensor
+        The data.
+    labels : torch.Tensor
+        The labels.
+    groups : list
+        The groups.
+    subject_list : list
+        The subject list.
+
+    Methods
+    -------
+    _load_sub(filepath)
+        Loads a subject's data with windowing and overlap.
+    """
+
     def __init__(
         self,
         window=2,
@@ -293,6 +409,7 @@ class RestDataset(Dataset):
         lso=False,
         random_state=0,
     ):
+
         Dataset.__init__(
             self, sfreq, n_subjects, zscore, n_samples, sensortype, lso, random_state
         )
