@@ -12,7 +12,7 @@ The package currently supports the following architectures:
 
 ## MeegNet Architecture
 
-![MeegNet architecture](https://github.com/arthurdehgan/meegnet/architecture.png "MeegNet Architecture")
+![MeegNet architecture](https://github.com/arthurdehgan/meegnet/blob/master/architecture.png "MeegNet Architecture")
 
 # Installation instruction
 
