@@ -9,7 +9,6 @@ import pandas as pd
 from mne.time_frequency.multitaper import psd_array_multitaper
 from scipy.io import loadmat
 from scipy.signal import welch
-from path import Path as path
 
 LOG = logging.getLogger("meegnet")
 
@@ -115,7 +114,7 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
     labels = list(df["gender_code"] - 1)
     psd = []
     for sub in sub_list:
-        file_path = path(PSD_PATH) / "PSD_{}_{}_{}".format(sub, window, overlap)
+        file_path = os.path.join(PSD_PATH, "PSD_{}_{}_{}".format(sub, window, overlap))
         try:
             psd.append(loadmat(file_path)["data"].ravel())
         except IOError:
