@@ -1,6 +1,7 @@
 results
 models
 figures
+docs/_build
 __pycache__
 
 data
