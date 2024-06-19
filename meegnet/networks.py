@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models
-
 from domainbed.lib import wide_resnet
 import copy
 

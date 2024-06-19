@@ -19,7 +19,7 @@ Submodules
 ----------
 
 meegnet.dataloaders module
---------------------
+--------------------------
 
 .. automodule:: meegnet.dataloaders
     :members:
@@ -27,7 +27,7 @@ meegnet.dataloaders module
     :show-inheritance:
 
 meegnet.network module
-------------------------
+----------------------
 
 .. automodule:: meegnet.network
     :members:
@@ -35,7 +35,7 @@ meegnet.network module
     :show-inheritance:
 
 meegnet.viz module
------------------------
+------------------
 
 .. automodule:: meegnet.viz
     :members:
@@ -43,7 +43,7 @@ meegnet.viz module
     :show-inheritance:
 
 meegnet.utils module
----------------------
+--------------------
 
 .. automodule:: meegnet.utils
     :members:
@@ -51,7 +51,7 @@ meegnet.utils module
     :show-inheritance:
 
 meegnet.parsing module
----------------------------
+----------------------
 
 .. automodule:: meegnet.parsing
     :members:

@@ -10,8 +10,7 @@ import os
 import sys
 
 # adding source path as parent folder since doc is in a docs folder
-sys.path.insert(0, os.path.abspath(".."))
-sys.path.insert(0, os.path.abspath("../meegnet"))
+# sys.path.insert(0, os.path.abspath(".."))
 
 project = 'MEEGNet'
 copyright = '2024, Arthur Dehgan'
