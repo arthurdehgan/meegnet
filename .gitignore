@@ -2,7 +2,6 @@ results
 models
 figures
 docs/_build
-meegnet/docs/_build
 __pycache__
 
 data
