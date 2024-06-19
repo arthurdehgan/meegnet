@@ -6,6 +6,13 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+import sys
+
+# adding source path as parent folder since doc is in a docs folder
+sys.path.insert(0, os.path.abspath(".."))
+
+
 project = 'MEEGNet'
 copyright = '2024, Arthur Dehgan'
 author = 'Arthur Dehgan'
