@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+import sphinx_rtd_theme
 
 setup(
     name="meegnet",
