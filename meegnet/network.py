@@ -1,5 +1,5 @@
 import os
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import logging
 import torch
 from torch import nn, optim
@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 import numpy as np
+from huggingface_hub import hf_hub_download
 
 LOG = logging.getLogger("meegnet")
 
@@ -23,7 +24,7 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
                 "mlp_dropout": net_params["dropout"],
             },
         )
-    elif net_option == "best_net":
+    elif net_option == "meegnet":
         return my_net(input_size, n_outputs)
     elif net_option == "custom_net":
         return FullNet(
@@ -436,6 +437,7 @@ class Model:
         self.name = name
         self.input_size = input_size  # TODO here put assertions on the shape
         self.net = create_net(net_option, input_size, n_outputs)
+        self.n_outputs = n_outputs
         self.n_folds = n_folds
         self.criterion = criterion
         self.save_path = save_path
@@ -600,7 +602,29 @@ class Model:
         LOG.info(f" [ACC] TEST {test_acc}")
         return test_loss, test_acc
 
-    def load(self, model_path=None):
+    def _get_from_hub(self, repo=None):
+        if repo is None:
+            repo = "lamaroufle/meegnet"
+        model_name = "_".join(self.name.split("_")[:-2])
+        filename = f"{model_name}_{"_".join(map(str, self.input_size))}_{self.n_outputs}"
+        model_path = hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".pt")
+        hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".mat")
+        return model_path
+
+    def feature_extraction_from_pretrained(self, repo=None):
+        model_path = self._get_from_hub(repo)
+        net_state, _, _ = self._load_net(model_path)
+        feat_state_dict = OrderedDict()
+        for key, value in net_state["state_dict"].items():
+            if key.startswith("feature"):
+                feat_state_dict[".".join(key.split(".")[1:])] = value
+        self.net.feature_extraction.load_state_dict(feat_state_dict)
+
+    def from_pretrained(self, repo=None):
+        model_path = self._get_from_hub(repo)
+        self.load(model_path)
+        
+    def _load_net(self, model_path=None):
         if model_path is None:
             model_path = os.path.join(self.save_path, self.name + ".pt")
         if os.path.exists(model_path):
@@ -608,15 +632,20 @@ class Model:
             checkpoint = torch.load(model_path)
             net_state = checkpoint["state_dict"]
             optimizer_state = checkpoint["optimizer"]
-            self.net.load_state_dict(net_state)
-            self.optimizer.load_state_dict(optimizer_state)
         mat_path = model_path[:-2] + "mat"
         if os.path.exists(mat_path):
-            self.results = loadmat(mat_path)
+            mat_data = loadmat(mat_path)
         else:
             LOG.warning(
-                f"Warning: Couldn't find any checkpoint named {self.name}.pt in {self.model_path}"
+                f"Error while loading checkpoint from {model_path}"
             )
+        return net_state, optimizer_state, mat_data
+
+    def load(self, model_path=None):
+        net_state, optimizer_state, mat_data = self._load_net(model_path)
+        self.net.load_state_dict(net_state)
+        self.optimizer.load_state_dict(optimizer_state)
+        self.results = mat_data
 
     def save(self, model_path=None):
         if model_path is None:
