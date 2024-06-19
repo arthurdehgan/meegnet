@@ -11,7 +11,7 @@ import sys
 
 # adding source path as parent folder since doc is in a docs folder
 sys.path.insert(0, os.path.abspath(".."))
-
+sys.path.insert(0, os.path.abspath("../meegnet"))
 
 project = 'MEEGNet'
 copyright = '2024, Arthur Dehgan'
@@ -21,7 +21,7 @@ release = '0.1.1'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["sphinx_rtd_theme", 'sphinx.ext.viewcode', "sphinx.ext.napoleon", "sphinx.ext.autodoc"]
+extensions = ["sphinx_rtd_theme", 'sphinx.ext.autosummary', 'sphinx.ext.viewcode', "sphinx.ext.napoleon", "sphinx.ext.autodoc"]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
