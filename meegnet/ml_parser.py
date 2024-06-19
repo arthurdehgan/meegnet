@@ -1,5 +1,4 @@
 import argparse
-from params import SAVE_PATH, DATA_PATH
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -93,11 +92,11 @@ parser.add_argument(
 parser.add_argument(
     "-o",
     "--out_path",
-    default=SAVE_PATH + "results/",
+    default=".",
     help="Where to save the result matrices, data path in config.ini file + results/, by default",
 )
 parser.add_argument(
-    "-i", "--in_path", default=DATA_PATH, help="Where is the data to load"
+    "-i", "--in_path", default=".", help="Where is the data to load"
 )
 parser.add_argument(
     "--elec_axis",

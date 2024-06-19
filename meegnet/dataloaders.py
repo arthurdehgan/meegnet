@@ -89,7 +89,7 @@ class InfiniteDataLoader:
         raise ValueError
 
 
-def string_to_int(array):
+def _string_to_int(array):
     array = np.array(array)
     for i, element in enumerate(np.unique(array)):
         array[array == element] = i
@@ -270,7 +270,7 @@ class Dataset:
         self.set_labels(self.labels)
 
         if type(self.groups[0]) != int:
-            self.groups = string_to_int(self.groups)
+            self.groups = _string_to_int(self.groups)
         self.groups = torch.Tensor(self.groups)
 
         self.n_subjects = len(np.unique(self.groups))
@@ -321,6 +321,7 @@ class Dataset:
         return (sum([list(index[i]) for index in indexes], []) for i in range(3))
 
     def data_split(self, train_size, valid_size, test_size=None):
+        """:no-index:"""
         # TODO add stratification for the data splits
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
@@ -336,7 +337,7 @@ class Dataset:
 
     def set_labels(self, labels):
         if type(labels[0]) in (str, np.str_):
-            labels = string_to_int(labels)
+            labels = _string_to_int(labels)
         self.labels = torch.Tensor(labels, dtype=torch.int32)
 
 
