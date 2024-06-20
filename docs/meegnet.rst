@@ -17,8 +17,6 @@ meegnet.dataloaders module
 
 .. automodule:: meegnet.dataloaders
    :members:
-   :undoc-members:
-   :show-inheritance:
 
 meegnet.utils module
 --------------------

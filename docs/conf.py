@@ -21,9 +21,16 @@ release = "0.1.1"
 
 extensions = ["sphinx.ext.autodoc", "sphinx_rtd_theme", "sphinx.ext.napoleon"]
 
+# generate autosummary pages
+autosummary_generate = True
+
+# The master toctree document.
+master_doc = "index"
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
+modindex_common_prefix = ["meegnet."]
+napoleon_use_param = False
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
