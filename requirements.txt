@@ -6,3 +6,5 @@ pandas
 toml
 scikit-learn
 configargparse
+torchvision
+huggingface_hub

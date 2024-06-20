@@ -132,27 +132,6 @@ class Dataset:
         The groups.
     subject_list : list
         The subject list.
-
-    Methods
-    -------
-    preload(data_path, csv_path=None)
-        loads the subject list from a csv file (participants_info.csv in the data_folder by default).
-    load(data_path=None, csv_path=None, one_sub=None)
-        Loads the data from the "downsamples_[sfreq]" folder in the data_path.
-    __len__()
-        Returns the length of the dataset (total number of data examples).
-    _load_sub(filepath)
-        Loads a subject's data.
-    _select_sensors(sensortype)
-        For MEG data only. Selects the sensors assuming the sensors are MAG, PLANNAR1, PLANNAR2.
-    _assert_sizes(train_size, valid_size, test_size=None)
-        Asserts that the sum of the data ratios is equal to 1.
-    _within_subject_split(sizes, generator)
-        Splits the data within each subject using the specified sizes and generator.
-    data_split(train_size, valid_size, test_size=None)
-        Splits the data into training, validation, and test sets based on the specified sizes and stratification (if desired).
-    torchDataset(index)
-        Returns a Torch dataset instance of the torch Dataset class for the given index.
     """
 
     def __init__(
@@ -190,6 +169,21 @@ class Dataset:
         return participants_df
 
     def preload(self, data_path, csv_path=None):
+        """loads the subject list from a csv file (participants_info.csv in the data_folder by default).
+
+        Parameters
+        ----------
+        data_path :
+            _description_
+        csv_path : _type_, optional
+            _description_, by default None
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+
         if csv_path is not None and os.path.exists(csv_path):
             dataframe = pd.read_csv(csv_path, index_col=0)
         else:
@@ -200,6 +194,17 @@ class Dataset:
         return dataframe
 
     def load(self, data_path=None, csv_path=None, one_sub=None):
+        """Loads the data from the "downsamples_[sfreq]" folder in the data_path.
+
+        Parameters
+        ----------
+        data_path : _type_, optional
+            _description_, by default None
+        csv_path : _type_, optional
+            _description_, by default None
+        one_sub : _type_, optional
+            _description_, by default None
+        """
         assert self.data_path is not None or data_path is not None, "data_path must be set."
         if self.data_path is None:
             self.data_path = data_path
@@ -276,9 +281,28 @@ class Dataset:
         self.n_subjects = len(np.unique(self.groups))
 
     def __len__(self):
+        """Returns the length of the dataset (total number of data examples).
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         return len(self.data)
 
     def _load_sub(self, filepath):
+        """Loads a subject's data.
+
+        Parameters
+        ----------
+        filepath : _type_
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         try:
             data = np.load(filepath)
         except IOError:
@@ -289,6 +313,18 @@ class Dataset:
         return torch.Tensor(np.array(data))
 
     def _select_sensors(self, sensortype):
+        """For MEG data only. Selects the sensors slices from the data.
+
+        Parameters
+        ----------
+        sensortype : str
+            type of sensor. Must be either "MAG", "plannar1", "plannar2" or "plannar".
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         if sensortype == "MAG":
             return [0]
         elif sensortype in ["GRAD", "plannar"]:
@@ -301,6 +337,17 @@ class Dataset:
             return None
 
     def _assert_sizes(self, train_size, valid_size, test_size=None):
+        """Asserts that the sum of the data ratios is equal to 1.
+
+        Parameters
+        ----------
+        train_size : _type_
+            _description_
+        valid_size : _type_
+            _description_
+        test_size : _type_, optional
+            _description_, by default None
+        """
         if test_size is None:
             test_size = 0
         assert (
@@ -308,6 +355,20 @@ class Dataset:
         ), "sum of data ratios must be equal to 1"
 
     def _within_subject_split(self, sizes, generator):
+        """Splits the data within each subject using the specified sizes and generator.
+
+        Parameters
+        ----------
+        sizes : _type_
+            _description_
+        generator : _type_
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
         for index, group in enumerate(self.groups):
@@ -321,7 +382,22 @@ class Dataset:
         return (sum([list(index[i]) for index in indexes], []) for i in range(3))
 
     def data_split(self, train_size, valid_size, test_size=None):
-        """:no-index:"""
+        """Splits the data into training, validation, and test sets based on the specified sizes and stratification (if desired).
+
+        Parameters
+        ----------
+        train_size : _type_
+            _description_
+        valid_size : _type_
+            _description_
+        test_size : _type_, optional
+            _description_, by default None
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         # TODO add stratification for the data splits
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
@@ -333,6 +409,18 @@ class Dataset:
             )
 
     def torchDataset(self, index):
+        """Returns a Torch dataset instance of the torch Dataset class for the given index.
+
+        Parameters
+        ----------
+        index : _type_
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         return torch.utils.data.TensorDataset(self.data[index], self.labels[index])
 
     def set_labels(self, labels):
