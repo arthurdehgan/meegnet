@@ -9,8 +9,8 @@ Welcome to MEEGNet!
 
 This is a suite of tools made available for neuroscience researchers to use a variety of M/EEG neural network architectures on their data.
 
-- **Source:** https://github.com/byuccl/meegnet
-- **Bug Reports:** https://github.com/byuccl/meegnet/issues
+- **Source:** https://github.com/arthurdehgan/meegnet
+- **Bug Reports:** https://github.com/arthurdehgan/meegnet/issues
 
 
 MeegNet Architecture
@@ -26,6 +26,11 @@ The package currently supports the following architectures:
 * LF-CNN 
 * VAR-CNN 
 * EEGNet 
+
+Documentation
+=============
+
+For a full documentation of the package as well as tutorials on how to use the library, click the `Readthedocs<>`_ link.
 
 Features
 ========
