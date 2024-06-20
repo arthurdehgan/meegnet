@@ -6,6 +6,8 @@
 Welcome to MEEGNet's documentation!
 ===================================
 
+.. include:: ../README.rst
+
 .. toctree::
    :maxdepth: 3
    :caption: meegnet documentation:
