@@ -1,61 +1,39 @@
-Introduction
-============
+Welcome to MEEGNet!
+===================
 
-This is a suite of tools made available for neuroscience researchers to
-use a variety of M/EEG neural network architectures on their data.
+.. image:: https://img.shields.io/pypi/v/meegnet.svg
+   :target: https://pypi.org/project/meegnet/
+   
+.. image:: https://img.shields.io/pypi/pyversions/meegnet.svg
+   :target: https://pypi.org/project/meegnet/
 
-Available Architectures
------------------------
+This is a suite of tools made available for neuroscience researchers to use a variety of M/EEG neural network architectures on their data.
 
-The package currently supports the following architectures: - LF-CNN -
-VAR-CNN - EEGNet - MEEGNet (Our)
+- **Source:** https://github.com/byuccl/meegnet
+- **Bug Reports:** https://github.com/byuccl/meegnet/issues
+
 
 MeegNet Architecture
 --------------------
 
-.. figure:: https://github.com/arthurdehgan/meegnet/blob/master/architecture.png
-   :alt: MeegNet Architecture
+.. image:: https://github.com/arthurdehgan/meegnet/blob/master/architecture.png
 
-   MeegNet architecture
+Other Available Architectures
+-----------------------------
 
-Installation instruction
-========================
+The package currently supports the following architectures: 
 
-Installation
-------------
-
-::
-
-   git clone https://github.com/arthurdehgan/meegnet.git
-   cd meegnet
-   pip install -r requirements.txt
-   pip install .
-
-The package will be added to pipy in the future (therefore removing the
-need to clone the repo)
-
-Install from scratch
---------------------
-
-We recommend creating a fresh python environment in order to use this
-packages scrips:
-
-::
-
-   VENV_PATH="/path/to/environment/"
-   python -m venv $VENV_PATH\meegnet
-   source $VENV_PATH\meegnet/bin/activate
-
-Once the environment is created and activated, it is possible to install
-as instructed in the previous section.
+* LF-CNN 
+* VAR-CNN 
+* EEGNet 
 
 Features
 ========
 
-(WIP)
+Work in Progress
 
-How to use (WIP)
-================
+Tutorials
+=========
 
 Jupyter Notebook tutorials:
 ---------------------------
@@ -66,8 +44,8 @@ Prepare your data by following the instructions
 Learn the basics of how to train and evaluate using a pre-made network
 `here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/Meegnet%20Network%20Training%20Basic%20Tutorial.ipynb>`__
 
-Alternate Packages
-==================
+Alternatives
+============
 
 Maybe this package doesn’t suit your needs, in which case I can
 recommend similar packages with similar goals: -
@@ -78,12 +56,12 @@ References
 ==========
 
 MEEGNet
-~~~~~~~
+-------
 
-(WIP)
+Work in Progress
 
 LF-CNN or VAR-CNN
-~~~~~~~~~~~~~~~~~
+-----------------
 
 Zubarev I, Zetter R, Halme HL, Parkkonen L. Adaptive neural network
 classifier for decoding MEG signals. Neuroimage. 2019 May 4;197:425-434.
@@ -107,7 +85,7 @@ classifier for decoding MEG signals. Neuroimage. 2019 May 4;197:425-434.
    }
 
 EEGNet
-~~~~~~
+------
 
 ::
 
