@@ -30,7 +30,7 @@ The package currently supports the following architectures:
 Documentation
 =============
 
-For a full documentation of the package as well as tutorials on how to use the library, click the `Readthedocs<https://meegnet.readthedocs.io/en/latest/index.html>`_ link.
+For a full documentation of the package as well as tutorials on how to use the library, click the `Readthedocs <https://meegnet.readthedocs.io/en/latest/index.html>`_ link.
 
 Features
 ========
