@@ -12,7 +12,7 @@
    install
    tutorials
    modules
-   alternatives
+   collaborate
    references
 
 Indices and tables
