@@ -52,8 +52,7 @@ Learn the basics of how to train and evaluate using a pre-made network
 Alternatives
 ============
 
-Maybe this package doesn’t suit your needs, in which case I can
-recommend similar packages with similar goals: 
+Maybe this package doesn’t suit your needs, in which case we can recommend similar packages with similar goals: 
 
 * https://mneflow.readthedocs.io/en/latest/
 * https://braindecode.org/stable/index.html
