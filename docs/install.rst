@@ -10,7 +10,7 @@ MEEGNet requires Python 3.6 or newer. Please ensure that this prerequisite has b
 
 We recommend creating a fresh python environment in order to use this packages and assiciated scrips:
 
-.. code:: bash
+.. code-block:: bash
 
    VENV_PATH="/path/to/environment/"
    python -m venv $VENV_PATH\meegnet
