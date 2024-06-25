@@ -8,36 +8,42 @@ The data folder
 
 The data folder *must* be named:
 
-.. code:: bash
+.. code-block:: bash
+    
    downsampled_[sfreq]
 
 where sfreq is the sampling frequency of the data inside the folder. For example if the data has been sampled at 1000Hz, the folder should be named:
 
-.. code:: bash
+.. code-block:: bash
+
    downsampled_1000
 
 The data folder should contain numpy-compatible files (see the `numpy doc <https://numpy.org/devdocs/reference/generated/numpy.lib.format.html>`_). These files must start with the subject/participant ID in their name, followed by an underscore ("_") and any other information you need/want.
 
 Here is an example of a valid name for a single participant file:
 
-.. code:: bash
+.. code-block:: bash
+
    CC12345_funny_useful_information.npy
 
 One single file should be of the shape:
 
-.. code:: bash
+.. code-block:: bash
+
    (n_trials, n_sensors, n_samples)
 
 or of the shape:
 
-.. code:: bash
+.. code-block:: bash
+
    (n_trials, n_sensor_type, n_sensors, n_samples)
 
 In the case of MEG data for example where there are multiple sensors for a given location (Magnetometers and gradiometers).
 
 An example of a valid shape for a MEG file where only the magnetometers are selected:
 
-.. code:: bash
+.. code-block:: bash
+
    (245, 1, 102, 2000)
 
 These numbers mean we have:
@@ -49,7 +55,8 @@ These numbers mean we have:
 
 The same file could also be saved with a shape of:
 
-.. code:: bash
+.. code-block:: bash
+
    (245, 102, 2000)
 
 Since there is only one sensor type, it is not necessary to explicitely have it in the shape.
@@ -74,7 +81,7 @@ Inside the path you will provide when creating an instance of the meegnet.Datase
 
 Inside the "downsampled_[sfreq]" folder there must be files in the format:
 
-.. code:: bash
+.. code-block:: bash
    SUBJECTID_anything.npy
 
 
