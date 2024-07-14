@@ -8,12 +8,7 @@ This script assumes a copy of the cc700 and dataman folders to a data path parse
 through the argparser.
 
 example on how to run the script:
-python prepare_data.py --config="config.toml" --data-path="/home/user/data/camcan/" --save-path="/home/user/data"
-
-TODO:
-    add a prompt on the amount of disk space and time required
-    add option of not doing epoched with passive and smt data
-
+python prepare_data.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
 """
 
 import os
