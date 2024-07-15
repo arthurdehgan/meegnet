@@ -57,8 +57,7 @@ parser.add(
 parser.add(
     "--net-option",
     default="meegnet",
-    choices=["custom_net", "meegnet", "EEGNet", "VGG", "vanPutNet", "MLP"],)
-    help="cNet is the custom net.",
+    choices=["custom_net", "meegnet", "EEGNet", "VGG", "vanPutNet", "MLP"],
 )
 parser.add(
     "--datatype",
@@ -77,9 +76,7 @@ parser.add(
     default=-1,
     help="limit of number of samples per subjects",
 )
-parser.add(
-    "-f", "--filters", default=8, type=int, help="The size of the first convolution"
-)
+parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
 parser.add(
     "--segment-length",
     type=float,
@@ -250,9 +247,7 @@ parser.add(
     choices=["same", "double", "inverted"],
     help="sets if the first dropout and the second are the same or if the first one or the second one should be bigger",
 )
-parser.add(
-    "-l", "--linear", default=100, type=int, help="The size of the second linear layer"
-)
+parser.add("-l", "--linear", default=100, type=int, help="The size of the second linear layer")
 parser.add(
     "-n",
     "--nchan",
