@@ -213,6 +213,7 @@ class Dataset:
             LOG.info(f"Found {len(self.subject_list)} subjects to load.")
         else:
             LOG.info(f"Loading subject {one_sub}")
+            self.subject_list = [one_sub]
         data_folder = f"downsampled_{self.sfreq}"
         numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):

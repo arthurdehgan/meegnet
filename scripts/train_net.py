@@ -24,7 +24,7 @@ if __name__ == "__main__":
         default_values = toml.load(f)
 
     fold = None if args.fold == -1 else int(args.fold)
-    if args.clf_type in ("eventclf", "toneclf"):
+    if args.clf_type == "eventclf":
         assert (
             args.datatype != "rest"
         ), "datatype must be set to passive in order to run event classification"
@@ -73,9 +73,6 @@ if __name__ == "__main__":
         n_subjects = len(os.listdir(data_path))
         n_outputs = min(n_subjects, args.max_subj)
         lso = False
-    if args.clf_type == "toneclf":
-        n_outputs = 3
-        lso = True
     else:
         n_outputs = 2
         lso = True

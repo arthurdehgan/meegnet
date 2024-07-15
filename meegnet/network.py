@@ -447,6 +447,8 @@ class Model:
         self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
         self.results = defaultdict(lambda: 0)
         self.checkpoint = defaultdict(lambda: 0)
+        self.classif_weights = self.get_clf_weights()
+        self.feature_weights = self.get_feature_weights()
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -655,3 +657,17 @@ class Model:
         # Compute accuracy from 2 vectors of labels.
         correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
         return correct / len(target)
+    
+    def get_feature_weights(self):
+        weights = []
+        for layer in self.net.feature_extraction:
+            if hasattr(layer, "weight"):
+                weights.append(layer.weight.detach().numpy())
+        return weights
+
+    def get_clf_weights(self):
+        weights = []
+        for layer in self.net.classif:
+            if hasattr(layer, "weight"):
+                weights.append(layer.weight.detach().numpy())
+        return weights
