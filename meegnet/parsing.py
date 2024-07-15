@@ -56,8 +56,8 @@ parser.add(
 )
 parser.add(
     "--net-option",
-    default="best_net",
-    choices=["custom_net", "best_net", "EEGNet", "VGG", "vanPutNet", "MLP"],
+    default="meegnet",
+    choices=["custom_net", "meegnet", "EEGNet", "VGG", "vanPutNet", "MLP"],)
     help="cNet is the custom net.",
 )
 parser.add(
