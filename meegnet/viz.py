@@ -913,10 +913,10 @@ def plot_epoch(data, title: str = None):
     return fig, axes
 
 
-def load_info(data_path, datatype):
+def load_info(raw_path, datatype):
     # Chargement des données de potition des capteurs:
     camcan_path = os.path.join(
-        data_path,
+        raw_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
         f"derivatives_{datatype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
