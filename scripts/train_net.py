@@ -14,9 +14,9 @@ logging.basicConfig(
 
 
 if __name__ == "__main__":
-    ###########
-    # PARSING #
-    ###########
+    ###############
+    ### PARSING ###
+    ###############
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
@@ -80,9 +80,9 @@ if __name__ == "__main__":
         n_outputs = 2
         lso = True
 
-    ################
-    # Starting log #
-    ################
+    ####################
+    ### Starting log ###
+    ####################
 
     if args.log:
         log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
@@ -93,9 +93,9 @@ if __name__ == "__main__":
         logging.basicConfig(filename=log_file, filemode="a")
         LOG.info(f"Starting logging in {log_file}")
 
-    ################
-    # Loading data #
-    ################
+    ####################
+    ### Loading data ###
+    ####################
 
     if args.datatype == "rest":
         dataset = RestDataset(
