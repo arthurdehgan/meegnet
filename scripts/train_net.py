@@ -56,6 +56,30 @@ if __name__ == "__main__":
         )
     )
 
+    name = f"{args.model_name}_{args.seed}_{args.sensors}"
+    suffixes = ""
+    if args.net_option == "custom_net":
+        if args.batchnorm:
+            suffixes += "_BN"
+        if args.maxpool != 0:
+            suffixes += f"_maxpool{args.maxpool}"
+
+        name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
+        name += suffixes
+
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
+    if args.clf_type == "subclf":
+        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+        n_subjects = len(os.listdir(data_path))
+        n_outputs = min(n_subjects, args.max_subj)
+        lso = False
+    if args.clf_type == "toneclf":
+        n_outputs = 3
+        lso = True
+    else:
+        n_outputs = 2
+        lso = True
+
     ################
     # Starting log #
     ################
@@ -72,19 +96,6 @@ if __name__ == "__main__":
     ################
     # Loading data #
     ################
-
-    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
-    if args.clf_type == "subclf":
-        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-        n_subjects = len(os.listdir(data_path))
-        n_outputs = min(n_subjects, args.max_subj)
-        lso = False
-    if args.clf_type == "toneclf":
-        n_outputs = 3
-        lso = True
-    else:
-        n_outputs = 2
-        lso = True
 
     if args.datatype == "rest":
         dataset = RestDataset(
@@ -109,24 +120,27 @@ if __name__ == "__main__":
 
     dataset.load(args.save_path)
 
+    #####################
+    ### LOADING MODEL ###
+    #####################
+
     LOG.info(f"{args.clf_type} - Training model:")
-    name = f"{args.model_name}_{args.seed}_{args.sensors}"
-    suffixes = ""
-    if args.net_option == "custom_net":
-        if args.batchnorm:
-            suffixes += "_BN"
-        if args.maxpool != 0:
-            suffixes += f"_maxpool{args.maxpool}"
-
-        name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
-        name += suffixes
-
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
 
     LOG.info(my_model.name)
     LOG.info(my_model.net)
 
+    ######################
+    ### TRAINING MODEL ###
+    ######################
+
     my_model.train(dataset)
+
+    #####################
+    ### TESTING MODEL ###
+    #####################
+
     my_model.test(dataset)
+
     # LOG.info("Evaluating model:")
     # evaluate(fold, datasets, args.net_option, args=args)

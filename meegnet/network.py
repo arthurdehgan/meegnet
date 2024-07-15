@@ -44,6 +44,8 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
         return EEGNet(input_size, n_outputs)
     elif net_option == "vanPutNet":
         return vanPutNet(input_size, n_outputs)
+    else:
+        raise AttributeError(f"Bad network option: {net_option}")
 
 
 class Flatten(nn.Module):
@@ -461,7 +463,6 @@ class Model:
         max_epoch=None,
         model_path=None,
         num_workers=4,
-        load=False,
     ):
         train_accs = []
         valid_accs = []
@@ -492,10 +493,6 @@ class Model:
             shuffle=True,
             pin_memory=True,
         )
-
-        if load:
-            LOG.info("Loading previous network state...")
-            self.load(model_path)
 
         LOG.info("Starting Training with:")
         LOG.info(f"batch size: {batch_size}")
