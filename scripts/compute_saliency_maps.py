@@ -4,6 +4,7 @@ import toml
 import torch
 import numpy as np
 import pandas as pd
+from meegnet_functions import load_single_subject
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet.dataloaders import Dataset, RestDataset
@@ -20,31 +21,6 @@ logging.basicConfig(
     format="%(asctime)s %(message)s",
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
-
-
-def load_single_subject(sub, args):
-    if args.datatype == "rest":
-        dataset = RestDataset(
-            window=args.segment_length,
-            overlap=args.overlap,
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
-    else:
-        dataset = Dataset(
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
-    dataset.load(args.save_path, one_sub=sub)
-    return dataset
 
 
 def compute_saliency_maps(
@@ -164,6 +140,7 @@ if __name__ == "__main__":
     with open("default_values.toml", "r") as f:
         default_values = toml.load(f)
 
+    fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":
         assert (
             args.datatype != "rest"
@@ -202,6 +179,8 @@ if __name__ == "__main__":
 
     if args.log:
         log_name = f"saliencies_{args.model_name}_{args.seed}_{args.sensors}"
+        if fold is not None:
+            log_name += f"_fold{args.fold}"
         log_name += ".log"
         log_file = os.path.join(args.save_path, log_name)
         logging.basicConfig(filename=log_file, filemode="a")
@@ -269,9 +248,9 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
-    #####################################
-    ### LOADING NETWORK AND DATA INFO ###
-    #####################################
+    #####################
+    ### LOADING MODEL ###
+    #####################
 
     if args.model_path is None:
         model_path = args.save_path
@@ -284,6 +263,11 @@ if __name__ == "__main__":
 
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     my_model.from_pretrained()
+    # my_model.load()
+
+    ####################
+    ### LOADING DATA ###
+    ####################
 
     csv_file = os.path.join(args.save_path, f"participants_info.csv")
     dataframe = (
@@ -293,18 +277,12 @@ if __name__ == "__main__":
     )
     subj_list = dataframe["sub"]
 
-    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
-    if args.clf_type == "subclf":
-        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-        n_subjects = len(os.listdir(data_path))
-        n_outputs = min(n_subjects, args.max_subj)
-        lso = False
-    else:
-        n_outputs = 2
-        lso = True
+    #################
+    ### MAIN LOOP ###
+    #################
 
     for sub in subj_list:
-        dataset = load_single_subject(sub, args)
+        dataset = load_single_subject(sub, n_samples, lso, args)
         compute_saliency_maps(
             dataset,
             labels,
