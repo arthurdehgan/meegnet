@@ -6,11 +6,10 @@ import torch
 import cv2
 import pandas as pd
 from PIL import Image
+from meegnet_functions import load_single_subject
 import matplotlib.pyplot as plt
 from meegnet.parsing import parser, save_config
-from meegnet.utils import load_checkpoint, cuda_check
-from meegnet.network import create_net
-from meegnet.dataloaders import load_data
+from meegnet.network import Model
 from meegnet.viz import plot_masked_epoch
 import cv2
 
@@ -28,52 +27,29 @@ from pytorch_grad_cam import GradCAM
 # from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 # from pytorch_grad_cam.utils.image import show_cam_on_image
 
-DEVICE = cuda_check()
-
+LOG = logging.getLogger("meegnet")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
 
 if __name__ == "__main__":
+
+    ###############
+    ### PARSING ###
+    ###############
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
     with open("default_values.toml", "r") as f:
         default_values = toml.load(f)
 
-    ######################
-    ### LOGGING CONFIG ###
-    ######################
-
-    if args.log:
-        log_name = args.model_name
-        if args.fold != -1:
-            log_name += f"_fold{args.fold}"
-        log_name += "_saliency_computations.log"
-        logging.basicConfig(
-            filename=os.path.join(args.save_path, log_name),
-            filemode="a",
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
-    else:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
-
-    ###############################
-    ### EXTRACTING PARSER INFO ###
-    ###############################
-
+    fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":
-        labels = [
-            "visual",
-            "auditory1",
-            "auditory2",
-            "auditory3",
-        ]  # image is label 0 and sound label 1
-    else:
-        labels = []
+        assert (
+            args.datatype != "rest"
+        ), "datatype must be set to passive in order to run event classification"
 
     if args.feature == "bins":
         trial_length = default_values["TRIAL_LENGTH_BINS"]
@@ -82,23 +58,27 @@ if __name__ == "__main__":
     elif args.feature == "temporal":
         trial_length = default_values["TRIAL_LENGTH_TIME"]
 
+    if args.clf_type == "subclf":
+        trial_length = int(args.segment_length * args.sfreq)
+
     if args.sensors == "MAG":
         n_channels = default_values["N_CHANNELS_MAG"]
-        chan_index = [0]
     elif args.sensors == "GRAD":
         n_channels = default_values["N_CHANNELS_GRAD"]
-        chan_index = [1, 2]
     else:
         n_channels = default_values["N_CHANNELS_OTHER"]
-        chan_index = [0, 1, 2]
 
-    input_size = (n_channels // 102, 102, trial_length)
+    input_size = (
+        (1, n_channels, trial_length)
+        if args.flat
+        else (
+            n_channels // default_values["N_CHANNELS_MAG"],
+            default_values["N_CHANNELS_MAG"],
+            trial_length,
+        )
+    )
 
-    if args.fold != -1:
-        fold = args.fold + 1
-    else:
-        fold = 1
-    name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
+    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
         if args.batchnorm:
@@ -109,10 +89,28 @@ if __name__ == "__main__":
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
 
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
     if args.clf_type == "subclf":
-        n_outputs = min(643, args.max_subj)
+        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+        n_subjects = len(os.listdir(data_path))
+        n_outputs = min(n_subjects, args.max_subj)
+        lso = False
     else:
         n_outputs = 2
+        lso = True
+
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
+
+    if args.log:
+        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
+        if fold is not None:
+            log_name += f"_fold{args.fold}"
+        log_name += "_gradcam_computations.log"
+        log_file = os.path.join(args.save_path, log_name)
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
     ##############################
     ### PREPARING SAVE FOLDERS ###
@@ -122,20 +120,31 @@ if __name__ == "__main__":
     if not os.path.exists(viz_path):
         os.makedirs(viz_path)
 
-    #####################################
-    ### LOADING NETWORK AND DATA INFO ###
-    #####################################
+    #####################
+    ### LOADING MODEL ###
+    #####################
 
-    model_filepath = os.path.join(args.save_path, name + ".pt")
-    net = create_net(args.net_option, name, input_size, n_outputs, DEVICE, args)
-    _, net_state, _ = load_checkpoint(model_filepath)
-    net.load_state_dict(net_state)
+    if args.model_path is None:
+        model_path = args.save_path
+    else:
+        model_path = args.model_path
 
+    if not os.path.exists(model_path):
+        logging.info(f"{model_path} does not exist. Creating folders")
+        os.makedirs(model_path)
+
+    my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
+    my_model.from_pretrained()
+    net = my_model.net
+    # my_model.load()
+
+    ####################
+    ### LOADING DATA ###
+    ####################
+
+    csv_file = os.path.join(args.save_path, f"participants_info.csv")
     dataframe = (
-        pd.read_csv(
-            os.path.join(args.save_path, f"participants_info_{args.datatype}.csv"),
-            index_col=0,
-        )
+        pd.read_csv(csv_file, index_col=0)
         .sample(frac=1, random_state=args.seed)
         .reset_index(drop=True)[: args.max_subj]
     )
@@ -153,19 +162,8 @@ if __name__ == "__main__":
         all_cams = []
         all_trials = None
         for sub in subj_list:
-            data, targets = load_data(
-                dataframe.loc[dataframe["sub"] == sub],
-                args.save_path,
-                epoched=args.epoched,
-                seed=args.seed,
-                sfreq=args.sfreq,
-                chan_index=chan_index,
-                datatype=args.datatype,
-                clf_type=args.clf_type,
-                n_samples=None if args.n_samples == -1 else args.n_samples,
-            )
-            if data is None:
-                logging.info(f"data from {sub} is empty.")
+            data = load_single_subject(sub, n_samples, lso, args).data
+            if data == []:
                 continue
             input_tensor = data.to(torch.float)  # can be multiple images
 

@@ -14,6 +14,7 @@ logging.basicConfig(
 
 
 if __name__ == "__main__":
+
     ###############
     ### PARSING ###
     ###############
@@ -56,7 +57,7 @@ if __name__ == "__main__":
         )
     )
 
-    name = f"{args.model_name}_{args.seed}_{args.sensors}"
+    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
         if args.batchnorm:
@@ -77,9 +78,9 @@ if __name__ == "__main__":
         n_outputs = 2
         lso = True
 
-    ####################
-    ### Starting log ###
-    ####################
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
 
     if args.log:
         log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
@@ -91,7 +92,7 @@ if __name__ == "__main__":
         LOG.info(f"Starting logging in {log_file}")
 
     ####################
-    ### Loading data ###
+    ### LOADING DATA ###
     ####################
 
     if args.datatype == "rest":

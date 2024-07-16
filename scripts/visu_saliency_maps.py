@@ -9,6 +9,13 @@ import mne
 import seaborn as sns
 import warnings
 
+LOG = logging.getLogger("meegnet")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+)
+
 warnings.filterwarnings("ignore")
 
 
@@ -30,8 +37,18 @@ if __name__ == "__main__":
     mne.set_log_level(False)
 
     args = parser.parse_args()
-    logging.info(parser.format_values())
     save_config(vars(args), args.config)
+
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
+
+    if args.log:
+        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
+        log_name += "_gradcam_computations.log"
+        log_file = os.path.join(args.save_path, log_name)
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
     #################################################
     ### Create network name depending on the args ###
@@ -47,10 +64,6 @@ if __name__ == "__main__":
 
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
-
-    #########################################
-    ### Get saliencies found in data-path ###
-    #########################################
 
     visu_path = os.path.join(args.save_path, "visualizations")
     if not os.path.exists(visu_path):
@@ -74,6 +87,10 @@ if __name__ == "__main__":
     else:
         n_outputs = 2
         lso = True
+
+    #########################################
+    ### Get saliencies found in data-path ###
+    #########################################
 
     if args.datatype == "rest":
         dataset = RestDataset(
@@ -123,11 +140,24 @@ if __name__ == "__main__":
     ### LOGGING ###
     ###############
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(message)s",
-        datefmt="%m/%d/%Y %I:%M:%S %p",
-    )
+    if args.log:
+        log_name = args.model_name
+        if args.fold != -1:
+            log_name += f"_fold{args.fold}"
+        log_name += "_gradcam_computations.log"
+        logging.basicConfig(
+            filename=os.path.join(args.save_path, log_name),
+            filemode="a",
+            level=logging.INFO,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(message)s",
+            datefmt="%m/%d/%Y %I:%M:%S %p",
+        )
 
     logging.info(f"Generating figure for sensors: {sensors}")
     logging.info(f"For the {args.clf_type} classification")
