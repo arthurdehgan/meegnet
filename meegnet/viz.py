@@ -867,7 +867,7 @@ def plot_masked_epoch(data, mask, c1="white", c2="green", alpha=0.3, title: str 
         dim == 2
     ), f"Data is supposed to be a 2 dimension array, a {dim}-dimension array was given."
 
-    mask = (mask - mask.min()) / mask.ptp()
+    mask = (mask - mask.min()) / np.ptp(mask)
     fig, axes = plot_epoch(data, title)
     for i, ax in enumerate(axes):
         for j, x in enumerate(range(data.shape[1])):
