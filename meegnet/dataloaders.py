@@ -149,8 +149,9 @@ class Dataset:
         self.zscore = zscore
         self.n_samples = n_samples
         self.lso = lso
-        self.random_state = random_state
         self.sensors = self._select_sensors(sensortype)
+        self.random_state = random_state
+        self._reset_seed()
 
         self.data = []
         self.labels = []
@@ -158,6 +159,11 @@ class Dataset:
         self.subject_list = []
         self.targets = self.labels
         self.data_path = None
+
+    def _reset_seed(self):
+        np.random.seed(self.random_state)
+        random.seed(self.random_state)
+        torch.manual_seed(self.random_state)
 
     def _load_csv(self, data_path, csv_name="participants_info.csv"):
         csv_file = os.path.join(data_path, csv_name)
@@ -205,22 +211,28 @@ class Dataset:
         one_sub : _type_, optional
             _description_, by default None
         """
+
         assert self.data_path is not None or data_path is not None, "data_path must be set."
         if self.data_path is None:
             self.data_path = data_path
         dataframe = self.preload(self.data_path, csv_path)
+
         if one_sub is None:
             LOG.info(f"Found {len(self.subject_list)} subjects to load.")
         else:
-            LOG.info(f"Loading subject {one_sub}")
-            self.subject_list = [one_sub]
+            if one_sub == "random":
+                one_sub = self.random_sub()
+            elif one_sub in self.subject_list:
+                LOG.info(f"Loading subject {one_sub}")
+                self.subject_list = [one_sub]
+            else:
+                raise AttributeError(f"{one_sub} not a valid subject.")
+
         data_folder = f"downsampled_{self.sfreq}"
         numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):
-            np.random.seed(self.random_state)
-            random.seed(self.random_state)
-            torch.manual_seed(self.random_state)
-            sub = file.split("_")[0]
+            self._reset_seed()
+            sub = file.split("_")[1]  # The subject ID is placed second !
             if one_sub is not None:
                 if sub != one_sub:
                     continue
@@ -280,6 +292,9 @@ class Dataset:
         self.groups = torch.Tensor(self.groups)
 
         self.n_subjects = len(np.unique(self.groups))
+
+    def random_sub(self):
+        return np.random.choice(self.subject_list)
 
     def __len__(self):
         """Returns the length of the dataset (total number of data examples).
@@ -427,7 +442,7 @@ class Dataset:
     def set_labels(self, labels):
         if type(labels[0]) in (str, np.str_):
             labels = _string_to_int(labels)
-        self.labels = torch.Tensor(labels, dtype=torch.int32)
+        self.labels = torch.Tensor(labels)
 
 
 class RestDataset(Dataset):
