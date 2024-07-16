@@ -98,7 +98,7 @@ def compute_saliency_maps(
     n_saliencies = 0
     n_saliencies += sum([len(e) for e in target_saliencies[0]])
     n_saliencies += sum([len(e) for e in target_saliencies[1]])
-    logging.info(f"{n_saliencies} saliency maps computed for {sub}")
+    LOG.info(f"{n_saliencies} saliency maps computed for {sub}")
     for j, sal_type in enumerate(("pos", "neg")):
         if clf_type == "eventclf":
             for i, label in enumerate(labels):
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         model_path = args.model_path
 
     if not os.path.exists(model_path):
-        logging.info(f"{model_path} does not exist. Creating folders")
+        LOG.info(f"{model_path} does not exist. Creating folders")
         os.makedirs(model_path)
 
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
