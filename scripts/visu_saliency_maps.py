@@ -2,9 +2,10 @@ import os
 import logging
 from collections import defaultdict
 import numpy as np
+import toml
+import pandas as pd
 from meegnet.parsing import parser, save_config
 from meegnet.viz import generate_saliency_figure
-from meegnet.dataloaders import Dataset, RestDataset
 import mne
 import seaborn as sns
 import warnings
@@ -36,23 +37,30 @@ def get_saliency_data(saliency_dict, option):
 if __name__ == "__main__":
     mne.set_log_level(False)
 
+    ###############
+    ### PARSING ###
+    ###############
+
     args = parser.parse_args()
     save_config(vars(args), args.config)
+    with open("default_values.toml", "r") as f:
+        default_values = toml.load(f)
 
-    ######################
-    ### LOGGING CONFIG ###
-    ######################
+    fold = None if args.fold == -1 else int(args.fold)
+    if args.clf_type == "eventclf":
+        assert (
+            args.datatype != "rest"
+        ), "datatype must be set to passive in order to run event classification"
 
-    if args.log:
-        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
-        log_name += "_gradcam_computations.log"
-        log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(filename=log_file, filemode="a")
-        LOG.info(f"Starting logging in {log_file}")
+    if args.feature == "bins":
+        trial_length = default_values["TRIAL_LENGTH_BINS"]
+    elif args.feature == "bands":
+        trial_length = default_values["TRIAL_LENGTH_BANDS"]
+    elif args.feature == "temporal":
+        trial_length = default_values["TRIAL_LENGTH_TIME"]
 
-    #################################################
-    ### Create network name depending on the args ###
-    #################################################
+    if args.clf_type == "subclf":
+        trial_length = int(args.segment_length * args.sfreq)
 
     name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
@@ -64,14 +72,6 @@ if __name__ == "__main__":
 
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
-
-    visu_path = os.path.join(args.save_path, "visualizations")
-    if not os.path.exists(visu_path):
-        os.makedirs(visu_path)
-    sal_path = os.path.join(args.save_path, "saliency_maps", name)
-    if not os.path.exists(sal_path):
-        os.makedirs(sal_path)
-    file_list = os.listdir(sal_path)
 
     if args.clf_type == "eventclf":
         labels = ["visual", "auditory"]
@@ -88,36 +88,44 @@ if __name__ == "__main__":
         n_outputs = 2
         lso = True
 
-    #########################################
-    ### Get saliencies found in data-path ###
-    #########################################
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
 
-    if args.datatype == "rest":
-        dataset = RestDataset(
-            window=args.segment_length,
-            overlap=args.overlap,
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
-    else:
-        dataset = Dataset(
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
+    if args.log:
+        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
+        if fold is not None:
+            log_name += f"_fold{args.fold}"
+        log_name += "_gradcam_computations.log"
+        log_file = os.path.join(args.save_path, log_name)
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
-    dataset.preload(args.save_path)
-    subjects = dataset.subject_list
-    random_subject_idx = dataset.subject_list.index(dataset.random_sub())
+    ##############################
+    ### PREPARING SAVE FOLDERS ###
+    ##############################
 
-    all_saliencies = defaultdict(lambda: defaultdict(lambda: []))
+    visu_path = os.path.join(args.save_path, "visualizations")
+    if not os.path.exists(visu_path):
+        os.makedirs(visu_path)
+    sal_path = os.path.join(args.save_path, "saliency_maps", name)
+    if not os.path.exists(sal_path):
+        os.makedirs(sal_path)
+    file_list = os.listdir(sal_path)
+
+    ####################
+    ### LOADING DATA ###
+    ####################
+
+    csv_file = os.path.join(args.save_path, f"participants_info.csv")
+    dataframe = (
+        pd.read_csv(csv_file, index_col=0)
+        .sample(frac=1, random_state=args.seed)
+        .reset_index(drop=True)[: args.max_subj]
+    )
+    subj_list = dataframe["sub"]
+    np.random.seed(args.seed)
+    random_subject_idx = np.random.choice(np.arange(len(subj_list)))
 
     #########################
     ### HARD CODED VALUES ###
@@ -136,38 +144,17 @@ if __name__ == "__main__":
     # cmap = "inferno"
     # cmap = "seismic"
 
-    ###############
-    ### LOGGING ###
-    ###############
+    #################
+    ### MAIN LOOP ###
+    #################
 
-    if args.log:
-        log_name = args.model_name
-        if args.fold != -1:
-            log_name += f"_fold{args.fold}"
-        log_name += "_gradcam_computations.log"
-        logging.basicConfig(
-            filename=os.path.join(args.save_path, log_name),
-            filemode="a",
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
-    else:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s %(message)s",
-            datefmt="%m/%d/%Y %I:%M:%S %p",
-        )
+    all_saliencies = defaultdict(lambda: defaultdict(lambda: []))
 
-    logging.info(f"Generating figure for sensors: {sensors}")
-    logging.info(f"For the {args.clf_type} classification")
-
-    ######################################
-    ### LOAD DATA AND GENERATE FIGURES ###
-    ######################################
+    LOG.info(f"Generating figure for sensors: {sensors}")
+    LOG.info(f"For the {args.clf_type} classification")
 
     # label contains same information as sub for subclf but we only load files that have label == sub
-    for i, sub in enumerate(subjects):
+    for i, sub in enumerate(subj_list):
         sub_saliencies = defaultdict(lambda: {})
         for label in labels:
             if args.clf_type == "subclf":
