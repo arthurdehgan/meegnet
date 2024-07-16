@@ -1,3 +1,5 @@
+import threading
+import multiprocessing
 import os
 import logging
 import toml
@@ -22,29 +24,60 @@ logging.basicConfig(
 )
 
 
-def load_single_subject(sub, args):
-    if args.datatype == "rest":
-        dataset = RestDataset(
-            window=args.segment_length,
-            overlap=args.overlap,
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
+def produce_data(queue, sub, args, disk_semaphore):
+    with disk_semaphore:
+        if args.datatype == "rest":
+            dataset = RestDataset(
+                window=args.segment_length,
+                overlap=args.overlap,
+                sfreq=args.sfreq,
+                n_subjects=args.max_subj,
+                n_samples=n_samples,
+                sensortype=args.sensors,
+                lso=lso,
+                random_state=args.seed,
+            )
+        else:
+            dataset = Dataset(
+                sfreq=args.sfreq,
+                n_subjects=args.max_subj,
+                n_samples=n_samples,
+                sensortype=args.sensors,
+                lso=lso,
+                random_state=args.seed,
+            )
+        dataset.load(args.save_path, one_sub=sub)
+        if len(dataset) == 0:
+            logging.info(f"data from {sub} is empty.")
+            queue.put(tuple([None] * 2 + [0]))
+            return
+        else:
+            queue.put((dataset, sub, 1))
+            return
+
+
+def process_data(arguments):
+    queue, labels, sal_path, net, args = arguments
+    while True:
+        dataset, sub, stop = queue.get()
+        if stop is None:
+            break
+        if dataset is None:
+            continue
+        if len(dataset) == 0:
+            continue
+        compute_saliency_maps(
+            dataset,
+            labels,
+            sub,
+            sal_path,
+            net,
+            args.confidence,
+            args.w_size,
+            args.sfreq,
+            args.clf_type,
+            args.compute_psd,
         )
-    else:
-        dataset = Dataset(
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
-    dataset.load(args.save_path, one_sub=sub)
-    return dataset
 
 
 def compute_saliency_maps(
@@ -212,9 +245,14 @@ if __name__ == "__main__":
     ###############################
 
     if args.clf_type == "eventclf":
-        labels = ["visual", "auditory"]  # image is label 0 and sound label 1
+        labels = [
+            "visual",
+            "auditory",
+        ]  # image is label 0 and sound label 1
     elif args.clf_type == "subclf":
         labels = []
+    else:
+        labels = ["male", "female"]
 
     if args.feature == "bins":
         trial_length = default_values["TRIAL_LENGTH_BINS"]
@@ -303,17 +341,47 @@ if __name__ == "__main__":
         n_outputs = 2
         lso = True
 
+    #######################
+    ### PRODUCE CONSUME ###
+    #######################
+
+    # Setting start method to spawn for CUDA compatibility.
+    multiprocessing.set_start_method("spawn")
+    # Define the maximum number of threads that can read from the disk at once
+    MAX_DISK_READERS = 1
+    # Define the maximum size of the queue
+    MAX_QUEUE_SIZE = 12  # Adjust this value based on your memory constraints
+    NUM_CONSUMERS = 6
+
+    # Create a bounded queue with the maximum size
+    queue = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
+    # Create a semaphore with the maximum number of readers
+    disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
+
+    # Start the producer threads
+    threads = []
     for sub in subj_list:
-        dataset = load_single_subject(sub, args)
-        compute_saliency_maps(
-            dataset,
-            labels,
-            sub,
-            sal_path,
-            my_model.net,
-            args.confidence,
-            args.w_size,
-            args.sfreq,
-            args.clf_type,
-            args.compute_psd,
+        t = threading.Thread(
+            target=produce_data,
+            args=(queue, sub, args, disk_semaphore),
         )
+        t.start()
+        threads.append(t)
+
+    # Start the consumer processes
+    with multiprocessing.Pool(processes=NUM_CONSUMERS) as pool:
+        pool.map(
+            process_data,
+            [(queue, labels, sal_path, my_model.net, args)] * NUM_CONSUMERS,
+        )
+
+    # Wait for all producer threads to finish
+    for t in threads:
+        t.join()
+
+    # Signal the consumer processes to exit
+    for _ in range(NUM_CONSUMERS):
+        queue.put(tuple([None] * 3))
+
+    pool.close()
+    pool.join()

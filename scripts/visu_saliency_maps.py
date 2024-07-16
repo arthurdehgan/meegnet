@@ -4,6 +4,7 @@ from collections import defaultdict
 import numpy as np
 from meegnet.parsing import parser, save_config
 from meegnet.viz import generate_saliency_figure
+from meegnet.dataloaders import Dataset, RestDataset
 import mne
 import seaborn as sns
 import warnings
@@ -36,13 +37,8 @@ if __name__ == "__main__":
     ### Create network name depending on the args ###
     #################################################
 
-    if args.fold != -1:
-        fold = args.fold + 1
-    else:
-        fold = 1
-    name = f"{args.model_name}_{args.seed}_fold{fold}_{args.sensors}"
-
-    suffixes = args.clf_type
+    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
+    suffixes = ""
     if args.net_option == "custom_net":
         if args.batchnorm:
             suffixes += "_BN"
@@ -60,25 +56,49 @@ if __name__ == "__main__":
     if not os.path.exists(visu_path):
         os.makedirs(visu_path)
     sal_path = os.path.join(args.save_path, "saliency_maps", name)
+    if not os.path.exists(sal_path):
+        os.makedirs(sal_path)
     file_list = os.listdir(sal_path)
 
     if args.clf_type == "eventclf":
-        labels = ["visual", "auditory1", "auditory2", "auditory3"]
+        labels = ["visual", "auditory"]
     else:
         labels = []
 
-    subjects = np.unique(
-        [
-            file.split("_")[0]
-            for file in file_list
-            if set(file.split("_")).intersection(set(labels)) != set()
-        ]
-    )[: args.max_subj]
-    random_subject = np.random.randint(len(subjects))
-
-    # TODO not working
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
     if args.clf_type == "subclf":
-        labels = subjects
+        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+        n_subjects = len(os.listdir(data_path))
+        n_outputs = min(n_subjects, args.max_subj)
+        lso = False
+    else:
+        n_outputs = 2
+        lso = True
+
+    if args.datatype == "rest":
+        dataset = RestDataset(
+            window=args.segment_length,
+            overlap=args.overlap,
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=lso,
+            random_state=args.seed,
+        )
+    else:
+        dataset = Dataset(
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=lso,
+            random_state=args.seed,
+        )
+
+    dataset.preload(args.save_path)
+    subjects = dataset.subject_list
+    random_subject_idx = dataset.subject_list.index(dataset.random_sub())
 
     all_saliencies = defaultdict(lambda: defaultdict(lambda: []))
 
@@ -87,7 +107,7 @@ if __name__ == "__main__":
     #########################
 
     # TODO add those to a TOML file, either config or default_values
-    sensors = ["MAG"]  # , "PLANNAR1", "PLANNAR2"]
+    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
     cmap = "coolwarm"
     stim_tick = 75
     saliency_types = ("pos", "neg")
@@ -143,7 +163,6 @@ if __name__ == "__main__":
                     nofile = True
                     continue
                 if len(saliencies.shape) == 3:
-                    print(saliency_file)
                     saliencies = saliencies[np.newaxis, ...]  # If only one saliency in file
                 elif len(saliencies.shape) != 4:
                     nofile = True
@@ -157,14 +176,18 @@ if __name__ == "__main__":
 
         skip = False
         for option in saliency_options:
-            if i == random_subject:
+            if i == random_subject_idx:
                 data_dict = get_saliency_data(sub_saliencies, option)
                 for val in data_dict.values():
                     if val.size == 0:
                         skip = True
                         break
+                temp = {
+                    key: val[np.random.choice(np.arange(len(val)))]
+                    for key, val in data_dict.items()
+                }
                 out_path = generate_saliency_figure(
-                    {key: val[0] for key, val in data_dict.items()},
+                    temp,
                     info_path=args.raw_path,
                     save_path=visu_path,
                     suffix=f"{args.clf_type}_{sub}_single_trial_{option}",
@@ -189,13 +212,13 @@ if __name__ == "__main__":
                 )
                 logging.info(f"Figure generated: {out_path}")
         if skip:
-            random_subject += 1
+            random_subject_idx += 1
             continue
 
     for label in labels:
         for saliency_type in saliency_types:
             if type(all_saliencies[saliency_type][label]) == list:
-                all_saliencies[saliency_type][label] = np.concatenate(
+                all_saliencies[saliency_type][label] = np.array(
                     all_saliencies[saliency_type][label]
                 )
     for option in saliency_options:

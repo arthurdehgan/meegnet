@@ -687,7 +687,7 @@ def generate_saliency_figure(
     title: str = "",
     sensors: list = [""],
     clf_type="",
-    datatype="rest",
+    datatype="passive",
     sfreq=500,
     edge=50,
     cmap="coolwarm",
@@ -780,6 +780,7 @@ def generate_saliency_figure(
             n_sensors = grads.shape[0]
             vmax = grads.max()
             vmin = grads.min()
+            vlim = max(abs(vmax), abs(vmin))
             max_idx = np.argmax([avg_range(arr) for arr in grads.T])
             # max_idx = np.argmax(np.mean(grads, axis=0))
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
@@ -787,8 +788,8 @@ def generate_saliency_figure(
                 grads,
                 interpolation="nearest",
                 aspect=1,
-                vmin=vmin,
-                vmax=vmax,
+                vmin=-vlim,
+                vmax=vlim,
                 cmap=cmap,
             )
             axes[-1].spines["top"].set_visible(False)
@@ -829,7 +830,7 @@ def generate_saliency_figure(
                 info,
                 res=300,
                 cmap=cmap,
-                vlim=(vmin, vmax) if vmax > vmin else (None, None),
+                vlim=(-vlim, vlim),
                 show=False,
                 contours=0,
                 axes=axes[-1],
@@ -841,7 +842,7 @@ def generate_saliency_figure(
                     ax=axes[-1],
                     location="right",
                     shrink=0.9,
-                    ticks=(vmin, 0, vmax),
+                    ticks=(-vlim, 0, vlim),
                 )
                 axes[-1].axis("off")
 

@@ -36,6 +36,7 @@ MAX_DISK_READERS = 1
 # Create a semaphore with the maximum number of readers
 disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
 
+
 def bad_subj_found(sub: str, info: str, message: str, df_path: str):
     """
     Open, edits and saves the dataframe (bad_subj_df) with provided error info.
