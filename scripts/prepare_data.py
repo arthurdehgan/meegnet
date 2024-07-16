@@ -206,13 +206,12 @@ if __name__ == "__main__":
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 
-    ################
-    # Starting log #
-    ################
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
 
     if args.log:
         log_file = os.path.join(args.save_path, "prepare_data.log")
-        print(log_file)
         logging.basicConfig(filename=log_file, filemode="a")
         LOG.info(f"Starting logging in {log_file}")
 
