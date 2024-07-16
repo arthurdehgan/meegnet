@@ -7,7 +7,6 @@ import pandas as pd
 from meegnet_functions import load_single_subject
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
-from meegnet.dataloaders import Dataset, RestDataset
 from meegnet.viz import (
     get_positive_negative_saliency,
     compute_saliency_based_psd,
