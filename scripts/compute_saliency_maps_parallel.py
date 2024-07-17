@@ -1,8 +1,8 @@
 import threading
 import multiprocessing
 import os
+import configparser
 import logging
-import toml
 import torch
 import numpy as np
 import pandas as pd
@@ -194,8 +194,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
-    with open("default_values.toml", "r") as f:
-        default_values = toml.load(f)
+    default_values = configparser.ConfigParser()
+    default_values.read("default_values.ini")
+    default_values = default_values["config"]
 
     if args.clf_type == "eventclf":
         assert (
