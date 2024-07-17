@@ -28,7 +28,7 @@ if __name__ == "__main__":
     #########################
 
     LABELS = ["visual", "auditory"]  # image is label 0 and sound label 1
-    CHANNELS = ("GRAD", "GRAD2", "MAG")
+    CHANNELS = ("MAG", "GRAD", "GRAD2")
 
     ###############
     ### PARSING ###

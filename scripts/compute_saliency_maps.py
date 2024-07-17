@@ -4,7 +4,7 @@ import pandas as pd
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet.viz import compute_saliency_maps
-from meegnet_functions import load_single_subject, get_name, get_input_size
+from meegnet_functions import load_single_subject, get_name, get_input_size, prepare_logging
 
 
 LOG = logging.getLogger("meegnet")
@@ -53,13 +53,7 @@ if __name__ == "__main__":
     ######################
 
     if args.log:
-        log_name = f"saliencies_{args.model_name}_{args.seed}_{args.sensors}"
-        if fold is not None:
-            log_name += f"_fold{args.fold}"
-        log_name += ".log"
-        log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(filename=log_file, filemode="a")
-        LOG.info(f"Starting logging in {log_file}")
+        prepare_logging("saliencies", args, LOG, fold)
 
     ##############################
     ### PREPARING SAVE FOLDERS ###

@@ -8,7 +8,7 @@ This script assumes a copy of the cc700 and dataman folders to a data path parse
 through the argparser.
 
 example on how to run the script:
-python prepare_data.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
+python prepare_data_parallel.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
 """
 
 import os
@@ -19,10 +19,7 @@ import numpy as np
 import threading
 import multiprocessing
 from meegnet.parsing import parser, save_config
-import warnings
-
-mne.set_config("verbose", "warning")
-warnings.filterwarnings("ignore")
+from prepare_data import bad_subj_found
 
 LOG = logging.getLogger("meegnet")
 logging.basicConfig(
@@ -37,51 +34,14 @@ MAX_DISK_READERS = 1
 disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
 
 
-def bad_subj_found(sub: str, info: str, message: str, df_path: str):
-    """
-    Open, edits and saves the dataframe (bad_subj_df) with provided error info.
-
-    Parameters
-    ----------
-    sub : str
-        The subject identifier.
-    info : str
-        Information about the subject.
-    message : str
-        The log message to be logged.
-    df_path : str
-        The path to the CSV file where the DataFrame is stored.
-
-    Returns
-    -------
-    None
-    """
-    LOG.info(message)
-    row = [sub, info]
-    with open(df_path, "r") as f:
-        df = pd.read_csv(f, index_col=0)
-    df = df._append({key: val for key, val in zip(df.columns, row)}, ignore_index=True)
-    with open(df_path, "w") as f:
-        df.to_csv(f)
-
-
 def process_data(args):
     global disk_semaphore
     q, sfreq, datatype = args
-    print("process called!")
     while True:
-        print("----- IN THE LOOP -----")
-        print(q)
         data, filepath, stop = q.get()
-        print(q)
-        print(stop)
-        LOG.info(f"{filepath} received")
         if stop is None:
-            print("----- BROKE THE LOOP -----")
             break
         elif data is not None:
-            print("----- PROCESSING!! -----")
-            LOG.info(f"Processing {filepath}...")
             data = data.resample(sfreq=sfreq)
             data = np.array(
                 [
@@ -95,7 +55,6 @@ def process_data(args):
             np.save(filepath, data)
         else:
             continue
-    print("process done !")
 
 
 def load_data(
@@ -246,7 +205,6 @@ if __name__ == "__main__":
 
     if args.log:
         log_file = os.path.join(args.save_path, "prepare_data.log")
-        print(log_file)
         logging.basicConfig(filename=log_file, filemode="a")
         LOG.info(f"Starting logging in {log_file}")
 

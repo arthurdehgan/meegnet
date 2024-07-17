@@ -7,7 +7,7 @@ from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet.dataloaders import Dataset, RestDataset
 from meegnet.viz import compute_saliency_maps
-from meegnet_functions import get_input_size, get_name
+from meegnet_functions import get_input_size, get_name, prepare_logging
 
 
 LOG = logging.getLogger("meegnet")
@@ -80,20 +80,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     save_config(vars(args), args.config)
 
+    fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":
         assert (
             args.datatype != "rest"
         ), "datatype must be set to passive in order to run event classification"
 
     if args.clf_type == "eventclf":
-        labels = [
-            "visual",
-            "auditory",
-        ]  # image is label 0 and sound label 1
+        labels = ["visual", "auditory"]  # image is label 0 and sound label 1
     elif args.clf_type == "subclf":
         labels = []
-    else:
-        labels = ["male", "female"]
 
     input_size = get_input_size(args)
     name = get_name(args)
@@ -113,11 +109,7 @@ if __name__ == "__main__":
     ######################
 
     if args.log:
-        log_name = f"saliencies_{args.model_name}_{args.seed}_{args.sensors}"
-        log_name += ".log"
-        log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(filename=log_file, filemode="a")
-        LOG.info(f"Starting logging in {log_file}")
+        prepare_logging("saliencies", args, LOG, fold)
 
     ##############################
     ### PREPARING SAVE FOLDERS ###
@@ -132,9 +124,9 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
-    #####################################
-    ### LOADING NETWORK AND DATA INFO ###
-    #####################################
+    #####################
+    ### LOADING MODEL ###
+    #####################
 
     if args.model_path is None:
         model_path = args.save_path
@@ -142,11 +134,16 @@ if __name__ == "__main__":
         model_path = args.model_path
 
     if not os.path.exists(model_path):
-        logging.info(f"{model_path} does not exist. Creating folders")
+        LOG.info(f"{model_path} does not exist. Creating folders")
         os.makedirs(model_path)
 
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     my_model.from_pretrained()
+    # my_model.load()
+
+    ####################
+    ### LOADING DATA ###
+    ####################
 
     csv_file = os.path.join(args.save_path, f"participants_info.csv")
     dataframe = (
@@ -155,16 +152,6 @@ if __name__ == "__main__":
         .reset_index(drop=True)[: args.max_subj]
     )
     subj_list = dataframe["sub"]
-
-    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
-    if args.clf_type == "subclf":
-        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-        n_subjects = len(os.listdir(data_path))
-        n_outputs = min(n_subjects, args.max_subj)
-        lso = False
-    else:
-        n_outputs = 2
-        lso = True
 
     #######################
     ### PRODUCE CONSUME ###
