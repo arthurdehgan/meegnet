@@ -3,8 +3,8 @@ torch
 numpy
 scipy
 pandas
-toml
 scikit-learn
 configargparse
 torchvision
 huggingface_hub
+grad-cam

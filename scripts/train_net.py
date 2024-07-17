@@ -1,6 +1,6 @@
 import os
 import logging
-import toml
+import configparser
 from meegnet.dataloaders import Dataset, RestDataset
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
@@ -21,8 +21,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
-    with open("default_values.toml", "r") as f:
-        default_values = toml.load(f)
+    default_values = configparser.ConfigParser()
+    default_values.read("../default_values.ini")
+    default_values = default_values["config"]
 
     fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":

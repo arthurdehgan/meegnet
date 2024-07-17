@@ -16,10 +16,7 @@ import logging
 import mne
 import pandas as pd
 import numpy as np
-import threading
-import multiprocessing
 from meegnet.parsing import parser, save_config
-import warnings
 
 
 LOG = logging.getLogger("meegnet")

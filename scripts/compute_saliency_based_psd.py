@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import torch
 import os
-import toml
+import configparser
 import logging
 from meegnet.parsing import parser, save_config
 from meegnet.network import create_net
-from meegnet.misc_functions import compute_saliency_based_psd
+from meegnet_functions import compute_saliency_based_psd
 from meegnet.utils import load_checkpoint
 from meegnet.dataloaders import load_data
 
@@ -101,8 +101,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
-    with open("default_values.toml", "r") as f:
-        default_values = toml.load(f)
+    default_values = configparser.ConfigParser()
+    default_values.read("default_values.ini")
+    default_values = default_values["config"]
 
     ###############################
     ### EXTRACTING PARSER INFO ###
