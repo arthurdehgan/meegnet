@@ -1,17 +1,16 @@
 import os
-import configparser
 import logging
 import numpy as np
 import torch
 import cv2
 import pandas as pd
 from PIL import Image
-from meegnet_functions import load_single_subject
 import matplotlib.pyplot as plt
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet.viz import plot_masked_epoch
-import cv2
+from meegnet_functions import load_single_subject, prepare_logging, get_input_size, get_name
+
 
 # from pytorch_grad_cam import GuidedBackpropReLUModel
 from pytorch_grad_cam import GradCAM
@@ -42,9 +41,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
-    default_values = configparser.ConfigParser()
-    default_values.read("../default_values.ini")
-    default_values = default_values["config"]
 
     fold = None if args.fold == -1 else int(args.fold)
     if args.clf_type == "eventclf":
@@ -52,43 +48,8 @@ if __name__ == "__main__":
             args.datatype != "rest"
         ), "datatype must be set to passive in order to run event classification"
 
-    if args.feature == "bins":
-        trial_length = default_values["TRIAL_LENGTH_BINS"]
-    elif args.feature == "bands":
-        trial_length = default_values["TRIAL_LENGTH_BANDS"]
-    elif args.feature == "temporal":
-        trial_length = default_values["TRIAL_LENGTH_TIME"]
-
-    if args.clf_type == "subclf":
-        trial_length = int(args.segment_length * args.sfreq)
-
-    if args.sensors == "MAG":
-        n_channels = default_values["N_CHANNELS_MAG"]
-    elif args.sensors == "GRAD":
-        n_channels = default_values["N_CHANNELS_GRAD"]
-    else:
-        n_channels = default_values["N_CHANNELS_OTHER"]
-
-    input_size = (
-        (1, n_channels, trial_length)
-        if args.flat
-        else (
-            n_channels // default_values["N_CHANNELS_MAG"],
-            default_values["N_CHANNELS_MAG"],
-            trial_length,
-        )
-    )
-
-    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
-    suffixes = ""
-    if args.net_option == "custom_net":
-        if args.batchnorm:
-            suffixes += "_BN"
-        if args.maxpool != 0:
-            suffixes += f"_maxpool{args.maxpool}"
-
-        name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
-        name += suffixes
+    input_size = get_input_size(args)
+    name = get_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
     if args.clf_type == "subclf":
@@ -105,13 +66,7 @@ if __name__ == "__main__":
     ######################
 
     if args.log:
-        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
-        if fold is not None:
-            log_name += f"_fold{args.fold}"
-        log_name += "_gradcam_computations.log"
-        log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(filename=log_file, filemode="a")
-        LOG.info(f"Starting logging in {log_file}")
+        prepare_logging("gradcam_computations", args, LOG, fold)
 
     ##############################
     ### PREPARING SAVE FOLDERS ###
