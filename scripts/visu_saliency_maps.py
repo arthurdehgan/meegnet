@@ -61,6 +61,10 @@ if __name__ == "__main__":
 
     if args.clf_type == "subclf":
         trial_length = int(args.segment_length * args.sfreq)
+    if args.clf_type == "eventclf":
+        labels = ["visual", "auditory"]
+    else:
+        labels = []
 
     name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
@@ -72,11 +76,6 @@ if __name__ == "__main__":
 
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
-
-    if args.clf_type == "eventclf":
-        labels = ["visual", "auditory"]
-    else:
-        labels = []
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
     if args.clf_type == "subclf":
@@ -111,7 +110,6 @@ if __name__ == "__main__":
     sal_path = os.path.join(args.save_path, "saliency_maps", name)
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
-    file_list = os.listdir(sal_path)
 
     ####################
     ### LOADING DATA ###
