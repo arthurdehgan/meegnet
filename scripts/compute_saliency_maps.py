@@ -7,6 +7,7 @@ import pandas as pd
 from meegnet_functions import load_single_subject
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
+from meegnet.utils import cuda_check
 from meegnet.viz import (
     get_positive_negative_saliency,
     compute_saliency_based_psd,
@@ -35,12 +36,8 @@ def compute_saliency_maps(
     compute_psd=False,
 ):
 
-    if torch.cuda.is_available():
-        DEVICE = "cuda"
-    else:
-        DEVICE = "cpu"
-
-    GBP = GuidedBackpropReLUModel(net, device=DEVICE)
+    device = cuda_check()
+    GBP = GuidedBackpropReLUModel(net, device=device)
 
     # Load all trials and corresponding labels for a specific subject.
     data = dataset.data
@@ -57,7 +54,7 @@ def compute_saliency_maps(
         X = trial
         while len(X.shape) < 4:
             X = X[np.newaxis, :]
-        X = X.to(DEVICE)
+        X = X.to(device)
         # Compute predictions of the trained network, and confidence
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
@@ -67,7 +64,7 @@ def compute_saliency_maps(
         # If the confidence reaches desired treshhold (given by args.confidence)
         if confidence >= threshold and pred == label:
             # Compute Guided Back-propagation for given label projected on given data X
-            guided_grads = GBP(X.to(DEVICE), label)
+            guided_grads = GBP(X.to(device), label)
             guided_grads = np.rollaxis(guided_grads, 2, 0)
             # Compute saliencies
             pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
@@ -154,62 +151,17 @@ if __name__ == "__main__":
 
     if args.clf_type == "subclf":
         trial_length = int(args.segment_length * args.sfreq)
-
-    if args.sensors == "MAG":
-        n_channels = default_values["N_CHANNELS_MAG"]
-    elif args.sensors == "GRAD":
-        n_channels = default_values["N_CHANNELS_GRAD"]
-    else:
-        n_channels = default_values["N_CHANNELS_OTHER"]
-
-    input_size = (
-        (1, n_channels, trial_length)
-        if args.flat
-        else (
-            n_channels // default_values["N_CHANNELS_MAG"],
-            default_values["N_CHANNELS_MAG"],
-            trial_length,
-        )
-    )
-
-    ######################
-    ### LOGGING CONFIG ###
-    ######################
-
-    if args.log:
-        log_name = f"saliencies_{args.model_name}_{args.seed}_{args.sensors}"
-        if fold is not None:
-            log_name += f"_fold{args.fold}"
-        log_name += ".log"
-        log_file = os.path.join(args.save_path, log_name)
-        logging.basicConfig(filename=log_file, filemode="a")
-        LOG.info(f"Starting logging in {log_file}")
-
-    ###############################
-    ### TRANSLATING PARSER INFO ###
-    ###############################
-
     if args.clf_type == "eventclf":
         labels = ["visual", "auditory"]  # image is label 0 and sound label 1
     elif args.clf_type == "subclf":
         labels = []
 
-    if args.feature == "bins":
-        trial_length = default_values["TRIAL_LENGTH_BINS"]
-    elif args.feature == "bands":
-        trial_length = default_values["TRIAL_LENGTH_BANDS"]
-    elif args.feature == "temporal":
-        trial_length = default_values["TRIAL_LENGTH_TIME"]
-
     if args.sensors == "MAG":
         n_channels = default_values["N_CHANNELS_MAG"]
-        chan_index = [0]
     elif args.sensors == "GRAD":
         n_channels = default_values["N_CHANNELS_GRAD"]
-        chan_index = [1, 2]
     else:
         n_channels = default_values["N_CHANNELS_OTHER"]
-        chan_index = [0, 1, 2]
 
     input_size = (n_channels // 102, 102, trial_length)
 
@@ -233,6 +185,19 @@ if __name__ == "__main__":
     else:
         n_outputs = 2
         lso = True
+
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
+
+    if args.log:
+        log_name = f"saliencies_{args.model_name}_{args.seed}_{args.sensors}"
+        if fold is not None:
+            log_name += f"_fold{args.fold}"
+        log_name += ".log"
+        log_file = os.path.join(args.save_path, log_name)
+        logging.basicConfig(filename=log_file, filemode="a")
+        LOG.info(f"Starting logging in {log_file}")
 
     ##############################
     ### PREPARING SAVE FOLDERS ###
