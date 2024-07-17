@@ -199,7 +199,7 @@ class Dataset:
         self.subject_list = list(dataframe["sub"])
         return dataframe
 
-    def load(self, data_path=None, csv_path=None, one_sub=None):
+    def load(self, data_path=None, csv_path=None, one_sub=None, verbose=2):
         """Loads the data from the "downsamples_[sfreq]" folder in the data_path.
 
         Parameters
@@ -210,12 +210,21 @@ class Dataset:
             _description_, by default None
         one_sub : _type_, optional
             _description_, by default None
+        verbose : int, optional
+            The verbose level for logging, by default 2 will show all info.
         """
 
         assert self.data_path is not None or data_path is not None, "data_path must be set."
         if self.data_path is None:
             self.data_path = data_path
         dataframe = self.preload(self.data_path, csv_path)
+        match verbose:
+            case 0:
+                LOG.setLevel(logging.NOTSET)
+            case 1:
+                LOG.setLevel(logging.WARNING)
+            case 2:
+                LOG.setLevel(logging.INFO)
 
         if one_sub is None:
             LOG.info(f"Found {len(self.subject_list)} subjects to load.")

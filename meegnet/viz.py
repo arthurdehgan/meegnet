@@ -1,8 +1,9 @@
 import os
 import mne
-from mne.viz import plot_topomap
+import logging
 import copy
 import torch
+from mne.viz import plot_topomap
 from torch.autograd import Variable
 from torchvision import models
 import numpy as np
@@ -14,7 +15,80 @@ import matplotlib.cm as mpl_color_map
 from matplotlib.gridspec import GridSpec
 from collections.abc import Iterable
 from joblib import Parallel, delayed
-from meegnet.utils import compute_psd
+from meegnet.utils import compute_psd, cuda_check
+from pytorch_grad_cam import GuidedBackpropReLUModel
+
+LOG = logging.getLogger("meegnet")
+
+
+def compute_saliency_maps(
+    dataset,
+    labels,
+    sub,
+    sal_path,
+    net,
+    threshold,
+    clf_type="",
+):
+
+    device = cuda_check()
+    GBP = GuidedBackpropReLUModel(net, device=device)
+
+    # Load all trials and corresponding labels for a specific subject.
+    data = dataset.data
+    targets = dataset.labels
+    if clf_type == "eventclf":
+        target_saliencies = [[[], []], [[], []]]
+    else:
+        target_saliencies = [[], []]
+
+    # For each of those trial with associated label:
+    for trial, label in zip(data, targets):
+        X = trial
+        while len(X.shape) < 4:
+            X = X[np.newaxis, :]
+        X = X.to(device)
+        # Compute predictions of the trained network, and confidence
+        preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
+        pred = preds.argmax().item()
+        confidence = preds.max()
+        label = int(label)
+
+        # If the confidence reaches desired treshhold (given by args.confidence)
+        if confidence >= threshold and pred == label:
+            # Compute Guided Back-propagation for given label projected on given data X
+            guided_grads = GBP(X.to(device), label)
+            guided_grads = np.rollaxis(guided_grads, 2, 0)
+            # Compute saliencies
+            pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
+
+            # Depending on the task, add saliencies in lists
+            if clf_type == "eventclf":
+                target_saliencies[label][0].append(pos_saliency)
+                target_saliencies[label][1].append(neg_saliency)
+            else:
+                target_saliencies[0].append(pos_saliency)
+                target_saliencies[1].append(neg_saliency)
+    # With all saliencies computed, we save them in the specified save-path
+    n_saliencies = 0
+    n_saliencies += sum([len(e) for e in target_saliencies[0]])
+    n_saliencies += sum([len(e) for e in target_saliencies[1]])
+    LOG.info(f"{n_saliencies} saliency maps computed for {sub}")
+    for j, sal_type in enumerate(("pos", "neg")):
+        if clf_type == "eventclf":
+            for i, label in enumerate(labels):
+                sal_filepath = os.path.join(
+                    sal_path,
+                    f"{sub}_{labels[i]}_{sal_type}_sal_{threshold}confidence.npy",
+                )
+                np.save(sal_filepath, np.array(target_saliencies[i][j]))
+        else:
+            lab = "" if clf_type == "subclf" else f"_{labels[label]}"
+            sal_filepath = os.path.join(
+                sal_path,
+                f"{sub}{lab}_{sal_type}_sal_{threshold}confidence.npy",
+            )
+            np.save(sal_filepath, np.array(target_saliencies[j]))
 
 
 def convert_to_grayscale(im_as_arr):
@@ -825,7 +899,7 @@ def generate_saliency_figure(
                 data = gradmeans
             info = load_info(info_path, datatype)
 
-            im, _ = mne.viz.plot_topomap(
+            im, _ = plot_topomap(
                 data.ravel(),
                 info,
                 res=300,
