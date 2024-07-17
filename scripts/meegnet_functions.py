@@ -4,7 +4,7 @@ import logging
 import configparser
 
 
-def load_single_subject(sub, n_samples, lso, args):
+def load_single_subject(sub, n_samples, lso, args, verbose=2):
     if args.datatype == "rest":
         dataset = RestDataset(
             window=args.segment_length,
@@ -25,7 +25,7 @@ def load_single_subject(sub, n_samples, lso, args):
             lso=lso,
             random_state=args.seed,
         )
-    dataset.load(args.save_path, one_sub=sub, verbose=0)
+    dataset.load(args.save_path, one_sub=sub, verbose=verbose)
     return dataset
 
 
