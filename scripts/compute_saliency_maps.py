@@ -1,10 +1,9 @@
 import os
 import logging
-import numpy as np
 import pandas as pd
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
-from meegnet.utils import compute_saliency_maps
+from meegnet.viz import compute_saliency_maps
 from meegnet_functions import load_single_subject, get_name, get_input_size
 
 
@@ -117,8 +116,5 @@ if __name__ == "__main__":
             sal_path,
             my_model.net,
             args.confidence,
-            args.w_size,
-            args.sfreq,
             args.clf_type,
-            args.compute_psd,
         )

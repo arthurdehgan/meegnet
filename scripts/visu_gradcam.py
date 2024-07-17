@@ -118,7 +118,7 @@ if __name__ == "__main__":
         all_cams = []
         all_trials = None
         for sub in subj_list:
-            data = load_single_subject(sub, n_samples, lso, args).data
+            data = load_single_subject(sub, n_samples, lso, args, verbose=0).data
             if data == []:
                 continue
             input_tensor = data.to(torch.float)  # can be multiple images

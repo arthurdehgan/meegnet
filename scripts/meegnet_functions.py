@@ -25,7 +25,7 @@ def load_single_subject(sub, n_samples, lso, args):
             lso=lso,
             random_state=args.seed,
         )
-    dataset.load(args.save_path, one_sub=sub)
+    dataset.load(args.save_path, one_sub=sub, verbose=0)
     return dataset
 
 
@@ -45,28 +45,28 @@ def get_input_size(args):
     default_values = default_values["config"]
 
     if args.feature == "bins":
-        trial_length = default_values["TRIAL_LENGTH_BINS"]
+        trial_length = int(default_values["TRIAL_LENGTH_BINS"])
     elif args.feature == "bands":
-        trial_length = default_values["TRIAL_LENGTH_BANDS"]
+        trial_length = int(default_values["TRIAL_LENGTH_BANDS"])
     elif args.feature == "temporal":
-        trial_length = default_values["TRIAL_LENGTH_TIME"]
+        trial_length = int(default_values["TRIAL_LENGTH_TIME"])
 
     if args.clf_type == "subclf":
         trial_length = int(args.segment_length * args.sfreq)
 
     if args.sensors == "MAG":
-        n_channels = default_values["N_CHANNELS_MAG"]
+        n_channels = int(default_values["N_CHANNELS_MAG"])
     elif args.sensors == "GRAD":
-        n_channels = default_values["N_CHANNELS_GRAD"]
+        n_channels = int(default_values["N_CHANNELS_GRAD"])
     else:
-        n_channels = default_values["N_CHANNELS_OTHER"]
+        n_channels = int(default_values["N_CHANNELS_OTHER"])
 
     return (
         (1, n_channels, trial_length)
         if args.flat
         else (
-            n_channels // default_values["N_CHANNELS_MAG"],
-            default_values["N_CHANNELS_MAG"],
+            n_channels // int(default_values["N_CHANNELS_MAG"]),
+            int(default_values["N_CHANNELS_MAG"]),
             trial_length,
         )
     )
@@ -83,3 +83,5 @@ def get_name(args):
 
         name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
         name += suffixes
+
+    return name

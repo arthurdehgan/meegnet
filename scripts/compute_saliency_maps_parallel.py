@@ -2,13 +2,11 @@ import threading
 import multiprocessing
 import os
 import logging
-import torch
-import numpy as np
 import pandas as pd
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet.dataloaders import Dataset, RestDataset
-from meegnet.utils import compute_saliency_maps
+from meegnet.viz import compute_saliency_maps
 from meegnet_functions import get_input_size, get_name
 
 
@@ -69,10 +67,7 @@ def process_data(arguments):
             sal_path,
             net,
             args.confidence,
-            args.w_size,
-            args.sfreq,
             args.clf_type,
-            args.compute_psd,
         )
 
 
