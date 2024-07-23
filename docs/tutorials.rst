@@ -6,3 +6,4 @@ Tutorials
    
    meegnettuto
    preparedata
+   ../notebooks/visu_saliency
