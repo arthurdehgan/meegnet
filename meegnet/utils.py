@@ -9,6 +9,7 @@ from scipy.io import loadmat
 from scipy.signal import welch
 
 LOG = logging.getLogger("meegnet")
+mne.set_log_level(False)
 
 
 def extract_bands(data: np.array, f: list = None) -> np.array:
