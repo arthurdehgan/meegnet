@@ -447,8 +447,6 @@ class Model:
         self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
         self.results = defaultdict(lambda: 0)
         self.checkpoint = defaultdict(lambda: 0)
-        self.classif_weights = self.get_clf_weights()
-        self.feature_weights = self.get_feature_weights()
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -662,7 +660,7 @@ class Model:
         weights = []
         for layer in self.net.feature_extraction:
             if hasattr(layer, "weight"):
-                weights.append(layer.weight.detach().numpy())
+                weights.append(layer.weight.cpu().detach().numpy())
         return weights
 
     def get_clf_weights(self):
