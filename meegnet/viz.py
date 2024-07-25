@@ -19,6 +19,7 @@ from meegnet.utils import compute_psd, cuda_check
 from pytorch_grad_cam import GuidedBackpropReLUModel
 
 LOG = logging.getLogger("meegnet")
+mne.set_log_level(False)
 
 
 def compute_saliency_maps(
