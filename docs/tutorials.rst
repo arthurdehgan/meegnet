@@ -8,3 +8,4 @@ Tutorials
    preparedata
 
    visu_saliency
+   visu_filters
