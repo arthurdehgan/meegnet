@@ -8,7 +8,7 @@ import configparser
 import pandas as pd
 from meegnet.parsing import parser, save_config
 from meegnet.viz import generate_saliency_figure
-from meegnet_functions import prepare_logging, get_name
+from meegnet_functions import prepare_logging, get_name, load_info
 
 
 LOG = logging.getLogger("meegnet")
@@ -178,7 +178,7 @@ if __name__ == "__main__":
                 }
                 out_path = generate_saliency_figure(
                     temp,
-                    info_path=args.raw_path,
+                    info=load_info(),
                     save_path=visu_path,
                     suffix=f"{args.clf_type}_{sub}_single_trial_{option}",
                     sensors=sensors,
@@ -191,7 +191,7 @@ if __name__ == "__main__":
                 temp = {key: np.mean(val, axis=0) for key, val in data_dict.items()}
                 out_path = generate_saliency_figure(
                     temp,
-                    info_path=args.raw_path,
+                    info=load_info(),
                     save_path=visu_path,
                     suffix=f"{args.clf_type}_{sub}_all_trials_{option}",
                     sensors=sensors,
@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
         out_path = generate_saliency_figure(
             final_dict,
-            info_path=args.raw_path,
+            info=load_info(),
             save_path=visu_path,
             suffix=f"{args.clf_type}_{option}",
             sensors=sensors,

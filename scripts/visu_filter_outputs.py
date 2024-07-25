@@ -9,8 +9,7 @@ import logging
 from mne.viz import plot_topomap
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
-from meegnet.viz import load_info
-from meegnet_functions import load_single_subject, prepare_logging, get_name, get_input_size
+from meegnet_functions import load_single_subject, prepare_logging, get_name, get_input_size, load_info
 
 
 LOG = logging.getLogger("meegnet")
@@ -98,7 +97,7 @@ if __name__ == "__main__":
     ### Genrating feature importance topomaps ###
     #############################################
 
-    info = load_info(args.raw_path, args.datatype)
+    info = load_info()
 
     plt.figure(figsize=(20, 17))
     for i, filtr in enumerate(model_weights[0]):

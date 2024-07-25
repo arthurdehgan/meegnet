@@ -3,6 +3,9 @@ import os
 import logging
 import configparser
 
+def load_info():
+    return np.load("../camcan_sensor_locations.npy", allow_pickle=True).tolist()
+
 
 def load_single_subject(sub, n_samples, lso, args, verbose=2):
     if args.datatype == "rest":
