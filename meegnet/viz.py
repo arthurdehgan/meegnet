@@ -756,7 +756,7 @@ def _unit_test_avg_range():
 
 def generate_saliency_figure(
     saliencies: dict,
-    info_path: str,
+    info, 
     save_path: str = "",
     suffix: str = "",
     title: str = "",
@@ -901,7 +901,6 @@ def generate_saliency_figure(
                 data = grads[:, max_idx]
             else:
                 data = gradmeans
-            info = load_info(info_path, datatype)
 
             im, _ = plot_topomap(
                 data.ravel(),
@@ -992,27 +991,3 @@ def plot_epoch(data, title: str = None):
     # plt.savefig(out_path, dpi=300)
     # return out_path
     return fig, axes
-
-
-def load_info(raw_path, datatype):
-    # Chargement des données de potition des capteurs:
-    if raw_path is not None:
-        camcan_path = os.path.join(
-            raw_path,
-            "cc700/meg/pipeline/release005/BIDSsep/",
-            f"derivatives_{datatype}",
-            "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
-        )
-        subjects = os.listdir(camcan_path)
-        subj_path = os.path.join(camcan_path, subjects[0])
-        for file in os.listdir(subj_path):
-            if file.endswith(".fif"):
-                raw = mne.io.read_raw_fif(os.path.join(subj_path, file), preload=False)
-                break
-        return raw.pick_types(meg="mag").info
-    else:
-        sample_data_folder = mne.datasets.sample.data_path()
-        sample_data_raw_file = os.path.join(sample_data_folder, "MEG", "sample", "sample_audvis_filt-0-40_raw.fif")
-        raw = mne.io.read_raw_fif(sample_data_raw_file)
-        return raw.pick_types(meg="mag").info
-
