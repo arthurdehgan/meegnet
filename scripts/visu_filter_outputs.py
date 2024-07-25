@@ -91,7 +91,7 @@ if __name__ == "__main__":
     my_model.from_pretrained()
     # my_model.load()
 
-    model_weights = my_model.feature_weights
+    model_weights = my_model.get_feature_weights()
 
     #############################################
     ### Genrating feature importance topomaps ###
