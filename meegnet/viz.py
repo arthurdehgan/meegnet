@@ -766,6 +766,7 @@ def generate_saliency_figure(
     edge=50,
     cmap="coolwarm",
     stim_tick=75,
+    show=False,
 ):
     """
     Generates a figure visualizing saliency maps for MEG data.
@@ -798,6 +799,8 @@ def generate_saliency_figure(
         Colormap to use for displaying the topo- and saliency maps. Default is "coolwarm".
     stim_tick : int, optional
         Tick position for the stimulus event in the time axis. Default is  75.
+    show : bool, optional
+        Wether to show the figure or not. Useful for ipynb.
 
     Returns
     -------
@@ -897,10 +900,7 @@ def generate_saliency_figure(
                 data = grads[:, max_idx]
             else:
                 data = gradmeans
-            if info is not None:
-                info = load_info(info_path, datatype)
-            else:
-                info = load_info
+            info = load_info(info_path, datatype)
 
             im, _ = plot_topomap(
                 data.ravel(),
@@ -926,6 +926,8 @@ def generate_saliency_figure(
     out_path = os.path.join(save_path, f"{suffix}saliencies.png")
     # plt.tight_layout()
     plt.savefig(out_path, dpi=300)
+    if show:
+        plt.show()
     plt.close()
     return out_path
 
@@ -993,7 +995,7 @@ def plot_epoch(data, title: str = None):
 
 def load_info(raw_path, datatype):
     # Chargement des données de potition des capteurs:
-    if row_path is not None:
+    if raw_path is not None:
         camcan_path = os.path.join(
             raw_path,
             "cc700/meg/pipeline/release005/BIDSsep/",
