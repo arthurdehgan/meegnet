@@ -136,13 +136,13 @@ class Dataset:
 
     def __init__(
         self,
-        sfreq=500,
-        n_subjects=None,
-        zscore=True,
-        n_samples=None,
-        sensortype=None,
-        lso=False,
-        random_state=0,
+        sfreq: float = 500,
+        n_subjects: int = None,
+        zscore: bool = True,
+        n_samples: int = None,
+        sensortype: str = None,
+        lso: bool = False,
+        random_state: int = 0,
     ):
         self.sfreq = sfreq
         self.n_subjects = n_subjects
@@ -174,20 +174,20 @@ class Dataset:
         )
         return participants_df
 
-    def preload(self, data_path, csv_path=None):
+    def preload(self, data_path: str, csv_path=None):
         """loads the subject list from a csv file (participants_info.csv in the data_folder by default).
 
         Parameters
         ----------
-        data_path :
-            _description_
-        csv_path : _type_, optional
-            _description_, by default None
+        data_path : str of path-like
+            The path of the folder containing the csv fie describing the dataset
+        csv_path : str, optional
+            The path to the csv file, is set to None, will use default "participants_info.csv", by default None
 
         Returns
         -------
-        _type_
-            _description_
+        pandas.DataFrame
+            The dataframe containing participants informations
         """
 
         if csv_path is not None and os.path.exists(csv_path):
@@ -199,17 +199,23 @@ class Dataset:
         self.subject_list = list(dataframe["sub"])
         return dataframe
 
-    def load(self, data_path=None, csv_path=None, one_sub=None, verbose=2):
+    def load(
+        self,
+        data_path: str = None,
+        csv_path: str = None,
+        one_sub: str = None,
+        verbose: int = 2,
+    ):
         """Loads the data from the "downsamples_[sfreq]" folder in the data_path.
 
         Parameters
         ----------
-        data_path : _type_, optional
-            _description_, by default None
-        csv_path : _type_, optional
-            _description_, by default None
-        one_sub : _type_, optional
-            _description_, by default None
+        data_path : str or path-like, optional
+            The path to the data. If set to None, will use self.data_path, by default None
+        csv_path : str or path-like, optional
+            The path to the csv file. If set to None, will use default "participants_info.csv", by default None
+        one_sub : str, optional
+            The subject ID corresponding to the sub column of the participants_info, by default None. If "random" will select a random subject
         verbose : int, optional
             The verbose level for logging, by default 2 will show all info.
         """
@@ -217,7 +223,11 @@ class Dataset:
         assert self.data_path is not None or data_path is not None, "data_path must be set."
         if self.data_path is None:
             self.data_path = data_path
+
+        # Load participants info first
         dataframe = self.preload(self.data_path, csv_path)
+
+        # update logging verbosity
         match verbose:
             case 0:
                 LOG.setLevel(logging.NOTSET)
@@ -226,9 +236,10 @@ class Dataset:
             case 2:
                 LOG.setLevel(logging.INFO)
 
+        # Load all subjects by default
         if one_sub is None:
             LOG.info(f"Found {len(self.subject_list)} subjects to load.")
-        else:
+        else:  # else load that one subject
             if one_sub == "random":
                 one_sub = self.random_sub()
             elif one_sub in self.subject_list:
@@ -237,21 +248,23 @@ class Dataset:
             else:
                 raise AttributeError(f"{one_sub} not a valid subject.")
 
+        # get paths
         data_folder = f"downsampled_{self.sfreq}"
         numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):
             self._reset_seed()
-            sub = file.split("_")[1]  # The subject ID is placed second !
+            sub = file.split("_")[1]  # The subject ID is placed second in the filename
             if one_sub is not None:
                 if sub != one_sub:
-                    continue
+                    continue  # skip for loop till we get to our one subject
             if sub in self.subject_list:
                 row = dataframe.loc[dataframe["sub"] == sub]
                 sub_data = self._load_sub(os.path.join(numpy_filepath, file))
                 if sub_data is None:
-                    continue
+                    continue  # skip subject if there are no data in the loaded file
                 if self.sensors is not None:
                     sub_data = sub_data[:, self.sensors, :, :]
+                # Get label / labels from the dataframe:
                 labels = list(map(strip_string, row["label"].item().split(", ")))
                 if len(labels) == 1:
                     if labels[0] in self.subject_list:
@@ -282,6 +295,7 @@ class Dataset:
                 self.labels.append(np.array(labels))
                 self.groups += [sub] * len(labels)
 
+        # Transform data to the correct torch formats with proper types
         if len(self) == 0:
             return
         elif len(self) == 1:
@@ -306,28 +320,11 @@ class Dataset:
         return np.random.choice(self.subject_list)
 
     def __len__(self):
-        """Returns the length of the dataset (total number of data examples).
-
-        Returns
-        -------
-        _type_
-            _description_
-        """
+        """Returns the length of the dataset (total number of data examples)."""
         return len(self.data)
 
-    def _load_sub(self, filepath):
-        """Loads a subject's data.
-
-        Parameters
-        ----------
-        filepath : _type_
-            _description_
-
-        Returns
-        -------
-        _type_
-            _description_
-        """
+    def _load_sub(self, filepath: str):
+        """Loads a subject's data."""
         try:
             data = np.load(filepath)
         except IOError:
@@ -347,8 +344,8 @@ class Dataset:
 
         Returns
         -------
-        _type_
-            _description_
+        list
+            list of sensor indices according to the prepare_data tutorial
         """
         if sensortype == "MAG":
             return [0]
@@ -362,17 +359,7 @@ class Dataset:
             return None
 
     def _assert_sizes(self, train_size, valid_size, test_size=None):
-        """Asserts that the sum of the data ratios is equal to 1.
-
-        Parameters
-        ----------
-        train_size : _type_
-            _description_
-        valid_size : _type_
-            _description_
-        test_size : _type_, optional
-            _description_, by default None
-        """
+        """Asserts that the sum of the data ratios is equal to 1."""
         if test_size is None:
             test_size = 0
         assert (
@@ -380,20 +367,7 @@ class Dataset:
         ), "sum of data ratios must be equal to 1"
 
     def _within_subject_split(self, sizes, generator):
-        """Splits the data within each subject using the specified sizes and generator.
-
-        Parameters
-        ----------
-        sizes : _type_
-            _description_
-        generator : _type_
-            _description_
-
-        Returns
-        -------
-        _type_
-            _description_
-        """
+        """Splits the data within each subject using the specified sizes and generator."""
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
         for index, group in enumerate(self.groups):
@@ -406,22 +380,22 @@ class Dataset:
         # )
         return (sum([list(index[i]) for index in indexes], []) for i in range(3))
 
-    def data_split(self, train_size, valid_size, test_size=None):
+    def data_split(self, train_size: float, valid_size: float, test_size: float = None):
         """Splits the data into training, validation, and test sets based on the specified sizes and stratification (if desired).
 
         Parameters
         ----------
-        train_size : _type_
-            _description_
-        valid_size : _type_
-            _description_
-        test_size : _type_, optional
-            _description_, by default None
+        train_size : float
+            Size of the train set in %
+        valid_size : float
+            Size of the validation set in %
+        test_size : float, optional
+            Size of the test set in %, by default None
 
         Returns
         -------
-        _type_
-            _description_
+        tuples
+            The indices for the splits
         """
         # TODO add stratification for the data splits
         self._assert_sizes(train_size, valid_size, test_size)
@@ -434,18 +408,7 @@ class Dataset:
             )
 
     def torchDataset(self, index):
-        """Returns a Torch dataset instance of the torch Dataset class for the given index.
-
-        Parameters
-        ----------
-        index : _type_
-            _description_
-
-        Returns
-        -------
-        _type_
-            _description_
-        """
+        """Returns a Torch dataset instance of the torch Dataset class for the given index."""
         return torch.utils.data.TensorDataset(self.data[index], self.labels[index])
 
     def set_labels(self, labels):
