@@ -9,3 +9,4 @@ Tutorials
 
    visu_saliency
    visu_filters
+   visu_gradcam
