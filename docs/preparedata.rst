@@ -1,12 +1,12 @@
 Prepare data Tutorial:
 ======================
 
-The goal of this tutorial is to guide te user through the steps on how to get your dataset ready for the meegnet library. In order for the dataset class to work flawlessly, only two major elements are necessary. The first one is the data folder that will be in a folder inside the dataset path. The second one is a csv file that contains the information about the labels for each subject matrix data.
+The goal of this tutorial is to guide the user through the steps on how to get your dataset ready for the meegnet library. In order for the dataset class to work flawlessly, only two major elements are necessary. The first one is the data folder that will be in a folder inside the dataset path. The second one is a csv file that contains the information about the labels for each subject matrix data.
 
 The data folder
 ---------------
 
-The data folder *must* be named:
+The data folder *MUST* be named:
 
 .. code-block:: bash
     
