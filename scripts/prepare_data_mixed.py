@@ -8,9 +8,9 @@ This script assumes a copy of the cc700 and dataman folders to a data path parse
 through the argparser.
 
 example on how to run the script:
-python prepare_data.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
+python prepare_data_mixed.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
 
-This script (prepare_data_mixed) will look for passive oddball data as well as resting-state data in order to 
+This script (prepare_data_mixed) will look for passive oddball data as well as resting-state data in order to
 create a mixed Dataset.
 """
 
@@ -58,7 +58,12 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
         df.to_csv(f)
 
 
-def process_data(data, sfreq, datatype):
+def process_data(data, sfreq, datatype, n_epochs=None):
+    # TODO HARD-CODED = bad !!
+    length = 400
+    ignore = 30  # to ignore the first 30s of resting-state signals
+    # TODO end ugly hard-coded values
+
     if data is not None:
         data = data.resample(sfreq=sfreq)
         data = np.array(
@@ -68,43 +73,24 @@ def process_data(data, sfreq, datatype):
                 data.get_data(picks="planar2"),
             ]
         )
+        # Ugly but, this means that we will select n_epochs trials only when data is not passive
         if datatype == "passive":
             data = data.swapaxes(0, 1)
+        elif n_epochs is not None:
+            # Generating fake epochs from continuous data like resting-state:
+            rest_indexes = range(ignore * length, data.shape[-1] - length, length)
+            random_indexes = np.random.choice(rest_indexes, n_epochs, replace=False)
+            data = np.array([data[:, :, i : i + length] for i in random_indexes])
+        print(data.shape)
     return data
 
 
-def load_data(
+def load_and_process(
     sub_folder: str,
+    sfreq: int,
     data_path: str,
     save_path: str,
-    datatype: str = "rest",
-    epoched: bool = False,
 ):
-    if datatype == "rest":
-        assert (
-            not epoched
-        ), "Can't load epoched resting state data as there are no events for it"
-    row = None
-
-    data_filepath = os.path.join(
-        data_path,
-        "cc700/meg/pipeline/release005/BIDSsep/",
-        f"derivatives_{datatype}",
-        "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
-    )
-    user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
-    source_csv_path = os.path.join(
-        data_path,
-        f"dataman/useraccess/processed/{user}/standard_data.csv",
-    )
-    with open(source_csv_path, "r") as f:
-        df = pd.read_csv(f)
-
-    fif_file = ""
-    file_list = os.listdir(os.path.join(data_filepath, sub_folder))
-    while not fif_file.endswith(".fif"):
-        fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
-
     bad_csv_path = os.path.join(save_path, f"bad_participants_info.csv")
     if os.path.exists(bad_csv_path):
         with open(bad_csv_path, "r") as f:
@@ -115,9 +101,7 @@ def load_data(
             bad_subs_df.to_csv(f)
 
     good_csv_path = os.path.join(save_path, f"participants_info.csv")
-    columns = ["sub", "age", "label", "hand", "Coil", "MT_TR"]
-    if datatype != "rest":
-        columns.append("event_labels")
+    columns = ["sub", "age", "label", "hand", "Coil", "MT_TR", "event_labels"]
     if os.path.exists(good_csv_path):
         with open(good_csv_path, "r") as f:
             good_subs_df = pd.read_csv(f, index_col=0)
@@ -126,58 +110,87 @@ def load_data(
         with open(good_csv_path, "w") as f:
             good_subs_df.to_csv(f)
 
+    sub = sub_folder.split("-")[1]
     if sub in bad_subs_df["sub"].tolist():
-        return None, None
+        return None
     elif sub in good_subs_df["sub"].tolist() and os.path.exists(filepath):
-        return None, None
+        return None
 
-    raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
-    bads = raw.info["bads"]
-    if bads == []:
-        if epoched and datatype in ("passive", "smt"):  # datatype != "rest"
-            try:
-                events = mne.find_events(raw)
-            except ValueError as e:
-                bad_subj_found(
-                    sub=sub,
-                    info="wrong event timings",
-                    message=f"{sub} could not be used because of {e}",
-                    df_path=bad_csv_path,
-                )
-                return None, None
-            unique_events = set(events[:, -1])
-            if unique_events == {6, 7, 8, 9}:
-                event_dict = {
-                    6: "auditory1",
-                    7: "auditory2",
-                    8: "auditory3",
-                    9: "visual",
-                }
-                labels = [event_dict[event] for event in events[:, -1]]
-            else:
-                bad_subj_found(
-                    sub=sub,
-                    info=f"wrong event found: {unique_events}",
-                    message=f"a different event has been found in {sub}: {unique_events}",
-                    df_path=bad_csv_path,
-                )
-                return None, None
-            data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
-        else:
-            data = raw
-
-        row = df[df["CCID"] == sub].values.tolist()[0]
-        if datatype in ("passive", "smt"):
-            row.append(labels)
-    else:
-        bad_subj_found(
-            sub=sub,
-            info="bad channels",
-            message=f"{sub} was dropped because of bad channels {bads}",
-            df_path=bad_csv_path,
+    datas = []
+    # Important : we start with passive because we will match number of epochs from passive to rest
+    for datatype in ("passive", "rest"):
+        row = None
+        data_filepath = os.path.join(
+            data_path,
+            "cc700/meg/pipeline/release005/BIDSsep/",
+            f"derivatives_{datatype}",
+            "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
         )
-        return None, None
+        user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
+        source_csv_path = os.path.join(
+            data_path,
+            f"dataman/useraccess/processed/{user}/standard_data.csv",
+        )
+        with open(source_csv_path, "r") as f:
+            df = pd.read_csv(f)
 
+        fif_file = ""
+        file_list = os.listdir(os.path.join(data_filepath, sub_folder))
+        while not fif_file.endswith(".fif"):
+            fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
+
+        raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
+        bads = raw.info["bads"]
+        if bads == []:
+            if datatype in ("passive", "smt"):  # datatype != "rest"
+                try:
+                    events = mne.find_events(raw)
+                except ValueError as e:
+                    bad_subj_found(
+                        sub=sub,
+                        info="wrong event timings",
+                        message=f"{sub} could not be used because of {e}",
+                        df_path=bad_csv_path,
+                    )
+                    return
+                unique_events = set(events[:, -1])
+                if unique_events == {6, 7, 8, 9}:
+                    event_dict = {
+                        6: "auditory1",
+                        7: "auditory2",
+                        8: "auditory3",
+                        9: "visual",
+                    }
+                    labels = [event_dict[event] for event in events[:, -1]]
+                else:
+                    bad_subj_found(
+                        sub=sub,
+                        info=f"wrong event found: {unique_events}",
+                        message=f"a different event has been found in {sub}: {unique_events}",
+                        df_path=bad_csv_path,
+                    )
+                    return
+                data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
+            else:
+                data = raw
+
+            # doing this, we match the number of resting-state pseudo-epochs to the number of passive epochs:
+            if datatype in ("passive", "smt"):
+                n_epochs = len(labels)
+            # send n_epochs to the function in order to select trials when using resting-state data
+            datas.append(process_data(data, sfreq, datatype, n_epochs))
+        else:
+            bad_subj_found(
+                sub=sub,
+                info="bad channels",
+                message=f"{sub} was dropped because of bad channels {bads}",
+                df_path=bad_csv_path,
+            )
+            return
+
+    row = df[df["CCID"] == sub].values.tolist()[0]
+    rest_labels = ["rest"] * n_epochs
+    row.append(labels + rest_labels)
     if not sub in good_subs_df["sub"].tolist():
         good_subs_df = good_subs_df._append(
             {key: val for key, val in zip(good_subs_df.columns, row)},
@@ -185,7 +198,7 @@ def load_data(
         )
         with open(good_csv_path, "w") as f:
             good_subs_df.to_csv(f)
-    return data, filepath
+    return np.concatenate(datas, axis=0)
 
 
 if __name__ == "__main__":
@@ -231,25 +244,19 @@ if __name__ == "__main__":
         f"derivatives_{args.datatype}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
-    subj_count = len(os.listdir(data_filepath))
 
     ##################################
     ### LOADING AND PREPARING DATA ###
     ##################################
 
-    length = 400
-    ignore = 30  # to ignore the first 30s of resting-state signals
-
+    np.random.seed(args.seed)
     for sub in os.listdir(data_filepath):
-        data = load_data(sub, args.raw_path, args.save_path, "passive", args.epoched)
-        data = process_data(data, filepath, args.sfreq, "passive")
-        a = load_data(sub, args.raw_path, args.save_path, "rest", args.epoched)
-        a = process_data(data, filepath, args.sfreq, "rest")
-        for i in range(ignore * length, data.shape[-1] - length, length):
-            data = np.vstack((data, a[i : i + length][np.newaxis, ...]))
+        data = load_and_process(sub, args.sfreq, args.raw_path, args.save_path)
+        if data is None:
+            continue
 
         sub = sub.split("-")[1]
-        filename = f"mixed_{sub}_epoched.npy"
+        filename = f"{sub}_epoched_mixed.npy"
         out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
         if not os.path.exists(out_path):
             os.makedirs(out_path)
