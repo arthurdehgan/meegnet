@@ -105,7 +105,7 @@ if __name__ == "__main__":
     #########################
 
     # TODO add those to a TOML file, either config or default_values
-    sensors = ["MAG", "PLANNAR1", "PLANNAR2"]
+    sensors = ["MAG", "PLANAR1", "PLANAR2"]
     cmap = "coolwarm"
     stim_tick = 75
     saliency_types = ("pos", "neg")
