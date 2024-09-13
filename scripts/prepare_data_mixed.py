@@ -111,10 +111,15 @@ def load_and_process(
             good_subs_df.to_csv(f)
 
     sub = sub_folder.split("-")[1]
+    filename = f"{sub}_epoched_mixed.npy"
+    out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    filepath = os.path.join(out_path, filename)
     if sub in bad_subs_df["sub"].tolist():
-        return None
+        return None, None
     elif sub in good_subs_df["sub"].tolist() and os.path.exists(filepath):
-        return None
+        return None, None
 
     datas = []
     # Important : we start with passive because we will match number of epochs from passive to rest
@@ -135,9 +140,19 @@ def load_and_process(
             df = pd.read_csv(f)
 
         fif_file = ""
-        file_list = os.listdir(os.path.join(data_filepath, sub_folder))
-        while not fif_file.endswith(".fif"):
-            fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
+        dir = os.path.join(data_filepath, sub_folder)
+        if os.path.exists(dir):
+            file_list = os.listdir(dir)
+            while not fif_file.endswith(".fif"):
+                fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
+        else:
+            bad_subj_found(
+                sub=sub,
+                info="couldnt find all files for subject",
+                message=f"{dir} could not be found",
+                df_path=bad_csv_path,
+            )
+            return None, None
 
         raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
         bads = raw.info["bads"]
@@ -152,7 +167,7 @@ def load_and_process(
                         message=f"{sub} could not be used because of {e}",
                         df_path=bad_csv_path,
                     )
-                    return
+                    return None, None
                 unique_events = set(events[:, -1])
                 if unique_events == {6, 7, 8, 9}:
                     event_dict = {
@@ -169,7 +184,7 @@ def load_and_process(
                         message=f"a different event has been found in {sub}: {unique_events}",
                         df_path=bad_csv_path,
                     )
-                    return
+                    return None, None
                 data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
             else:
                 data = raw
@@ -186,7 +201,7 @@ def load_and_process(
                 message=f"{sub} was dropped because of bad channels {bads}",
                 df_path=bad_csv_path,
             )
-            return
+            return None, None
 
     row = df[df["CCID"] == sub].values.tolist()[0]
     rest_labels = ["rest"] * n_epochs
@@ -198,7 +213,7 @@ def load_and_process(
         )
         with open(good_csv_path, "w") as f:
             good_subs_df.to_csv(f)
-    return np.concatenate(datas, axis=0)
+    return np.concatenate(datas, axis=0), filepath
 
 
 if __name__ == "__main__":
@@ -251,14 +266,8 @@ if __name__ == "__main__":
 
     np.random.seed(args.seed)
     for sub in os.listdir(data_filepath):
-        data = load_and_process(sub, args.sfreq, args.raw_path, args.save_path)
+        data, filepath = load_and_process(sub, args.sfreq, args.raw_path, args.save_path)
         if data is None:
             continue
 
-        sub = sub.split("-")[1]
-        filename = f"{sub}_epoched_mixed.npy"
-        out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-        filepath = os.path.join(out_path, filename)
         np.save(filepath, data)
