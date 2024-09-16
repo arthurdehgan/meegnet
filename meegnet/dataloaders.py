@@ -205,6 +205,7 @@ class Dataset:
         csv_path: str = None,
         one_sub: str = None,
         verbose: int = 2,
+        label_col: str = "label",
     ):
         """Loads the data from the "downsamples_[sfreq]" folder in the data_path.
 
@@ -265,7 +266,7 @@ class Dataset:
                 if self.sensors is not None:
                     sub_data = sub_data[:, self.sensors, :, :]
                 # Get label / labels from the dataframe:
-                labels = list(map(strip_string, row["label"].item().split(", ")))
+                labels = list(map(strip_string, row[label_col].item().split(", ")))
                 if len(labels) == 1:
                     if labels[0] in self.subject_list:
                         labels = [self.subject_list.index(labels[0])] * len(sub_data)
