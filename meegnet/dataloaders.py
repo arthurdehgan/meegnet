@@ -253,7 +253,7 @@ class Dataset:
         numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):
             self._reset_seed()
-            sub = file.split("_")[1]  # The subject ID is placed second in the filename
+            sub = file.split("_")[0]  # The subject ID is placed second in the filename
             if one_sub is not None:
                 if sub != one_sub:
                     continue  # skip for loop till we get to our one subject
