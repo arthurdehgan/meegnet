@@ -603,7 +603,8 @@ class Model:
         if repo is None:
             repo = "lamaroufle/meegnet"
         model_name = "_".join(self.name.split("_")[:-2])
-        filename = f"{model_name}_{"_".join(map(str, self.input_size))}_{self.n_outputs}"
+        input_size_string = "_".join(map(str, self.input_size))
+        filename = f"{model_name}_{input_size_string}_{self.n_outputs}"
         model_path = hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".pt")
         hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".mat")
         return model_path
@@ -620,7 +621,7 @@ class Model:
     def from_pretrained(self, repo=None):
         model_path = self._get_from_hub(repo)
         self.load(model_path)
-        
+
     def _load_net(self, model_path=None):
         if model_path is None:
             model_path = os.path.join(self.save_path, self.name + ".pt")
@@ -633,9 +634,7 @@ class Model:
         if os.path.exists(mat_path):
             mat_data = loadmat(mat_path)
         else:
-            LOG.warning(
-                f"Error while loading checkpoint from {model_path}"
-            )
+            LOG.warning(f"Error while loading checkpoint from {model_path}")
         return net_state, optimizer_state, mat_data
 
     def load(self, model_path=None):
@@ -655,7 +654,7 @@ class Model:
         # Compute accuracy from 2 vectors of labels.
         correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
         return correct / len(target)
-    
+
     def get_feature_weights(self):
         weights = []
         for layer in self.net.feature_extraction:
