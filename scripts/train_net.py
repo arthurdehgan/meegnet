@@ -35,7 +35,7 @@ if __name__ == "__main__":
             args.datatype != "rest"
         ), "datatype must be set to passive in order to run event classification"
 
-    input_size = get_input_size(args)
+    input_size = get_input_size(args, default_values)
     name = get_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
