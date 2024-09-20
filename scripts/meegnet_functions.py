@@ -1,7 +1,8 @@
 from meegnet.dataloaders import Dataset, RestDataset
 import os
 import logging
-import configparser
+import numpy as np
+
 
 def load_info():
     return np.load("../camcan_sensor_locations.npy", allow_pickle=True).tolist()
@@ -42,11 +43,7 @@ def prepare_logging(name, args, LOG, fold=None):
     LOG.info(f"Starting logging in {log_file}")
 
 
-def get_input_size(args):
-    default_values = configparser.ConfigParser()
-    default_values.read("../default_values.ini")
-    default_values = default_values["config"]
-
+def get_input_size(args, default_values):
     if args.feature == "bins":
         trial_length = int(default_values["TRIAL_LENGTH_BINS"])
     elif args.feature == "bands":
