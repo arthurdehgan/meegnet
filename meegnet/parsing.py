@@ -196,7 +196,7 @@ parser.add(
 parser.add(
     "--clf-type",
     default="",
-    choices=["eventclf", "subclf", "mixedclf"],
+    choices=["eventclf", "subclf", "mixed_visual", "mixed_audit"],
     help="The type of classification to run.",
 )
 parser.add(

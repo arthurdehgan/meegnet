@@ -22,8 +22,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     save_config(vars(args), args.config)
+
+    config_path = "../default_values.ini"
     default_values = configparser.ConfigParser()
-    default_values.read("../default_values.ini")
+    assert os.path.exists(config_path), "default_values.ini not found"
+    default_values.read(config_path)
     default_values = default_values["config"]
 
     fold = None if args.fold == -1 else int(args.fold)
