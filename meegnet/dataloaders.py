@@ -313,7 +313,7 @@ class Dataset:
 
         if type(self.groups[0]) != int:
             self.groups = _string_to_int(self.groups)
-        self.groups = torch.Tensor(self.groups)
+        self.groups = torch.tensor(self.groups, dtype=int)
 
         self.n_subjects = len(np.unique(self.groups))
 
@@ -371,6 +371,7 @@ class Dataset:
         """Splits the data within each subject using the specified sizes and generator."""
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
+        print(self.groups)
         for index, group in enumerate(self.groups):
             index_groups[group].append(index)
         for group in index_groups:
