@@ -371,7 +371,6 @@ class Dataset:
         """Splits the data within each subject using the specified sizes and generator."""
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
-        print(self.groups)
         for index, group in enumerate(self.groups):
             index_groups[group].append(index)
         for group in index_groups:
