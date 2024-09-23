@@ -188,7 +188,9 @@ def load_and_process(
                         df_path=bad_csv_path,
                     )
                     return None, None
-                data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
+                # mixing up the timing of the stimulus
+                tmin = np.random.random_sample() / 5
+                data = mne.Epochs(raw, events, tmin=-tmin, tmax=0.8 - tmin, preload=True)
                 if len(events) != len(data):
                     bad_subj_found(
                         sub=sub,
