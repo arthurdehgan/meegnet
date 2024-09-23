@@ -19,8 +19,11 @@ import logging
 import mne
 import pandas as pd
 import numpy as np
+import warnings
 from meegnet.parsing import parser, save_config
 
+mne.set_log_level("WARNING")
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 LOG = logging.getLogger("meegnet")
 logging.basicConfig(
@@ -81,7 +84,6 @@ def process_data(data, sfreq, datatype, n_epochs=None):
             rest_indexes = range(ignore * length, data.shape[-1] - length, length)
             random_indexes = np.random.choice(rest_indexes, n_epochs, replace=False)
             data = np.array([data[:, :, i : i + length] for i in random_indexes])
-        print(data.shape)
     return data
 
 
@@ -90,6 +92,7 @@ def load_and_process(
     sfreq: int,
     data_path: str,
     save_path: str,
+    label: str,
 ):
     bad_csv_path = os.path.join(save_path, f"bad_participants_info.csv")
     if os.path.exists(bad_csv_path):
@@ -101,7 +104,7 @@ def load_and_process(
             bad_subs_df.to_csv(f)
 
     good_csv_path = os.path.join(save_path, f"participants_info.csv")
-    columns = ["sub", "age", "label", "hand", "Coil", "MT_TR", "event_labels"]
+    columns = ["sub", "age", "stuff", "hand", "Coil", "MT_TR", "label"]
     if os.path.exists(good_csv_path):
         with open(good_csv_path, "r") as f:
             good_subs_df = pd.read_csv(f, index_col=0)
@@ -112,7 +115,7 @@ def load_and_process(
 
     sub = sub_folder.split("-")[1]
     filename = f"{sub}_epoched_mixed.npy"
-    out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
+    out_path = os.path.join(save_path, f"downsampled_{args.sfreq}")
     if not os.path.exists(out_path):
         os.makedirs(out_path)
     filepath = os.path.join(out_path, filename)
@@ -171,12 +174,12 @@ def load_and_process(
                 unique_events = set(events[:, -1])
                 if unique_events == {6, 7, 8, 9}:
                     event_dict = {
-                        6: "auditory1",
-                        7: "auditory2",
-                        8: "auditory3",
+                        6: "auditory",
+                        7: "auditory",
+                        8: "auditory",
                         9: "visual",
                     }
-                    labels = [event_dict[event] for event in events[:, -1]]
+                    labels = np.array([event_dict[event] for event in events[:, -1]])
                 else:
                     bad_subj_found(
                         sub=sub,
@@ -186,6 +189,17 @@ def load_and_process(
                     )
                     return None, None
                 data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
+                if len(events) != len(data):
+                    bad_subj_found(
+                        sub=sub,
+                        info=f"Size missmatch between events and data.",
+                        message=f"Size missmatch between data ({len(data)}) and events ({len(events)}).",
+                        df_path=bad_csv_path,
+                    )
+                    return None, None
+                lab_idx = np.where(labels == label)[0]
+                labels = list(labels[lab_idx])
+                data = data[lab_idx]
             else:
                 data = raw
 
@@ -264,10 +278,14 @@ if __name__ == "__main__":
     ### LOADING AND PREPARING DATA ###
     ##################################
 
-    np.random.seed(args.seed)
-    for sub in os.listdir(data_filepath):
-        data, filepath = load_and_process(sub, args.sfreq, args.raw_path, args.save_path)
-        if data is None:
-            continue
+    for label in ("auditory", "visual"):
+        np.random.seed(args.seed)
+        save_path = os.path.join(args.save_path, f"mixed_{label}")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        for sub in os.listdir(data_filepath):
+            data, filepath = load_and_process(sub, args.sfreq, args.raw_path, save_path, label)
+            if data is None:
+                continue
 
-        np.save(filepath, data)
+            np.save(filepath, data)
