@@ -756,7 +756,7 @@ def _unit_test_avg_range():
 
 def generate_saliency_figure(
     saliencies: dict,
-    info, 
+    info,
     save_path: str = "",
     suffix: str = "",
     title: str = "",
@@ -768,6 +768,7 @@ def generate_saliency_figure(
     cmap="coolwarm",
     stim_tick=75,
     show=False,
+    outlines=None,
 ):
     """
     Generates a figure visualizing saliency maps for MEG data.
@@ -911,6 +912,7 @@ def generate_saliency_figure(
                 show=False,
                 contours=0,
                 axes=axes[-1],
+                outlines=outlines,
             )
             if idx == n_blocs - 1:
                 axes.append(fig.add_subplot(grid[i, n_blocs * 3]))
