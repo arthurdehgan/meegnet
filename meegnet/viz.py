@@ -836,6 +836,24 @@ def generate_saliency_figure(
     plt.axis("off")
     axes = []
     tick_ratio = int(1000 / sfreq)
+    # First pass to gather vlim values:
+    vlim_curr = 0
+    for i, label in enumerate(saliencies.keys()):
+        gradient = saliencies[label].squeeze()
+        gradient /= np.abs(gradient).max()
+        for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
+            idx = j // 3
+            grads = gradient[idx][:, edge:-edge]
+            segment_length = grads.shape[1]
+            mid_slice = (0, segment_length)
+            gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
+            grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
+            vmax = grads.max()
+            vmin = grads.min()
+            vlim_curr = max(abs(vmax), abs(vmin))
+            if vlim_curr > vlim:
+                vlim = vlim_curr
+
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label].squeeze()
         assert (
@@ -857,9 +875,6 @@ def generate_saliency_figure(
             gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
             grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
             n_sensors = grads.shape[0]
-            vmax = grads.max()
-            vmin = grads.min()
-            vlim = max(abs(vmax), abs(vmin))
             max_idx = np.argmax([avg_range(arr) for arr in grads.T])
             # max_idx = np.argmax(np.mean(grads, axis=0))
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
