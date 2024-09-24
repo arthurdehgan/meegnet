@@ -837,7 +837,7 @@ def generate_saliency_figure(
     axes = []
     tick_ratio = int(1000 / sfreq)
     # First pass to gather vlim values:
-    vlim_curr = 0
+    vlim = 0
     for i, label in enumerate(saliencies.keys()):
         gradient = saliencies[label].squeeze()
         gradient /= np.abs(gradient).max()
