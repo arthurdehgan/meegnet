@@ -191,7 +191,12 @@ class Dataset:
         """
 
         if csv_path is not None and os.path.exists(csv_path):
-            dataframe = pd.read_csv(csv_path, index_col=0)
+            with open(csv_path) as f:
+                first_line = f.readline()
+            if first_line.startswith(","):
+                dataframe = pd.read_csv(csv_path, index_col=0)
+            else:
+                dataframe = pd.read_csv(csv_path)
         else:
             dataframe = self._load_csv(data_path)
         LOG.info(f"Logging subjects and labels from {data_path}...")
