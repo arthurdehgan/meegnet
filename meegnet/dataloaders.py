@@ -275,7 +275,12 @@ class Dataset:
                 if self.sensors is not None:
                     sub_data = sub_data[:, self.sensors, :, :]
                 # Get label / labels from the dataframe:
-                labels = list(map(strip_string, row[label_col].item().split(", ")))
+                label = row[label_col].item()
+                if type(label) == str:
+                    labels = label.split(", ")
+                    labels = list(map(strip_string, labels))
+                else:
+                    labels = [label]
                 if len(labels) == 1:
                     if labels[0] in self.subject_list:
                         labels = [self.subject_list.index(labels[0])] * len(sub_data)
