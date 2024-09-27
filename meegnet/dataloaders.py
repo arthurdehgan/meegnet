@@ -167,11 +167,15 @@ class Dataset:
 
     def _load_csv(self, data_path, csv_name="participants_info.csv"):
         csv_file = os.path.join(data_path, csv_name)
-        participants_df = (
-            pd.read_csv(csv_file, index_col=0)
-            .sample(frac=1, random_state=self.random_state)
-            .reset_index(drop=True)[: self.n_subjects]
-        )
+        with open(csv_file) as f:
+            first_line = f.readline()
+        if first_line.startswith(","):
+            df = pd.read_csv(csv_file, index_col=0)
+        else:
+            df = pd.read_csv(csv_file)
+        participants_df = df.sample(frac=1, random_state=self.random_state).reset_index(
+            drop=True
+        )[: self.n_subjects]
         return participants_df
 
     def preload(self, data_path: str, csv_path=None):
