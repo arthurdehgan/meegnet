@@ -298,11 +298,13 @@ class Dataset:
                             f"Number of available samples for {file} "
                             f"below the requested amount ({self.n_samples})",
                         )
-                    random_samples = np.random.choice(
-                        np.arange(len(sub_data)),
-                        self.n_samples,
-                        replace=False,
-                    )
+                        random_samples = np.arange(len(sub_data))
+                    else:
+                        random_samples = np.random.choice(
+                            np.arange(len(sub_data)),
+                            self.n_samples,
+                            replace=False,
+                        )
                     sub_data = sub_data[random_samples]
                     labels = np.array(labels)[random_samples]
 
