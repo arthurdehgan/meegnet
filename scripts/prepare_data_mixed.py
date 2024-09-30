@@ -17,9 +17,9 @@ create a mixed Dataset.
 import os
 import logging
 import mne
+import warnings
 import pandas as pd
 import numpy as np
-import warnings
 from meegnet.parsing import parser, save_config
 
 mne.set_log_level("WARNING")
@@ -189,7 +189,7 @@ def load_and_process(
                     )
                     return None, None
                 # mixing up the timing of the stimulus
-                tmin = np.random.random_sample() / 5
+                tmin = (np.random.random_sample() / 5) + 0.01
                 data = mne.Epochs(raw, events, tmin=-tmin, tmax=0.8 - tmin, preload=True)
                 if len(events) != len(data):
                     bad_subj_found(
