@@ -14,9 +14,13 @@ python prepare_data.py --config="config.ini" --raw-path="/home/user/data/camcan/
 import os
 import logging
 import mne
+import warnings
 import pandas as pd
 import numpy as np
 from meegnet.parsing import parser, save_config
+
+mne.set_log_level("WARNING")
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 LOG = logging.getLogger("meegnet")
@@ -142,7 +146,7 @@ def load_data(
     raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
     bads = raw.info["bads"]
     if bads == []:
-        if epoched and datatype in ("passive", "smt"):  # datatype != "rest"
+        if epoched and datatype == "passive":  # datatype != "rest"
             try:
                 events = mne.find_events(raw)
             except ValueError as e:
@@ -175,7 +179,7 @@ def load_data(
             data = raw
 
         row = df[df["CCID"] == sub].values.tolist()[0]
-        if datatype in ("passive", "smt"):
+        if datatype == "passive":
             row.append(labels)
     else:
         bad_subj_found(

@@ -45,7 +45,7 @@ if __name__ == "__main__":
         n_outputs = min(n_subjects, args.max_subj)
         lso = False
     else:
-        n_outputs = 2
+        n_outputs = 7
         lso = True
 
     ######################
@@ -59,10 +59,8 @@ if __name__ == "__main__":
     ### LOADING DATA ###
     ####################
 
-    if args.datatype == "rest":
-        dataset = RestDataset(
-            window=args.segment_length,
-            overlap=args.overlap,
+    if args.epoched:
+        dataset = Dataset(
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
@@ -71,7 +69,9 @@ if __name__ == "__main__":
             random_state=args.seed,
         )
     else:
-        dataset = Dataset(
+        dataset = RestDataset(
+            window=args.segment_length,
+            overlap=args.overlap,
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
