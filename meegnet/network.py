@@ -25,7 +25,7 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
             },
         )
     elif net_option == "meegnet":
-        return my_net(input_size, n_outputs)
+        return meegnet(input_size, n_outputs)
     elif net_option == "custom_net":
         return FullNet(
             input_size,
@@ -247,7 +247,7 @@ class MLP(customNet):
         return x
 
 
-class my_net(customNet):
+class meegnet(customNet):
     def __init__(
         self,
         input_size,
@@ -255,7 +255,7 @@ class my_net(customNet):
         n_linear=2000,
         dropout=0.5,
     ):
-        super(my_net, self).__init__(input_size, n_outputs)
+        super(meegnet, self).__init__(input_size, n_outputs)
         self.maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
         layer_list = [
             nn.Conv2d(input_size[0], 100, (input_size[1], 1)),
@@ -452,6 +452,8 @@ class Model:
             self.device = "cuda"
         elif device == "cuda":
             LOG.warning("Warning: gpu device requested but unavailable. Setting device to CPU")
+            self.device = "cpu"
+        else:
             self.device = "cpu"
         self.net.to(self.device)
 
