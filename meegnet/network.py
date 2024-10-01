@@ -614,15 +614,6 @@ class Model:
         hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".mat")
         return model_path
 
-    def feature_extraction_from_pretrained(self, repo=None):
-        model_path = self._get_from_hub(repo)
-        net_state, _, _ = self._load_net(model_path)
-        feat_state_dict = OrderedDict()
-        for key, value in net_state["state_dict"].items():
-            if key.startswith("feature"):
-                feat_state_dict[".".join(key.split(".")[1:])] = value
-        self.net.feature_extraction.load_state_dict(feat_state_dict)
-
     def from_pretrained(self, repo=None):
         model_path = self._get_from_hub(repo)
         self.load(model_path)
@@ -644,9 +635,16 @@ class Model:
 
     def load(self, model_path=None):
         net_state, optimizer_state, mat_data = self._load_net(model_path)
-        self.net.load_state_dict(net_state)
-        self.optimizer.load_state_dict(optimizer_state)
-        self.results = mat_data
+        if net_state[list(net_state.keys())[-1]].shape[0] == self.n_outputs:
+            self.net.load_state_dict(net_state)
+            self.optimizer.load_state_dict(optimizer_state)
+            self.results = mat_data
+        else:
+            feat_state_dict = OrderedDict()
+            for key, value in net_state.items():
+                if key.startswith("feature"):
+                    feat_state_dict[".".join(key.split(".")[1:])] = value
+            self.net.feature_extraction.load_state_dict(feat_state_dict)
 
     def save(self, model_path=None):
         if model_path is None:
