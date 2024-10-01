@@ -467,7 +467,7 @@ class Model:
         num_workers=4,
     ):
         assert (
-            dataset.data.shape[0] == self.input_size
+            dataset.data[0].shape == self.input_size
         ), "Size of the dataset samples should match the input size of the network."
         train_accs = []
         valid_accs = []
