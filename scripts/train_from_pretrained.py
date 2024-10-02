@@ -23,7 +23,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     save_config(vars(args), args.config)
 
-    config_path = "../default_values.ini"
+    script_path = os.getcwd()
+    config_path = os.path.join(script_path, "../default_values.ini")
     default_values = configparser.ConfigParser()
     assert os.path.exists(config_path), "default_values.ini not found"
     default_values.read(config_path)
