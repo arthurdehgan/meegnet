@@ -93,6 +93,7 @@ if __name__ == "__main__":
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     my_model.load(model_path)
 
+    my_model.name = my_model.name + "_from_pretrained"
     LOG.info(my_model.name)
     LOG.info(my_model.net)
 
