@@ -280,8 +280,8 @@ class meegnet(customNet):
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
-                    nn.Linear(lin_size, int(n_linear / 2)),
-                    nn.Linear(int(n_linear / 2), n_outputs),
+                    nn.Linear(lin_size, int(n_linear / 2)).float(),
+                    nn.Linear(int(n_linear / 2), n_outputs).float(),
                 ]
             )
         )
@@ -355,7 +355,7 @@ class FullNet(nn.Module):
         )
 
     def forward(self, x):
-        feats = self.feature_extraction(x)
+        feats = self.feature_extraction(x).float()
         outs = self.classif(feats)
         return outs
 
@@ -515,7 +515,8 @@ class Model:
                 y = y.view(-1).to(self.device)
                 X = X.view(-1, *self.input_size).to(self.device)
                 out = self.net.forward(X.float())
-                loss = self.criterion(out, Variable(y.long()))
+                loss = self.criterion(out, Variable(y.float()))
+                loss = loss.float()
                 loss.backward()
                 self.optimizer.step()
                 progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
