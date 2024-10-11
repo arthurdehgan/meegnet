@@ -426,7 +426,9 @@ class Dataset:
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
         if self.lso:
-            return self._leave_subjects_out_split((train_size, valid_size, test_size))
+            return self._leave_subjects_out_split(
+                (train_size, valid_size, test_size), generator
+            )
 
         elif self.groups is not None:
             return self._within_subject_split((train_size, valid_size, test_size), generator)
