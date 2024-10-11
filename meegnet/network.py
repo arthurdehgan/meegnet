@@ -159,15 +159,10 @@ class EEGNet(customNet):
             *nn.ModuleList(
                 [
                     # not using the kernel_constraint=max_norm(norm_rate) parameter
-                    nn.Linear(lin_size, n_outputs),
+                    nn.Linear(lin_size, n_outputs).float(),
                 ]
             )
         )
-
-    def forward(self, x):
-        feats = self.feature_extraction(x)
-        outs = self.classif(feats)
-        return outs
 
 
 # This implementation is rather common and found on various blogs/github repos
@@ -353,11 +348,6 @@ class FullNet(nn.Module):
                 ]
             )
         )
-
-    def forward(self, x):
-        feats = self.feature_extraction(x).float()
-        outs = self.classif(feats)
-        return outs
 
     def _get_lin_size(self, layers):
         return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
