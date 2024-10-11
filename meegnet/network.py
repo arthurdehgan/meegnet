@@ -87,8 +87,8 @@ class customNet(nn.Module):
         self.n_outputs = n_outputs
 
     def forward(self, x):
-        feats = self.feature_extraction(x)
-        outs = self.classif(feats)
+        feats = self.feature_extraction(x).to(torch.float64)
+        outs = self.classif(feats).to(torch.float64)
         return outs
 
     def _get_lin_size(self, layers):
@@ -150,16 +150,16 @@ class EEGNet(customNet):
             Flatten(),
         ]
 
-        layers = nn.ModuleList(layer_list)
+        layers = nn.ModuleList(layer_list).to(torch.float64)
         lin_size = self._get_lin_size(layers)
 
-        self.feature_extraction = nn.Sequential(*layers)
+        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
 
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
                     # not using the kernel_constraint=max_norm(norm_rate) parameter
-                    nn.Linear(lin_size, n_outputs).float(),
+                    nn.Linear(lin_size, n_outputs).to(torch.float64),
                 ]
             )
         )
@@ -271,12 +271,12 @@ class meegnet(customNet):
         layers = nn.ModuleList(layer_list)
         lin_size = self._get_lin_size(layers)
 
-        self.feature_extraction = nn.Sequential(*layers)
+        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
         self.classif = nn.Sequential(
             *nn.ModuleList(
                 [
-                    nn.Linear(lin_size, int(n_linear / 2)).float(),
-                    nn.Linear(int(n_linear / 2), n_outputs).float(),
+                    nn.Linear(lin_size, int(n_linear / 2)).to(torch.float64),
+                    nn.Linear(int(n_linear / 2), n_outputs).to(torch.float64),
                 ]
             )
         )
@@ -502,11 +502,12 @@ class Model:
                     X, y, groups = batch
                 else:
                     X, y = batch
-                y = y.view(-1).to(self.device)
-                X = X.view(-1, *self.input_size).to(self.device)
-                out = self.net.forward(X.float())
-                loss = self.criterion(out, Variable(y.float()))
-                loss = loss.float()
+                y = y.view(-1)
+                targets = Variable(y.type(torch.LongTensor)).to(self.device)
+                X = X.view(-1, *self.input_size).to(torch.float64).to(self.device)
+                out = self.net.forward(X)
+                loss = self.criterion(out, targets)
+                loss = loss.to(torch.float64)
                 loss.backward()
                 self.optimizer.step()
                 progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
@@ -568,11 +569,12 @@ class Model:
                     X, y, _ = batch
                 else:
                     X, y = batch
-                y = y.view(-1).to(self.device)
-                X = X.view(-1, *self.input_size).to(self.device)
-                out = self.net.forward(X.float())
-                loss = self.criterion(out, Variable(y.long()))
-                acc = self.compute_accuracy(out, y)
+                y = y.view(-1)
+                targets = Variable(y.type(torch.LongTensor)).to(self.device)
+                X = X.view(-1, *self.input_size).to(torch.float64).to(self.device)
+                out = self.net.forward(X)
+                loss = self.criterion(out, targets)
+                acc = self.compute_accuracy(out, targets)
                 n = y.size(0)
                 losses += loss.detach().sum().data.cpu().numpy() * n
                 accuracy += acc.sum().data.cpu().numpy() * n
