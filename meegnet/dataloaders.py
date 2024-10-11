@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 from scipy.stats import zscore
+from sklearn.model_selection import GroupShuffleSplit
 from meegnet.utils import strip_string
 
 LOG = logging.getLogger("meegnet")
@@ -383,6 +384,13 @@ class Dataset:
             sum((train_size, valid_size, test_size)) == 1
         ), "sum of data ratios must be equal to 1"
 
+    def _leave_subjects_out_split(self, sizes, generator):
+        indexes = [[], [], []]
+        for i, split in enumerate(random_split(np.arange(self.n_subjects), sizes, generator)):
+            for sub in split:
+                indexes[i] += np.where(self.groups == sub)[0].tolist()
+        return tuple(indexes)
+
     def _within_subject_split(self, sizes, generator):
         """Splits the data within each subject using the specified sizes and generator."""
         indexes = []
@@ -418,6 +426,9 @@ class Dataset:
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
         if self.lso:
+            return self._leave_subjects_out_split((train_size, valid_size, test_size))
+
+        elif self.groups is not None:
             return self._within_subject_split((train_size, valid_size, test_size), generator)
         else:
             return random_split(
