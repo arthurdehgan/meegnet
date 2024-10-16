@@ -38,9 +38,9 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
             net_params["batchnorm"],
             net_params["maxpool"],
         )
-    elif net_option == "VGG":
+    elif net_option in ("VGG", "vgg"):
         return VGG16_NET(input_size, n_outputs)
-    elif net_option == "EEGNet":
+    elif net_option in ("EEGNet", "eegnet"):
         return EEGNet(input_size, n_outputs)
     elif net_option == "vanPutNet":
         return vanPutNet(input_size, n_outputs)
@@ -350,7 +350,11 @@ class FullNet(nn.Module):
         )
 
     def _get_lin_size(self, layers):
-        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
+        return (
+            nn.Sequential(*layers)
+            .to(torch.float64)(torch.zeros((1, *self.input_size)))
+            .shape[-1]
+        )
 
 
 class vanPutNet(customNet):
