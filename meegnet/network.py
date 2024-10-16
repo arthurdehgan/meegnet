@@ -92,7 +92,11 @@ class customNet(nn.Module):
         return outs
 
     def _get_lin_size(self, layers):
-        return nn.Sequential(*layers)(torch.zeros((1, *self.input_size))).shape[-1]
+        return (
+            nn.Sequential(*layers)
+            .to(torch.float64)(torch.zeros((1, *self.input_size)))
+            .shape[-1]
+        )
 
 
 class EEGNet(customNet):
@@ -347,13 +351,6 @@ class FullNet(nn.Module):
                     nn.Linear(int(n_linear / 2), n_outputs),
                 ]
             )
-        )
-
-    def _get_lin_size(self, layers):
-        return (
-            nn.Sequential(*layers)
-            .to(torch.float64)(torch.zeros((1, *self.input_size)))
-            .shape[-1]
         )
 
 
