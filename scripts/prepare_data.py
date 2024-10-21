@@ -59,7 +59,7 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
         df.to_csv(f)
 
 
-def process_data(data, filepath, sfreq, datatype):
+def process_data(data, filepath, sfreq, dataset):
     if data is not None:
         data = data.resample(sfreq=sfreq)
         data = np.array(
@@ -69,7 +69,7 @@ def process_data(data, filepath, sfreq, datatype):
                 data.get_data(picks="planar2"),
             ]
         )
-        if datatype == "passive":
+        if dataset == "passive":
             data = data.swapaxes(0, 1)
         np.save(filepath, data)
 
@@ -78,10 +78,10 @@ def load_data(
     sub_folder: str,
     data_path: str,
     save_path: str,
-    datatype: str = "rest",
+    dataset: str = "rest",
     epoched: bool = False,
 ):
-    if datatype == "rest":
+    if dataset == "rest":
         assert (
             not epoched
         ), "Can't load epoched resting state data as there are no events for it"
@@ -90,7 +90,7 @@ def load_data(
     data_filepath = os.path.join(
         data_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
-        f"derivatives_{datatype}",
+        f"derivatives_{dataset}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
     user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
@@ -108,10 +108,10 @@ def load_data(
 
     sub = sub_folder.split("-")[1]
     if epoched:
-        assert args.datatype != "rest", "Cannot generate epochs for resting-state data"
-        filename = f"{datatype}_{sub}_epoched.npy"
+        assert args.dataset != "rest", "Cannot generate epochs for resting-state data"
+        filename = f"{dataset}_{sub}_epoched.npy"
     else:
-        filename = f"{datatype}_{sub}.npy"
+        filename = f"{dataset}_{sub}.npy"
     out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
     if not os.path.exists(out_path):
         os.makedirs(out_path)
@@ -128,7 +128,7 @@ def load_data(
 
     good_csv_path = os.path.join(save_path, f"participants_info.csv")
     columns = ["sub", "age", "label", "hand", "Coil", "MT_TR"]
-    if datatype != "rest":
+    if dataset != "rest":
         columns.append("event_labels")
     if os.path.exists(good_csv_path):
         with open(good_csv_path, "r") as f:
@@ -146,7 +146,7 @@ def load_data(
     raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
     bads = raw.info["bads"]
     if bads == []:
-        if epoched and datatype == "passive":  # datatype != "rest"
+        if epoched and dataset == "passive":  # dataset != "rest"
             try:
                 events = mne.find_events(raw)
             except ValueError as e:
@@ -179,7 +179,7 @@ def load_data(
             data = raw
 
         row = df[df["CCID"] == sub].values.tolist()[0]
-        if datatype == "passive":
+        if dataset == "passive":
             row.append(labels)
     else:
         bad_subj_found(
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     data_filepath = os.path.join(
         args.raw_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
-        f"derivatives_{args.datatype}",
+        f"derivatives_{args.dataset}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
     subj_count = len(os.listdir(data_filepath))
@@ -247,6 +247,6 @@ if __name__ == "__main__":
 
     for sub in os.listdir(data_filepath):
         data, filepath = load_data(
-            sub, args.raw_path, args.save_path, args.datatype, args.epoched
+            sub, args.raw_path, args.save_path, args.dataset, args.epoched
         )
-        process_data(data, filepath, args.sfreq, args.datatype)
+        process_data(data, filepath, args.sfreq, args.dataset)
