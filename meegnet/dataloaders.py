@@ -97,7 +97,7 @@ def _string_to_int(array):
     return array.astype(int)
 
 
-class Dataset:
+class EpochedDataset:
     """Creates a dataset
 
     Parameters
@@ -447,7 +447,7 @@ class Dataset:
         self.labels = torch.Tensor(labels)
 
 
-class RestDataset(Dataset):
+class ContinuousDataset(EpochedDataset):
     """
     Creates a dataset for deep learning models from REST data with windowing.
 
@@ -548,3 +548,8 @@ class RestDataset(Dataset):
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         return torch.Tensor(np.array(data))
+
+
+# For backwards compatibility purposes
+RestDataset = ContinuousDataset
+Dataset = EpochedDataset

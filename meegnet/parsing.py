@@ -39,9 +39,15 @@ parser.add(
     help="will flatten sensors dimension",
 )
 parser.add(
-    "--epoched",
+    "--dataset",
+    default="rest",
+    choices=["rest", "passive", "smt"],
+    help="The camcan MEG dataset to load.",
+)
+parser.add(
+    "lso",
     action="store_true",
-    help="will load epoched data instead of the whole signal for each subject. This option only works for passive and smt data in which there are events that we use to generate epochs.",
+    help="wether or not to use Leave Subject Out when splitting data",
 )
 parser.add(
     "--randomsearch",
@@ -57,13 +63,23 @@ parser.add(
 parser.add(
     "--net-option",
     default="meegnet",
-    choices=["custom_net", "meegnet", "EEGNet", "VGG", "vanPutNet", "MLP"],
+    choices=[
+        "custom",
+        "MEEGNet",
+        "meegnet",
+        "EEGNet",
+        "eegnet",
+        "vgg",
+        "VGG",
+        "vanPutNet",
+        "mlp",
+        "MLP",
+    ],
 )
 parser.add(
-    "--datatype",
-    default="rest",
-    choices=["rest", "smt", "passive"],
-    help="the type of data to be loaded",
+    "--epoched",
+    action="store_true",
+    help="Flag data as epoched if it is already epoched in the data files. otherwise the dataloader will segment data according to set parameters",
 )
 parser.add(
     "--crossval",
@@ -192,12 +208,6 @@ parser.add(
     default=1000,
     type=int,
     help="maximum number of subjects to use (1000 uses all subjects)",
-)
-parser.add(
-    "--clf-type",
-    default="",
-    choices=["eventclf", "subclf", "mixed_visual", "mixed_audit"],
-    help="The type of classification to run.",
 )
 parser.add(
     "-s",
