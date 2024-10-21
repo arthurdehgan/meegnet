@@ -126,12 +126,12 @@ def load_and_process(
 
     datas = []
     # Important : we start with passive because we will match number of epochs from passive to rest
-    for datatype in ("passive", "rest"):
+    for dataset in ("passive", "rest"):
         row = None
         data_filepath = os.path.join(
             data_path,
             "cc700/meg/pipeline/release005/BIDSsep/",
-            f"derivatives_{datatype}",
+            f"derivatives_{dataset}",
             "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
         )
         user = os.listdir(os.path.join(data_path, "dataman/useraccess/processed/"))[0]
@@ -160,7 +160,7 @@ def load_and_process(
         raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
         bads = raw.info["bads"]
         if bads == []:
-            if datatype in ("passive", "smt"):  # datatype != "rest"
+            if dataset in ("passive", "smt"):  # dataset != "rest"
                 try:
                     events = mne.find_events(raw)
                 except ValueError as e:
@@ -206,10 +206,10 @@ def load_and_process(
                 data = raw
 
             # doing this, we match the number of resting-state pseudo-epochs to the number of passive epochs:
-            if datatype in ("passive", "smt"):
+            if dataset in ("passive", "smt"):
                 n_epochs = len(labels)
             # send n_epochs to the function in order to select trials when using resting-state data
-            datas.append(process_data(data, sfreq, datatype, n_epochs))
+            datas.append(process_data(data, sfreq, dataset, n_epochs))
         else:
             bad_subj_found(
                 sub=sub,
@@ -261,9 +261,6 @@ if __name__ == "__main__":
         "cc700" in check_path and "dataman" in check_path
     ), "The --raw-path must contain the cc700 and dataman folders in order for this script to work properly."
 
-    LOG.info(
-        "ignoring the selected datatype option as this scripts prepares mixed data from passive and rest..."
-    )
     #######################
     ### FIXING UP PATHS ###
     #######################
