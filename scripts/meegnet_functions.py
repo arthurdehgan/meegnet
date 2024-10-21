@@ -1,4 +1,4 @@
-from meegnet.dataloaders import Dataset, RestDataset
+from meegnet.dataloaders import EpochedDataset, ContinuousDataset
 import os
 import logging
 import numpy as np
@@ -8,27 +8,28 @@ def load_info():
     return np.load("../camcan_sensor_locations.npy", allow_pickle=True).tolist()
 
 
-def load_single_subject(sub, n_samples, lso, args, verbose=2):
-    if args.datatype == "rest":
-        dataset = RestDataset(
+def load_single_subject(sub, n_samples, args, verbose=2):
+    if args.epoched:
+        dataset = EpochedDataset(
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=args.lso,
+            random_state=args.seed,
+        )
+    else:
+        dataset = ContinuousDataset(
             window=args.segment_length,
             overlap=args.overlap,
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
             sensortype=args.sensors,
-            lso=lso,
+            lso=args.lso,
             random_state=args.seed,
         )
-    else:
-        dataset = Dataset(
-            sfreq=args.sfreq,
-            n_subjects=args.max_subj,
-            n_samples=n_samples,
-            sensortype=args.sensors,
-            lso=lso,
-            random_state=args.seed,
-        )
+
     dataset.load(args.save_path, one_sub=sub, verbose=verbose)
     return dataset
 
@@ -51,7 +52,7 @@ def get_input_size(args, default_values):
     elif args.feature == "temporal":
         trial_length = int(default_values["TRIAL_LENGTH_TIME"])
 
-    if args.clf_type == "subclf":
+    if not args.epoched:
         trial_length = int(args.segment_length * args.sfreq)
 
     if args.sensors == "MAG":
@@ -73,7 +74,7 @@ def get_input_size(args, default_values):
 
 
 def get_name(args):
-    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
+    name = f"{args.model_name}_{args.seed}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
         if args.batchnorm:
