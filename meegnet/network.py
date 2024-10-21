@@ -14,7 +14,10 @@ LOG = logging.getLogger("meegnet")
 
 
 def create_net(net_option, input_size, n_outputs, net_params=None):
-    if net_option == "MLP":
+    if net_option in ("MLP", "mlp"):
+        assert (
+            net_params is not None
+        ), "The mlp option needs the user to provide a net_params dictionary containing the linear, hlayers and dropout keys."
         return MLP(
             input_size=input_size,
             n_outputs=n_outputs,
@@ -26,7 +29,7 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
         )
     elif net_option == "meegnet":
         return meegnet(input_size, n_outputs)
-    elif net_option == "custom_net":
+    elif net_option == "custom":
         return FullNet(
             input_size,
             n_outputs,
@@ -39,7 +42,7 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
             net_params["maxpool"],
         )
     elif net_option in ("VGG", "vgg"):
-        return VGG16_NET(input_size, n_outputs)
+        return VGG16(input_size, n_outputs)
     elif net_option in ("EEGNet", "eegnet"):
         return EEGNet(input_size, n_outputs)
     elif net_option == "vanPutNet":
@@ -94,7 +97,7 @@ class customNet(nn.Module):
     def _get_lin_size(self, layers):
         return (
             nn.Sequential(*layers)
-            .to(torch.float64)(torch.zeros((1, *self.input_size)))
+            .to(torch.float64)(torch.zeros((1, *self.input_size)).to(torch.float64))
             .shape[-1]
         )
 
@@ -170,34 +173,33 @@ class EEGNet(customNet):
 
 
 # This implementation is rather common and found on various blogs/github repos
-class VGG16_NET(customNet):
+class VGG16(customNet):
     def __init__(self, input_size, n_outputs):
-        super(VGG16_NET, self).__init__(input_size, n_outputs)
+        super(VGG16, self).__init__(input_size, n_outputs)
 
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         layer_list = [
             nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            self.maxpool,
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            self.maxpool,
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            self.maxpool,
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            self.maxpool,
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
             nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            self.maxpool,
+            nn.MaxPool2d(kernel_size=2, stride=2),
             Flatten(),
         ]
         layers = nn.ModuleList(layer_list)
-        self.feature_extraction = nn.Sequential(*layers)
+        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
 
         lin_size = self._get_lin_size(layers)
         self.classif = nn.Sequential(
@@ -212,7 +214,7 @@ class VGG16_NET(customNet):
                     nn.Linear(4096, self.n_outputs),
                 ]
             )
-        )
+        ).to(torch.float64)
 
 
 class MLP(customNet):
@@ -222,15 +224,15 @@ class MLP(customNet):
         customNet.__init__(self, input_size, n_outputs)
         n_inputs = np.prod(input_size)
         self.flatten = Flatten()
-        self.input = nn.Linear(n_inputs, hparams["mlp_width"])
+        self.input = nn.Linear(n_inputs, hparams["mlp_width"]).to(torch.float64)
         self.dropout = nn.Dropout(hparams["mlp_dropout"])
         self.hiddens = nn.ModuleList(
             [
-                nn.Linear(hparams["mlp_width"], hparams["mlp_width"])
+                nn.Linear(hparams["mlp_width"], hparams["mlp_width"]).to(torch.float64)
                 for _ in range(hparams["mlp_depth"] - 2)
             ]
         )
-        self.output = nn.Linear(hparams["mlp_width"], n_outputs)
+        self.output = nn.Linear(hparams["mlp_width"], n_outputs).to(torch.float64)
         self.n_outputs = n_outputs
 
     def forward(self, x):
@@ -426,10 +428,11 @@ class Model:
         criterion=nn.CrossEntropyLoss(),
         n_folds=5,
         device="cuda",
+        net_params=None,
     ):
         self.name = name
         self.input_size = input_size  # TODO here put assertions on the shape
-        self.net = create_net(net_option, input_size, n_outputs)
+        self.net = create_net(net_option, input_size, n_outputs, net_params)
         self.n_outputs = n_outputs
         self.n_folds = n_folds
         self.criterion = criterion
@@ -506,8 +509,7 @@ class Model:
                 y = y.view(-1)
                 targets = Variable(y.type(torch.LongTensor)).to(self.device)
                 X = X.view(-1, *self.input_size).to(torch.float64).to(self.device)
-                out = self.net.forward(X)
-                loss = self.criterion(out, targets)
+                loss = self.criterion(self.net.forward(X), targets)
                 loss = loss.to(torch.float64)
                 loss.backward()
                 self.optimizer.step()
