@@ -45,7 +45,7 @@ parser.add(
     help="The camcan MEG dataset to load.",
 )
 parser.add(
-    "lso",
+    "--lso",
     action="store_true",
     help="wether or not to use Leave Subject Out when splitting data",
 )
