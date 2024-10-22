@@ -98,7 +98,8 @@ def _string_to_int(array):
 
 
 class EpochedDataset:
-    """Creates a dataset
+    """
+    Creates a dataset for epoch-based M/EEG data.
 
     Parameters
     ----------
@@ -133,6 +134,10 @@ class EpochedDataset:
         The groups.
     subject_list : list
         The subject list.
+    targets : torch.Tensor
+        The targets (aliases for labels).
+    data_path : str
+        The path to the data.
     """
 
     def __init__(
@@ -179,34 +184,38 @@ class EpochedDataset:
         )[: self.n_subjects]
         return participants_df
 
-    def preload(self, data_path: str, csv_path=None):
-        """loads the subject list from a csv file (participants_info.csv in the data_folder by default).
+    def preload(self, data_path: str, csv_path: str = None) -> pd.DataFrame:
+        """
+        Loads the subject list from a CSV file.
 
         Parameters
         ----------
-        data_path : str of path-like
-            The path of the folder containing the csv fie describing the dataset
+        data_path : str
+            Path to the folder containing the dataset.
         csv_path : str, optional
-            The path to the csv file, is set to None, will use default "participants_info.csv", by default None
+            Path to the CSV file. Defaults to "participants_info.csv" in the data_path.
 
         Returns
         -------
-        pandas.DataFrame
-            The dataframe containing participants informations
+        pd.DataFrame
+            DataFrame containing participant information.
         """
 
-        if csv_path is not None and os.path.exists(csv_path):
-            with open(csv_path) as f:
-                first_line = f.readline()
-            if first_line.startswith(","):
-                dataframe = pd.read_csv(csv_path, index_col=0)
-            else:
-                dataframe = pd.read_csv(csv_path)
+        # Determine CSV file path
+        if csv_path is None:
+            csv_path = os.path.join(data_path, "participants_info.csv")
+
+        # Load CSV file
+        if csv_path.startswith(","):
+            dataframe = pd.read_csv(csv_path, index_col=0)
         else:
-            dataframe = self._load_csv(data_path)
+            dataframe = pd.read_csv(csv_path)
+
+        # Update instance attributes
         LOG.info(f"Logging subjects and labels from {data_path}...")
         self.data_path = data_path
-        self.subject_list = list(dataframe["sub"])
+        self.subject_list = dataframe["sub"].tolist()
+
         return dataframe
 
     def load(
@@ -216,104 +225,79 @@ class EpochedDataset:
         one_sub: str = None,
         verbose: int = 2,
         label_col: str = "label",
-    ):
-        """Loads the data from the "downsamples_[sfreq]" folder in the data_path.
+    ) -> None:
+        """
+        Loads data from the "downsampled_[sfreq]" folder in the data_path.
 
         Parameters
         ----------
-        data_path : str or path-like, optional
-            The path to the data. If set to None, will use self.data_path, by default None
-        csv_path : str or path-like, optional
-            The path to the csv file. If set to None, will use default "participants_info.csv", by default None
+        data_path : str, optional
+            Path to the data. Defaults to self.data_path if None.
+        csv_path : str, optional
+            Path to the CSV file. Defaults to "participants_info.csv" in data_path.
         one_sub : str, optional
-            The subject ID corresponding to the sub column of the participants_info, by default None. If "random" will select a random subject
+            Subject ID or "random" to select a random subject.
         verbose : int, optional
-            The verbose level for logging, by default 2 will show all info.
+            Logging verbosity level (0-2).
+        label_col : str, optional
+            Column name for labels in the CSV file.
         """
 
-        assert self.data_path is not None or data_path is not None, "data_path must be set."
-        if self.data_path is None:
-            self.data_path = data_path
+        # Ensure data_path is set
+        if data_path is None:
+            assert self.data_path is not None, "data_path must be set"
+            data_path = self.data_path
 
-        # Load participants info first
-        dataframe = self.preload(self.data_path, csv_path)
+        # Load participants info
+        dataframe = self.preload(data_path, csv_path)
 
-        # update logging verbosity
-        match verbose:
-            case 0:
-                LOG.setLevel(logging.NOTSET)
-            case 1:
-                LOG.setLevel(logging.WARNING)
-            case 2:
-                LOG.setLevel(logging.INFO)
+        # Set logging verbosity
+        verbosity_levels = {0: logging.NOTSET, 1: logging.WARNING, 2: logging.INFO}
+        LOG.setLevel(verbosity_levels.get(verbose, logging.INFO))
 
-        # Load all subjects by default
-        if one_sub is None:
-            LOG.info(f"Found {len(self.subject_list)} subjects to load.")
-        else:  # else load that one subject
-            if one_sub == "random":
-                one_sub = self.random_sub()
-            elif one_sub in self.subject_list:
-                LOG.info(f"Loading subject {one_sub}")
-                self.subject_list = [one_sub]
-            else:
-                raise AttributeError(f"{one_sub} not a valid subject.")
+        # Select subject(s) to load
+        if one_sub == "random":
+            one_sub = self.random_sub()
+        elif one_sub is not None and one_sub not in self.subject_list:
+            raise AttributeError(f"{one_sub} not a valid subject")
+        elif one_sub is not None:
+            self.subject_list = [one_sub]
 
-        # get paths
+        # Load data for selected subject(s)
         data_folder = f"downsampled_{self.sfreq}"
         numpy_filepath = os.path.join(self.data_path, data_folder)
         for file in os.listdir(numpy_filepath):
             self._reset_seed()
             sub = file.split("_")[0]  # The subject ID is placed first in the filename
-            if one_sub is not None:
-                if sub != one_sub:
-                    continue  # skip for loop till we get to our one subject
-            if sub in self.subject_list:
-                row = dataframe.loc[dataframe["sub"] == sub]
-                sub_data = self._load_sub(os.path.join(numpy_filepath, file))
-                if sub_data is None:
-                    continue  # skip subject if there are no data in the loaded file
-                if self.sensors is not None:
-                    sub_data = sub_data[:, self.sensors, :, :]
-                # Get label / labels from the dataframe:
-                label = row[label_col].item()
-                if type(label) == str:
-                    labels = label.split(", ")
-                    labels = list(map(strip_string, labels))
-                else:
-                    labels = [label]
-                if len(labels) == 1:
-                    if labels[0] in self.subject_list:
-                        labels = [self.subject_list.index(labels[0])] * len(sub_data)
-                    else:
-                        labels = [labels[0]] * len(sub_data)
-                if len(labels) != len(sub_data):
-                    LOG.warning(
-                        "Length of label vector different from number "
-                        f"of data samples for subject {sub}. Skipping."
-                    )
-                    continue
-                if self.n_samples is not None:
-                    if self.n_samples > len(sub_data):
-                        LOG.warning(
-                            f"Number of available samples for {file} "
-                            f"below the requested amount ({self.n_samples})",
-                        )
-                        random_samples = np.arange(len(sub_data))
-                    else:
-                        random_samples = np.random.choice(
-                            np.arange(len(sub_data)),
-                            self.n_samples,
-                            replace=False,
-                        )
-                    sub_data = sub_data[random_samples]
-                    labels = np.array(labels)[random_samples]
+            if one_sub is not None and sub != one_sub:
+                continue
+            if sub not in self.subject_list:
+                continue
 
-                self.data.append(torch.Tensor(sub_data))
-                self.labels.append(np.array(labels))
-                self.groups += [sub] * len(labels)
+            row = dataframe.loc[dataframe["sub"] == sub]
+            sub_data = self._load_sub(os.path.join(numpy_filepath, file))
+            if sub_data is None:
+                continue  # skip subject if there are no data in the loaded file
 
-        # Transform data to the correct torch formats with proper types
+            # Process data and labels
+            if self.sensors is not None:
+                sub_data = sub_data[:, self.sensors, :, :]
+            label = row[label_col].item()
+            labels = self._process_labels(label, len(sub_data))
+
+            # Handle sampling
+            if self.n_samples is not None:
+                random_samples = np.random.choice(
+                    np.arange(len(sub_data)), self.n_samples, replace=False
+                )
+                sub_data = sub_data[random_samples]
+                labels = labels[random_samples]
+
+            self.data.append(torch.Tensor(sub_data))
+            self.labels.append(np.array(labels))
+            self.groups += [sub] * len(labels)
+
+        # Format data and labels
         if len(self) == 0:
             return
         elif len(self) == 1:
@@ -334,6 +318,20 @@ class EpochedDataset:
 
         self.n_subjects = len(np.unique(self.groups))
 
+    def _process_labels(self, label: str, n_samples: int) -> list:
+        """Process label(s) for a subject."""
+        if isinstance(label, str):
+            labels = label.split(", ")
+            labels = list(map(strip_string, labels))
+        else:
+            labels = [label]
+        if len(labels) == 1:
+            if labels[0] in self.subject_list:
+                labels = [self.subject_list.index(labels[0])] * n_samples
+            else:
+                labels = [labels[0]] * n_samples
+        return labels
+
     def random_sub(self):
         return np.random.choice(self.subject_list)
 
@@ -342,7 +340,7 @@ class EpochedDataset:
         return len(self.data)
 
     def _load_sub(self, filepath: str):
-        """Loads a subject's data."""
+        """Loads a single subject's data."""
         try:
             data = np.load(filepath)
         except IOError:
@@ -352,29 +350,31 @@ class EpochedDataset:
             data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
         return torch.Tensor(np.array(data))
 
-    def _select_sensors(self, sensortype):
-        """For MEG data only. Selects the sensors slices from the data.
+    def _select_sensors(self, sensortype: str) -> list:
+        """
+        Selects MEG sensor slices based on the sensor type.
 
         Parameters
         ----------
         sensortype : str
-            type of sensor. Must be either "MAG", "plannar1", "plannar2" or "plannar".
+            Type of sensor ("MAG", "GRAD", "plannar", or variants).
 
         Returns
         -------
-        list
-            list of sensor indices according to the prepare_data tutorial
+        list or None
+            List of sensor indices if sensortype is valid, otherwise None.
         """
-        if sensortype == "MAG":
-            return [0]
-        elif sensortype in ["GRAD", "plannar"]:
-            return [1, 2]
-        elif sensortype in ["GRAD1", "plannar1"]:
-            return [1]
-        elif sensortype in ["GRAD2", "plannar2"]:
-            return [2]
-        else:
-            return None
+        sensor_mapping = {
+            "MAG": [0],
+            "GRAD": [1, 2],
+            "plannar": [1, 2],
+            "GRAD1": [1],
+            "plannar1": [1],
+            "GRAD2": [2],
+            "plannar2": [2],
+            "ALL": [1, 2, 3],
+        }
+        return sensor_mapping.get(sensortype)
 
     def _assert_sizes(self, train_size, valid_size, test_size=None):
         """Asserts that the sum of the data ratios is equal to 1."""
@@ -385,57 +385,51 @@ class EpochedDataset:
         ), "sum of data ratios must be equal to 1"
 
     def _leave_subjects_out_split(self, sizes, generator):
+        """Leaves subjects out split."""
         indexes = [[], [], []]
         for i, split in enumerate(random_split(np.arange(self.n_subjects), sizes, generator)):
-            for sub in split:
-                indexes[i] += np.where(self.groups == sub)[0].tolist()
+            indexes[i].extend(np.where(self.groups == sub)[0].tolist() for sub in split)
         return tuple(indexes)
 
     def _within_subject_split(self, sizes, generator):
-        """Splits the data within each subject using the specified sizes and generator."""
+        """Splits data within each subject."""
         indexes = []
         index_groups = [[] for _ in range(self.n_subjects)]
         for index, group in enumerate(self.groups):
             index_groups[group].append(index)
         for group in index_groups:
             indexes.append(random_split(group, sizes, generator))
-        # logging.info(
-        #     f"Using {self.n_subjects} subjects: {train_size} for train, "
-        #     f"{valid_size} for validation, and {test_size} for test"
-        # )
-        return (sum([list(index[i]) for index in indexes], []) for i in range(3))
+        indexes = zip(*[random_split(group, sizes, generator) for group in index_groups])
+        return tuple(sum(map(list, index), []) for index in indexes)
 
     def data_split(self, train_size: float, valid_size: float, test_size: float = None):
-        """Splits the data into training, validation, and test sets based on the specified sizes and stratification (if desired).
+        """
+        Splits data into training, validation, and test sets.
 
         Parameters
         ----------
         train_size : float
-            Size of the train set in %
+            Train set size (%).
         valid_size : float
-            Size of the validation set in %
+            Validation set size (%).
         test_size : float, optional
-            Size of the test set in %, by default None
+            Test set size (%). Defaults to None.
 
         Returns
         -------
-        tuples
-            The indices for the splits
+        tuple
+            Indices for the splits.
         """
-        # TODO add stratification for the data splits
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
-        if self.lso:
-            return self._leave_subjects_out_split(
-                (train_size, valid_size, test_size), generator
-            )
 
+        sizes = tuple(train_size, valid_size, test_size)
+        if self.lso:
+            return self._leave_subjects_out_split(sizes, generator)
         elif self.groups is not None:
-            return self._within_subject_split((train_size, valid_size, test_size), generator)
+            return self._within_subject_split(sizes, generator)
         else:
-            return random_split(
-                np.arange(len(self)), [train_size, valid_size, test_size], generator
-            )
+            return random_split(np.arange(len(self)), sizes, generator)
 
     def torchDataset(self, index):
         """Returns a Torch dataset instance of the torch Dataset class for the given index."""
@@ -454,48 +448,48 @@ class ContinuousDataset(EpochedDataset):
     Parameters
     ----------
     window : int, optional
-        The window size in seconds, by default 2.
+        Window size in seconds. Defaults to 2.
     overlap : float, optional
-        The overlap between windows, by default 0.
+        Overlap between windows (0-1). Defaults to 0.
     offset : int, optional
-        The offset in seconds, by default 10.
+        Offset in seconds. Defaults to 10.
     sfreq : int, optional
-        The sampling frequency, by default 500.
+        Sampling frequency. Defaults to 500.
     n_subjects : int, optional
-        The number of subjects. Default value is None, which means all subjects are processed.
+        Number of subjects. Defaults to None (all subjects).
     zscore : bool, optional
-        If True, z-scoring is applied to the data, by default True.
+        Apply z-scoring. Defaults to True.
     n_samples : int, optional
-        The number of samples to include, by default None.
+        Number of samples per subject. Defaults to None.
     sensortype : str, optional
-        The type of sensor to use, by default None.
+        Sensor type. Defaults to None.
     lso : bool, optional
-        Leave subjects out. If False, within-subject splitting is used, by default False.
+        Leave subjects out. Defaults to False.
     random_state : int, optional
-        The random state for reproducibility, by default 0.
+        Random state for reproducibility. Defaults to 0.
 
     Attributes
     ----------
     window : int
-        The window size in seconds.
+        Window size in seconds.
     overlap : float
-        The overlap between windows.
+        Overlap between windows.
     offset : int
-        The offset in seconds.
+        Offset in seconds.
     sfreq : int
-        The sampling frequency.
+        Sampling frequency.
     n_subjects : int
-        The number of subjects.
+        Number of subjects.
     n_samples : int
-        The number of samples for each subject.
+        Number of samples per subject.
     data : torch.Tensor
-        The data.
+        Data.
     labels : torch.Tensor
-        The labels.
+        Labels.
     groups : list
-        The groups.
+        Groups.
     subject_list : list
-        The subject list.
+        Subject list.
 
     Methods
     -------
@@ -505,28 +499,54 @@ class ContinuousDataset(EpochedDataset):
 
     def __init__(
         self,
-        window=2,
-        overlap=0,
-        offset=10,
-        sfreq=500,
-        n_subjects=None,
-        zscore=True,
-        n_samples=None,
-        sensortype=None,
-        lso=False,
-        random_state=0,
-    ):
+        window: int = 2,
+        overlap: float = 0,
+        offset: int = 10,
+        sfreq: int = 500,
+        n_subjects: int = None,
+        zscore: bool = True,
+        n_samples: int = None,
+        sensortype: str = None,
+        lso: bool = False,
+        random_state: int = 0,
+    ) -> None:
+        """
+        Initializes the ContinuousDataset.
 
-        Dataset.__init__(
-            self, sfreq, n_subjects, zscore, n_samples, sensortype, lso, random_state
-        )
+        Args:
+        window (int): Window size in seconds.
+        overlap (float): Overlap between windows.
+        offset (int): Offset in seconds.
+        sfreq (int): Sampling frequency.
+        n_subjects (int): Number of subjects.
+        zscore (bool): Apply z-scoring.
+        n_samples (int): Number of samples per subject.
+        sensortype (str): Sensor type.
+        lso (bool): Leave subjects out.
+        random_state (int): Random state for reproducibility.
+        """
+
+        super().__init__(sfreq, n_subjects, zscore, n_samples, sensortype, lso, random_state)
 
         assert 0 <= overlap < 1, "Overlap must be between 0 and 1."
         self.window = window
         self.overlap = overlap
         self.offset = offset
 
-    def _load_sub(self, filepath):
+    def _load_sub(self, filepath: str) -> torch.Tensor:
+        """
+        Loads a subject's data with windowing and overlap.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the subject's data file.
+
+        Returns
+        -------
+        torch.Tensor
+            Loaded data.
+        """
         try:
             step = int(self.window * self.sfreq * (1 - self.overlap))
             start = int(self.offset * self.sfreq)
