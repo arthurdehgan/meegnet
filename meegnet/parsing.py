@@ -41,7 +41,7 @@ parser.add(
 parser.add(
     "--dataset",
     default="rest",
-    choices=["rest", "passive", "smt"],
+    choices=["rest", "passive", "smt","mixed"],
     help="The camcan MEG dataset to load.",
 )
 parser.add(
