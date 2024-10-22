@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict, OrderedDict
 import logging
+from typing import Tuple
 import torch
 from torch import nn, optim
 from torch.autograd import Variable
@@ -13,12 +14,36 @@ from huggingface_hub import hf_hub_download
 LOG = logging.getLogger("meegnet")
 
 
-def create_net(net_option, input_size, n_outputs, net_params=None):
-    if net_option in ("MLP", "mlp"):
-        assert (
-            net_params is not None
-        ), "The mlp option needs the user to provide a net_params dictionary containing the linear, hlayers and dropout keys."
-        return MLP(
+def create_net(
+    net_option: str, input_size: int, n_outputs: int, net_params: dict = None
+) -> nn.Module:
+    """
+    Creates a neural network based on the specified option.
+
+    Parameters
+    ----------
+    net_option : str
+        Network architecture option ("MLP", "meegnet", "custom", "VGG", "EEGNet", "vanPutNet").
+    input_size : int
+        Input size of the network.
+    n_outputs : int
+        Number of output neurons.
+    net_params : dict, optional
+        Network parameters (required for "MLP" and "custom" options).
+
+    Returns
+    -------
+    nn.Module
+        Created neural network.
+
+    Raises
+    ------
+    AttributeError
+        If net_option is invalid.
+    """
+
+    net_options = {
+        "mlp": lambda: MLP(
             input_size=input_size,
             n_outputs=n_outputs,
             hparams={
@@ -26,11 +51,9 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
                 "mlp_depth": net_params["hlayers"],
                 "mlp_dropout": net_params["dropout"],
             },
-        )
-    elif net_option == "meegnet":
-        return meegnet(input_size, n_outputs)
-    elif net_option == "custom":
-        return FullNet(
+        ),
+        "meegnet": lambda: MEEGNet(input_size, n_outputs),
+        "custom": lambda: FullNet(
             input_size,
             n_outputs,
             net_params["hlayers"],
@@ -40,25 +63,68 @@ def create_net(net_option, input_size, n_outputs, net_params=None):
             net_params["dropout"],
             net_params["batchnorm"],
             net_params["maxpool"],
-        )
-    elif net_option in ("VGG", "vgg"):
-        return VGG16(input_size, n_outputs)
-    elif net_option in ("EEGNet", "eegnet"):
-        return EEGNet(input_size, n_outputs)
-    elif net_option == "vanPutNet":
-        return vanPutNet(input_size, n_outputs)
-    else:
-        raise AttributeError(f"Bad network option: {net_option}")
+        ),
+        "vgg": lambda: VGG16(input_size, n_outputs),
+        "eegnet": lambda: EEGNet(input_size, n_outputs),
+        "vanputnet": lambda: VanPutNet(input_size, n_outputs),
+    }
+
+    if net_option.lower() not in net_options:
+        raise AttributeError(f"Invalid network option: {net_option}")
+
+    if net_option.lower() in ["mlp", "custom"] and net_params is None:
+        raise ValueError("net_params is required for MLP and custom networks")
+
+    return net_options[net_option.lower()]()
 
 
 class Flatten(nn.Module):
-    # Flatten layer used to connect between feature extraction and classif parts of a net.
+    """
+    Flatten layer to connect feature extraction and classification parts of a network.
+
+    Parameters
+    ----------
+    None
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    forward(x)
+        Flattens the input tensor.
+    """
+
     def forward(self, x):
-        x = x.view(x.size(0), -1)
-        return x
+        """Flattens the input tensor."""
+        return x.view(x.size(0), -1)
 
 
 class DepthwiseConv2d(nn.Module):
+    """
+    Depthwise separable convolutional layer.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    kernel_size : int or tuple
+        Size of the convolutional kernel.
+    depthwise_multiplier : int, optional
+        Multiplier for depthwise convolution. Defaults to 1.
+
+    Attributes
+    ----------
+    depthwise : nn.Conv2d
+        Depthwise convolutional layer.
+
+    Methods
+    -------
+    forward(x)
+        Applies depthwise convolution to the input tensor.
+    """
+
     def __init__(self, in_channels, kernel_size, depthwise_multiplier=1, **kwargs):
         super(DepthwiseConv2d, self).__init__()
         self.depthwise = nn.Conv2d(
@@ -70,59 +136,162 @@ class DepthwiseConv2d(nn.Module):
         )
 
     def forward(self, x):
+        """Applies depthwise convolution to the input tensor."""
         return self.depthwise(x)
 
 
 class SeparableConv2d(nn.Module):
+    """
+    Separable convolutional layer (depthwise + pointwise convolution).
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple
+        Size of the convolutional kernel.
+
+    Attributes
+    ----------
+    depthwise : DepthwiseConv2d
+        Depthwise convolutional layer.
+    pointwise : nn.Conv2d
+        Pointwise convolutional layer.
+
+    Methods
+    -------
+    forward(x)
+        Applies separable convolution to the input tensor.
+    """
+
     def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
         super(SeparableConv2d, self).__init__()
         self.depthwise = DepthwiseConv2d(in_channels, kernel_size, **kwargs)
         self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, **kwargs)
 
     def forward(self, x):
+        """Applies separable convolution to the input tensor."""
         return self.pointwise(self.depthwise(x))
 
 
-class customNet(nn.Module):
-    def __init__(self, input_size, n_outputs):
-        super(customNet, self).__init__()
+class CustomNet(nn.Module):
+    """
+    Base class for custom neural networks.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape of the network.
+    n_outputs : int
+        Number of output neurons.
+
+    Attributes
+    ----------
+    input_size : tuple
+        Input shape of the network.
+    n_outputs : int
+        Number of output neurons.
+
+    Methods
+    -------
+    forward(x)
+        Defines the forward pass through the network.
+    _get_lin_size(layers)
+        Computes the output size of a sequence of layers.
+    feature_extraction(x)
+        Defines the feature extraction part of the network (must be implemented).
+    classif(x)
+        Defines the classification part of the network (must be implemented).
+    """
+
+    def __init__(self, input_size: tuple, n_outputs: int) -> None:
+        """
+        Initializes the CustomNet.
+
+        Args:
+        input_size (tuple): Input shape of the network.
+        n_outputs (int): Number of output neurons.
+        """
+        super(CustomNet, self).__init__()
         self.input_size = input_size
         self.n_outputs = n_outputs
 
-    def forward(self, x):
-        feats = self.feature_extraction(x).to(torch.float64)
-        outs = self.classif(feats).to(torch.float64)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Defines the forward pass through the network.
+
+        Args:
+        x (torch.Tensor): Input tensor.
+
+        Returns:
+        torch.Tensor: Output tensor.
+        """
+        feats = self.feature_extraction(x)
+        outs = self.classif(feats)
         return outs
 
-    def _get_lin_size(self, layers):
-        return (
-            nn.Sequential(*layers)
-            .to(torch.float64)(torch.zeros((1, *self.input_size)).to(torch.float64))
-            .shape[-1]
-        )
+    def _get_lin_size(self, layers: nn.Sequential) -> int:
+        """
+        Computes the output size of a sequence of layers.
+
+        Args:
+        layers (nn.Sequential): Sequence of layers.
+
+        Returns:
+        int: Output size of the sequence.
+        """
+        return layers(torch.zeros((1, *self.input_size))).shape[-1]
 
 
-class EEGNet(customNet):
+class EEGNet(CustomNet):
+    """
+    EEGNet architecture implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape (S, C, T) where S is the number of sensors.
+    n_outputs : int
+        Number of output classes.
+    filter_size : int, optional
+        Filter size. Defaults to 64.
+    n_filters : int, optional
+        Number of filters. Defaults to 16.
+    dropout : float, optional
+        Dropout rate. Defaults to 0.5.
+    dropout_option : str, optional
+        Dropout type ("SpatialDropout2D" or "Dropout"). Defaults to "Dropout".
+    depthwise_multiplier : int, optional
+        Depthwise multiplier. Defaults to 2.
+
+    Attributes
+    ----------
+    feature_extraction : nn.Sequential
+        Feature extraction layers.
+    classif : nn.Sequential
+        Classification layers.
+    """
+
     def __init__(
         self,
-        input_size,
-        n_outputs,
-        filter_size=64,
-        n_filters=16,
-        dropout=0.5,
-        dropout_option="Dropout",
-        depthwise_multiplier=2,
-    ):
-        customNet.__init__(self, input_size, n_outputs)
-        if dropout_option == "SpatialDropout2D":
-            dropoutType = nn.Dropout2d
-        elif dropout_option == "Dropout":
-            dropoutType = nn.Dropout
-        else:
+        input_size: tuple,
+        n_outputs: int,
+        filter_size: int = 64,
+        n_filters: int = 16,
+        dropout: float = 0.5,
+        dropout_option: str = "Dropout",
+        depthwise_multiplier: int = 2,
+    ) -> None:
+        super().__init__(input_size, n_outputs)
+
+        if dropout_option not in ["SpatialDropout2D", "Dropout"]:
             raise ValueError(
-                "dropoutType must be one of SpatialDropout2D "
+                "dropout_option must be one of SpatialDropout2D "
                 "or Dropout, passed as a string."
             )
+        dropout_type = nn.Dropout2d if dropout_option == "SpatialDropout2D" else nn.Dropout
 
         n_channels = input_size[1]
         layer_list = [
@@ -130,12 +299,10 @@ class EEGNet(customNet):
                 input_size[0],
                 n_filters,
                 (1, filter_size),
-                padding=(1, (filter_size) // 2),
-                # padding="same",
+                padding=(1, filter_size // 2),
                 bias=False,
             ),
             nn.BatchNorm2d(n_filters),
-            # depthwise_constraind=maxnorm(1.) not used
             DepthwiseConv2d(
                 n_filters,
                 (n_channels, 1),
@@ -143,63 +310,77 @@ class EEGNet(customNet):
                 padding=0,
                 bias=False,
             ),
-            # Changed n_filters to *2 becaus of dimension error,
-            # TODO check if it was originally a typo in our code
-            nn.BatchNorm2d(n_filters * 2),
+            nn.BatchNorm2d(n_filters * depthwise_multiplier),
             nn.ELU(),
             nn.AvgPool2d((1, 4)),
-            dropoutType(dropout),
-            SeparableConv2d(n_filters * 2, n_filters * 2, (1, 16), padding=(1, 8), bias=False),
-            nn.BatchNorm2d(n_filters * 2),
+            dropout_type(dropout),
+            SeparableConv2d(
+                n_filters * depthwise_multiplier,
+                n_filters * depthwise_multiplier,
+                (1, 16),
+                padding=(1, 8),
+                bias=False,
+            ),
+            nn.BatchNorm2d(n_filters * depthwise_multiplier),
             nn.ELU(),
             nn.AvgPool2d((1, 8)),
-            dropoutType(dropout),
+            dropout_type(dropout),
             Flatten(),
         ]
 
-        layers = nn.ModuleList(layer_list).to(torch.float64)
-        lin_size = self._get_lin_size(layers)
+        self.feature_extraction = nn.Sequential(*layer_list)
 
-        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
-
-        self.classif = nn.Sequential(
-            *nn.ModuleList(
-                [
-                    # not using the kernel_constraint=max_norm(norm_rate) parameter
-                    nn.Linear(lin_size, n_outputs).to(torch.float64),
-                ]
-            )
-        )
+        lin_size = self._get_lin_size(self.feature_extraction)
+        self.classif = nn.Sequential(nn.Linear(lin_size, n_outputs))
 
 
 # This implementation is rather common and found on various blogs/github repos
-class VGG16(customNet):
-    def __init__(self, input_size, n_outputs):
+class VGG16(CustomNet):
+    """
+    VGG16 architecture implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape (C, H, W) or (S, C, T) for M/EEG data. With S the number of sensors,
+        C the number of channels and T the number of time samples
+    n_outputs : int
+        Number of output classes.
+    """
+
+    def __init__(self, input_size: tuple, n_outputs: int) -> None:
         super(VGG16, self).__init__(input_size, n_outputs)
 
+        in_channels = input_size[0]
         layer_list = [
-            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             Flatten(),
         ]
         layers = nn.ModuleList(layer_list)
-        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
+        self.feature_extraction = nn.Sequential(*layers)
 
         lin_size = self._get_lin_size(layers)
         self.classif = nn.Sequential(
@@ -211,189 +392,243 @@ class VGG16(customNet):
                     nn.Linear(4096, 4096),
                     nn.ReLU(),
                     nn.Dropout(),
-                    nn.Linear(4096, self.n_outputs),
+                    nn.Linear(4096, n_outputs),
                 ]
             )
-        ).to(torch.float64)
-
-
-class MLP(customNet):
-    """Just an MLP"""
-
-    def __init__(self, input_size, n_outputs, hparams):
-        customNet.__init__(self, input_size, n_outputs)
-        n_inputs = np.prod(input_size)
-        self.flatten = Flatten()
-        self.input = nn.Linear(n_inputs, hparams["mlp_width"]).to(torch.float64)
-        self.dropout = nn.Dropout(hparams["mlp_dropout"])
-        self.hiddens = nn.ModuleList(
-            [
-                nn.Linear(hparams["mlp_width"], hparams["mlp_width"]).to(torch.float64)
-                for _ in range(hparams["mlp_depth"] - 2)
-            ]
         )
-        self.output = nn.Linear(hparams["mlp_width"], n_outputs).to(torch.float64)
-        self.n_outputs = n_outputs
-
-    def forward(self, x):
-        x = self.flatten(x)
-        x = self.input(x)
-        x = self.dropout(x)
-        x = F.relu(x)
-        for hidden in self.hiddens:
-            x = hidden(x)
-            x = self.dropout(x)
-            x = F.relu(x)
-        x = self.output(x)
-        return x
 
 
-class meegnet(customNet):
+class MLP(CustomNet):
+    """
+    Multi-Layer Perceptron (MLP) implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape.
+    n_outputs : int
+        Number of output neurons.
+    hparams : dict
+        Hyperparameters:
+            - mlp_width (int): Number of neurons in each hidden layer.
+            - mlp_depth (int): Number of hidden layers.
+            - mlp_dropout (float): Dropout rate.
+    """
+
+    def __init__(self, input_size: tuple, n_outputs: int, hparams: dict) -> None:
+        super(MLP, self).__init__(input_size, n_outputs)
+        n_inputs = np.prod(input_size)
+
+        self.feature_extraction = nn.Sequential(
+            Flatten(),
+            nn.Linear(n_inputs, hparams["mlp_width"]),
+            nn.Dropout(hparams["mlp_dropout"]),
+            nn.ReLU(),
+            *[
+                nn.Sequential(
+                    nn.Linear(hparams["mlp_width"], hparams["mlp_width"]),
+                    nn.Dropout(hparams["mlp_dropout"]),
+                    nn.ReLU(),
+                )
+                for _ in range(hparams["mlp_depth"] - 2)
+            ],
+        )
+
+        self.classif = nn.Linear(hparams["mlp_width"], n_outputs)
+
+
+class MEEGNet(CustomNet):
+    """
+    MEEGNet architecture implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape (S, C, T) where S is the number of sensors.
+    n_outputs : int
+        Number of output classes.
+    n_linear : int, optional
+        Number of neurons in the first linear layer. Defaults to 2000.
+    dropout : float, optional
+        Dropout rate. Defaults to 0.5.
+    """
+
     def __init__(
         self,
-        input_size,
-        n_outputs,
-        n_linear=2000,
-        dropout=0.5,
-    ):
-        super(meegnet, self).__init__(input_size, n_outputs)
-        self.maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
-        layer_list = [
+        input_size: tuple,
+        n_outputs: int,
+        n_linear: int = 2000,
+        dropout: float = 0.5,
+    ) -> None:
+        super(MEEGNet, self).__init__(input_size, n_outputs)
+
+        maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
+
+        self.feature_extraction = nn.Sequential(
             nn.Conv2d(input_size[0], 100, (input_size[1], 1)),
             nn.ReLU(),
             nn.Conv2d(100, 200, (1, 9)),
-            self.maxpool,
+            maxpool,
             nn.ReLU(),
             nn.Conv2d(200, 200, (1, 9)),
-            self.maxpool,
+            maxpool,
             nn.ReLU(),
             nn.Conv2d(200, 100, (1, 9)),
-            self.maxpool,
+            maxpool,
             nn.ReLU(),
             Flatten(),
             nn.Dropout(dropout),
-        ]
+        )
 
-        layers = nn.ModuleList(layer_list)
-        lin_size = self._get_lin_size(layers)
-
-        self.feature_extraction = nn.Sequential(*layers).to(torch.float64)
+        lin_size = self._get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
-            *nn.ModuleList(
-                [
-                    nn.Linear(lin_size, int(n_linear / 2)).to(torch.float64),
-                    nn.Linear(int(n_linear / 2), n_outputs).to(torch.float64),
-                ]
-            )
+            nn.Linear(lin_size, n_linear // 2),
+            nn.Linear(n_linear // 2, n_outputs),
         )
 
 
 class FullNet(nn.Module):
+    """
+    FullNet architecture implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape (S, C, T) where S is the number of sensors.
+    n_outputs : int
+        Number of output classes.
+    hlayers : int, optional
+        Number of hidden layers. Defaults to 2.
+    filter_size : int, optional
+        Filter size. Defaults to 7.
+    nchan : int, optional
+        Number of channels. Defaults to 5.
+    n_linear : int, optional
+        Number of neurons in the first linear layer. Defaults to 150.
+    dropout : float, optional
+        Dropout rate. Defaults to 0.25.
+    batchnorm : bool, optional
+        Whether to use batch normalization. Defaults to False.
+    maxpool : int, optional
+        Max pooling size. Defaults to 0.
+    """
+
     def __init__(
         self,
-        input_size,
-        n_outputs,
-        hlayers=2,
-        filter_size=7,
-        nchan=5,
-        n_linear=150,
-        dropout=0.25,
-        batchnorm=False,
-        maxpool=0,
-    ):
+        input_size: tuple,
+        n_outputs: int,
+        hlayers: int = 2,
+        filter_size: int = 7,
+        nchan: int = 5,
+        n_linear: int = 150,
+        dropout: float = 0.25,
+        batchnorm: bool = False,
+        maxpool: int = 0,
+    ) -> None:
         super(FullNet, self).__init__()
-        self.input_size = input_size
 
-        layer_list = [
+        self.feature_extraction = nn.Sequential(
             nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
             nn.ReLU(),
-        ]
-        prev = nchan
-        for i in range(0, int(hlayers / 2)):
-            nex = prev * 2
-            layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
-            if batchnorm:
-                layer_list += [nn.BatchNorm2d(nex)]
-            if maxpool != 0:
-                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
-            layer_list += [nn.ReLU()]
-            prev = nex
-
-        if hlayers % 2 != 0:
-            layer_list += [nn.Conv2d(prev, prev, (1, filter_size))]
-            if batchnorm:
-                layer_list += [nn.BatchNorm2d(prev)]
-            if maxpool != 0:
-                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
-            layer_list += [nn.ReLU()]
-
-        for i in range(0, int(hlayers / 2)):
-            nex = int(prev / 2)
-            layer_list += [nn.Conv2d(prev, nex, (1, filter_size))]
-            if batchnorm:
-                layer_list += [nn.BatchNorm2d(nex)]
-            if maxpool != 0:
-                layer_list += [nn.MaxPool2d((1, maxpool), 1)]
-            layer_list += [nn.ReLU()]
-            prev = nex
-
-        layer_list += [
+            *self._build_conv_layers(hlayers, filter_size, nchan, batchnorm, maxpool),
             Flatten(),
             nn.Dropout(dropout),
-        ]
+        )
 
-        layers = nn.ModuleList(layer_list)
-        lin_size = self._get_lin_size(layers)
-
-        self.feature_extraction = nn.Sequential(*layers)
+        lin_size = self._get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
-            *nn.ModuleList(
-                [
-                    nn.Linear(lin_size, int(n_linear / 2)),
-                    nn.Linear(int(n_linear / 2), n_outputs),
-                ]
-            )
+            nn.Linear(lin_size, n_linear // 2),
+            nn.Linear(n_linear // 2, n_outputs),
         )
 
+    def _build_conv_layers(self, hlayers, filter_size, nchan, batchnorm, maxpool):
+        layers = []
+        prev = nchan
 
-class vanPutNet(customNet):
-    def __init__(self, input_size, n_output, dropout=0.25):
-        customNet.__init__(self, input_size, n_output)
-        layers = nn.ModuleList(
-            [
-                nn.Conv2d(1, 100, 3),
+        # Encoder
+        for i in range(hlayers // 2):
+            nex = prev * 2
+            layers += [
+                nn.Conv2d(prev, nex, (1, filter_size)),
                 nn.ReLU(),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 100, 3),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(100, 300, (2, 3)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 300, (1, 7)),
-                nn.MaxPool2d((2, 2)),
-                nn.Dropout(dropout),
-                nn.Conv2d(300, 100, (1, 3)),
-                nn.Conv2d(100, 100, (1, 3)),
-                Flatten(),
+                *([nn.BatchNorm2d(nex)] if batchnorm else []),
+                *([nn.MaxPool2d((1, maxpool), 1)] if maxpool != 0 else []),
             ]
+            prev = nex
+
+        # Middle layer (if odd number of hidden layers)
+        if hlayers % 2 != 0:
+            layers += [
+                nn.Conv2d(prev, prev, (1, filter_size)),
+                nn.ReLU(),
+                *([nn.BatchNorm2d(prev)] if batchnorm else []),
+                *([nn.MaxPool2d((1, maxpool), 1)] if maxpool != 0 else []),
+            ]
+
+        # Decoder
+        for i in range(hlayers // 2):
+            nex = prev // 2
+            layers += [
+                nn.Conv2d(prev, nex, (1, filter_size)),
+                nn.ReLU(),
+                *([nn.BatchNorm2d(nex)] if batchnorm else []),
+                *([nn.MaxPool2d((1, maxpool), 1)] if maxpool != 0 else []),
+            ]
+            prev = nex
+
+        return layers
+
+
+class VanPutNet(CustomNet):
+    """
+    VanPutNet architecture implementation.
+
+    Parameters
+    ----------
+    input_size : tuple
+        Input shape (C, H, W) or (S, C, T) for M/EEG data.
+    n_output : int
+        Number of output classes.
+    dropout : float, optional
+        Dropout rate. Defaults to 0.25.
+    """
+
+    def __init__(self, input_size: tuple, n_output: int, dropout: float = 0.25) -> None:
+        super(VanPutNet, self).__init__(input_size, n_output)
+
+        conv_layers = nn.Sequential(
+            nn.Conv2d(1, 100, 3),
+            nn.ReLU(),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(dropout),
+            nn.Conv2d(100, 100, 3),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(dropout),
+            nn.Conv2d(100, 300, (2, 3)),
+            nn.MaxPool2d((2, 2)),
+            nn.Dropout(dropout),
+            nn.Conv2d(300, 300, (1, 7)),
+            nn.MaxPool2d((1, 2)),
+            nn.Dropout(dropout),
+            nn.Conv2d(300, 100, (1, 3)),
+            nn.Conv2d(100, 100, (1, 3)),
+            Flatten(),
         )
 
-        lin_size = self._get_lin_size(layers)
-        layers.append(nn.Linear(lin_size, 2))
-        self.model = nn.Sequential(*layers)
+        lin_size = self._get_lin_size(conv_layers)
+        self.model = nn.Sequential(
+            conv_layers,
+            nn.Linear(lin_size, n_output),
+            nn.Softmax(dim=1),
+        )
 
-    def forward(self, x):
-        return self.model(x)
 
-
-class AutoEncoder(customNet):
+class AutoEncoder(CustomNet):
     def __init__(
         self,
         input_size,
     ):
-        customNet.__init__(self, input_size)
+        CustomNet.__init__(self, input_size)
 
         lin_size = input_size[0] * input_size[1] * input_size[2]
 
@@ -418,18 +653,50 @@ class AutoEncoder(customNet):
 class Model:
     def __init__(
         self,
-        name,
-        net_option,
-        input_size,
-        n_outputs,
-        save_path=None,
-        learning_rate=0.00001,
-        optimizer=optim.Adam,
-        criterion=nn.CrossEntropyLoss(),
-        n_folds=5,
-        device="cuda",
-        net_params=None,
-    ):
+        name: str,
+        net_option: str,
+        input_size: tuple,
+        n_outputs: int,
+        save_path: str = None,
+        learning_rate: float = 0.00001,
+        optimizer: callable = optim.Adam,
+        criterion: callable = nn.CrossEntropyLoss(),
+        n_folds: int = 5,
+        device: str = "cuda",
+        net_params: dict = None,
+    ) -> None:
+        """
+        Initialize the Model class.
+
+        Parameters
+        ----------
+        name : str
+            Model name.
+        net_option : str
+            Network architecture option.
+        input_size : tuple
+            Input shape (C, H, W) or (S, C, T) for EEG data.
+        n_outputs : int
+            Number of output classes.
+        save_path : str, optional
+            Model save path. Defaults to None.
+        learning_rate : float, optional
+            Learning rate. Defaults to 0.00001.
+        optimizer : callable, optional
+            Optimizer function. Defaults to Adam.
+        criterion : callable, optional
+            Loss function. Defaults to CrossEntropyLoss.
+        n_folds : int, optional
+            Number of folds for cross-validation. Defaults to 5.
+        device : str, optional
+            Device to use (cuda or cpu). Defaults to "cuda".
+        net_params : dict, optional
+            Network architecture parameters. Defaults to None.
+        """
+        assert isinstance(name, str), "Name must be a string"
+        assert isinstance(input_size, tuple), "Input size must be a tuple"
+        assert len(input_size) == 3, "Input size must have 3 dimensions"
+
         self.name = name
         self.input_size = input_size  # TODO here put assertions on the shape
         self.net = create_net(net_option, input_size, n_outputs, net_params)
@@ -454,28 +721,58 @@ class Model:
     def train(
         self,
         dataset,
-        batch_size=128,
-        patience=20,
-        max_epoch=None,
-        model_path=None,
-        num_workers=4,
-    ):
+        batch_size: int = 128,
+        patience: int = 20,
+        max_epoch: int = None,
+        model_path: str = None,
+        num_workers: int = 4,
+    ) -> None:
+        """
+        Train the model on the provided dataset.
+
+        Parameters
+        ----------
+        dataset
+            Dataset to train on.
+        batch_size : int, optional
+            Batch size for training. Defaults to 128.
+        patience : int, optional
+            Patience for early stopping. Defaults to 20.
+        max_epoch : int, optional
+            Maximum number of epochs to train. Defaults to None.
+        model_path : str, optional
+            Path to save the model. Defaults to None.
+        num_workers : int, optional
+            Number of workers for data loading. Defaults to 4.
+
+        Notes
+        -----
+        This method trains the model using the provided dataset and hyperparameters.
+        It uses early stopping based on the validation loss and saves the model
+        periodically.
+        """
+        # Check dataset compatibility
         assert (
             dataset.data[0].shape == self.input_size
-        ), "Size of the dataset samples should match the input size of the network."
-        train_accs = []
-        valid_accs = []
-        train_losses = []
-        valid_losses = []
+        ), "Dataset sample size must match network input size."
+
+        # Initialize training metrics
+        train_accs, valid_accs = [], []
+        train_losses, valid_losses = [], []
         best_vloss = float("inf")
         best_vacc = 0.5
         best_epoch = 0
+
+        # Load checkpoint values
         patience_state = self.results["current_patience"]
         epoch = self.checkpoint["epoch"]
+
+        # Set training mode and batch size
         self.net.train()
         self.batch_size = batch_size
         self.num_workers = num_workers
 
+        # Create data loaders
         LOG.info("Creating DataLoaders...")
         train_index, valid_index, test_index = dataset.data_split(0.8, 0.1, 0.1)
         trainloader = DataLoader(
@@ -493,32 +790,16 @@ class Model:
             pin_memory=True,
         )
 
+        # Log training configuration
         LOG.info("Starting Training with:")
-        LOG.info(f"batch size: {batch_size}")
-        LOG.info(f"learning rate: {self.lr}")
-        LOG.info(f"patience: {patience}")
+        LOG.info(f"Batch size: {batch_size}")
+        LOG.info(f"Learning rate: {self.lr}")
+        LOG.info(f"Patience: {patience}")
+
         while patience_state < patience:
             epoch += 1
-            n_batches = len(trainloader)
-            for i, batch in enumerate(trainloader):
-                self.optimizer.zero_grad()
-                if len(batch) > 2:
-                    X, y, groups = batch
-                else:
-                    X, y = batch
-                y = y.view(-1)
-                targets = Variable(y.type(torch.LongTensor)).to(self.device)
-                X = X.view(-1, *self.input_size).to(torch.float64).to(self.device)
-                loss = self.criterion(self.net.forward(X), targets)
-                loss = loss.to(torch.float64)
-                loss.backward()
-                self.optimizer.step()
-                progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
-                if n_batches > 10:
-                    if i % (n_batches // 10) == 0:
-                        LOG.info(progress)
-                else:
-                    LOG.info(progress)
+            self.train_epoch(trainloader, validloader)
+
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
             train_accs.append(train_acc)
@@ -554,6 +835,7 @@ class Model:
             LOG.info("Epoch: {}".format(epoch))
             LOG.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
             LOG.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+
             if max_epoch is not None:
                 if epoch == max_epoch:
                     LOG.info("Max number of epoch reached. Stopping training.")
@@ -561,6 +843,36 @@ class Model:
 
     def fit(self, *args, **kwargs):
         return self.train(args, *kwargs)
+
+    def train_batch(self, batch):
+        self.optimizer.zero_grad()
+        if len(batch) > 2:
+            X, y, groups = batch
+        else:
+            X, y = batch
+        y = y.view(-1)
+        targets = Variable(y.type(torch.LongTensor)).to(self.device)
+        X = X.view(-1, *self.input_size).to(self.device)
+        loss = self.criterion(self.net.forward(X), targets)
+        loss = loss
+        loss.backward()
+        self.optimizer.step()
+        return loss
+
+    def display_progress(self, i, epoch, loss, n_batches):
+        progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
+        if n_batches > 10:
+            if i % (n_batches // 10) == 0:
+                LOG.info(progress)
+        else:
+            LOG.info(progress)
+
+    def train_epoch(self, epoch, trainloader):
+        # Train loop for a single epoch
+        n_batches = len(trainloader)
+        for i, batch in enumerate(trainloader):
+            loss = self.train_batch(batch)
+            self.display_progress(i, epoch, loss, n_batches)
 
     def evaluate(self, dataloader):
         with torch.no_grad():
@@ -574,7 +886,7 @@ class Model:
                     X, y = batch
                 y = y.view(-1)
                 targets = Variable(y.type(torch.LongTensor)).to(self.device)
-                X = X.view(-1, *self.input_size).to(torch.float64).to(self.device)
+                X = X.view(-1, *self.input_size).to(self.device)
                 out = self.net.forward(X)
                 loss = self.criterion(out, targets)
                 acc = self.compute_accuracy(out, targets)
@@ -614,7 +926,8 @@ class Model:
         model_path = self._get_from_hub(repo)
         self.load(model_path)
 
-    def _load_net(self, model_path=None):
+    def _load_net(self, model_path: str = None) -> Tuple:
+        """Load network state and optimizer state from file."""
         if model_path is None:
             model_path = os.path.join(self.save_path, self.name + ".pt")
         if os.path.exists(model_path):
@@ -630,24 +943,33 @@ class Model:
         return net_state, optimizer_state, mat_data
 
     def load(self, model_path=None):
-        net_state, optimizer_state, mat_data = self._load_net(model_path)
-        if net_state[list(net_state.keys())[-1]].shape[0] == self.n_outputs:
-            self.net.load_state_dict(net_state)
-            self.optimizer.load_state_dict(optimizer_state)
-            self.results = mat_data
-        else:
-            feat_state_dict = OrderedDict()
-            for key, value in net_state.items():
-                if key.startswith("feature"):
-                    feat_state_dict[".".join(key.split(".")[1:])] = value
-            self.net.feature_extraction.load_state_dict(feat_state_dict)
+        """Load model from file."""
+        try:
+            net_state, optimizer_state, mat_data = self._load_net(model_path)
+            if net_state[list(net_state.keys())[-1]].shape[0] == self.n_outputs:
+                self.net.load_state_dict(net_state)
+                self.optimizer.load_state_dict(optimizer_state)
+                self.results = mat_data
+            else:
+                feat_state_dict = OrderedDict()
+                for key, value in net_state.items():
+                    if key.startswith("feature"):
+                        feat_state_dict[".".join(key.split(".")[1:])] = value
+                self.net.feature_extraction.load_state_dict(feat_state_dict)
+        except FileNotFoundError:
+            LOG.error(f"Model file not found: {model_path}")
 
-    def save(self, model_path=None):
-        if model_path is None:
-            model_path = os.path.join(self.save_path, self.name + ".pt")
-        mat_path = model_path[:-2] + "mat"
-        torch.save(self.checkpoint, model_path)
-        savemat(mat_path, self.results)
+    def save(self, model_path: str = None) -> None:
+        """Save model to file."""
+        try:
+            LOG.error(f"Error saving model to file: {model_path}")
+            if model_path is None:
+                model_path = os.path.join(self.save_path, self.name + ".pt")
+            mat_path = model_path[:-2] + "mat"
+            torch.save(self.checkpoint, model_path)
+            savemat(mat_path, self.results)
+        except OSError:
+            LOG.error(f"Error saving model to file: {model_path}")
 
     def compute_accuracy(self, y_pred, target):
         # Compute accuracy from 2 vectors of labels.
