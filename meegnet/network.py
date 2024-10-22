@@ -774,7 +774,7 @@ class Model:
 
         # Create data loaders
         LOG.info("Creating DataLoaders...")
-        train_index, valid_index, test_index = dataset.data_split(0.8, 0.1, 0.1)
+        train_index, valid_index, _ = dataset.data_split(0.8, 0.1, 0.1)
         trainloader = DataLoader(
             dataset.torchDataset(train_index),
             batch_size=batch_size,
@@ -828,13 +828,13 @@ class Model:
                     "state_dict": self.net.state_dict(),
                     "optimizer": self.optimizer.state_dict(),
                 }
-                if self.save_path is not None:
+                if self.save_path is not None and epoch != 0:
                     self.save(model_path)
             else:
                 patience_state += 1
-            LOG.info("Epoch: {}".format(epoch))
-            LOG.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-            LOG.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+            LOG.info(f"Epoch: {epoch}")
+            LOG.info(f" [LOSS] TRAIN {train_loss} / VALID {valid_loss}")
+            LOG.info(f" [ACC] TRAIN {train_acc} / VALID {valid_acc}")
 
             if max_epoch is not None:
                 if epoch == max_epoch:
