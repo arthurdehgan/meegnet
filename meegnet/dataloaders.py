@@ -330,7 +330,7 @@ class EpochedDataset:
                 labels = [self.subject_list.index(labels[0])] * n_samples
             else:
                 labels = [labels[0]] * n_samples
-        return labels
+        return np.array(labels)
 
     def random_sub(self):
         return np.random.choice(self.subject_list)
