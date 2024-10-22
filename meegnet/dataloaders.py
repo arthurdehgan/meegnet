@@ -388,7 +388,9 @@ class EpochedDataset:
         """Leaves subjects out split."""
         indexes = [[], [], []]
         for i, split in enumerate(random_split(np.arange(self.n_subjects), sizes, generator)):
-            indexes[i].extend(np.where(self.groups == sub)[0].tolist() for sub in split)
+            indexes[i] = [
+                idx for sub in split for idx in np.where(self.groups == sub)[0].tolist()
+            ]
         return tuple(indexes)
 
     def _within_subject_split(self, sizes, generator):
@@ -423,7 +425,7 @@ class EpochedDataset:
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
 
-        sizes = tuple(train_size, valid_size, test_size)
+        sizes = (train_size, valid_size, test_size)
         if self.lso:
             return self._leave_subjects_out_split(sizes, generator)
         elif self.groups is not None:
