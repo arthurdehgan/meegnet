@@ -706,8 +706,8 @@ class Model:
         self.save_path = save_path
         self.lr = learning_rate
         self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
-        self.results = defaultdict(lambda: 0)
         self.checkpoint = defaultdict(lambda: 0)
+        self.tracker = TrainingTracker(self.save_path, self.name)
 
         if torch.cuda.is_available():
             self.device = "cuda"
@@ -756,17 +756,6 @@ class Model:
             dataset.data[0].shape == self.input_size
         ), "Dataset sample size must match network input size."
 
-        # Initialize training metrics
-        train_accs, valid_accs = [], []
-        train_losses, valid_losses = [], []
-        best_vloss = float("inf")
-        best_vacc = 0.5
-        best_epoch = 0
-
-        # Load checkpoint values
-        patience_state = self.results["current_patience"]
-        epoch = self.checkpoint["epoch"]
-
         # Set training mode and batch size
         self.net.train()
         self.batch_size = batch_size
@@ -796,50 +785,19 @@ class Model:
         LOG.info(f"Learning rate: {self.lr}")
         LOG.info(f"Patience: {patience}")
 
-        while patience_state < patience:
+        while self.tracker.patience_state < patience and (
+            max_epoch is None or epoch <= max_epoch
+        ):
             epoch += 1
             self.train_epoch(trainloader, validloader)
-
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
-            train_accs.append(train_acc)
-            valid_accs.append(valid_acc)
-            train_losses.append(train_loss)
-            valid_losses.append(valid_loss)
-
-            if valid_loss < best_vloss:
-                best_vacc = valid_acc
-                best_vloss = valid_loss
-                best_epoch = epoch
-                patience_state = 0
-                self.results = {
-                    "acc_score": [best_vacc],
-                    "loss_score": [best_vloss],
-                    "acc": valid_accs,
-                    "train_acc": train_accs,
-                    "valid_loss": valid_losses,
-                    "train_loss": train_losses,
-                    "best_epoch": best_epoch,
-                    "patience": patience,
-                    "current_patience": patience_state,
-                }
-                self.checkpoint = {
-                    "epoch": epoch + 1,
-                    "state_dict": self.net.state_dict(),
-                    "optimizer": self.optimizer.state_dict(),
-                }
-                if self.save_path is not None and epoch != 0:
-                    self.save(model_path)
-            else:
-                patience_state += 1
-            LOG.info(f"Epoch: {epoch}")
-            LOG.info(f" [LOSS] TRAIN {train_loss} / VALID {valid_loss}")
-            LOG.info(f" [ACC] TRAIN {train_acc} / VALID {valid_acc}")
-
-            if max_epoch is not None:
-                if epoch == max_epoch:
-                    LOG.info("Max number of epoch reached. Stopping training.")
-                    break
+            self.tracker.update(
+                epoch, train_loss, valid_loss, train_acc, valid_acc, self.net, self.optimizer
+            )
+            LOG.info("Epoch: {}".format(epoch))
+            LOG.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
+            LOG.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
 
     def fit(self, *args, **kwargs):
         return self.train(args, *kwargs)
@@ -896,7 +854,7 @@ class Model:
                 counter += n
             floss = losses / float(counter)
             faccuracy = accuracy / float(counter)
-        return floss, faccuracy
+            return floss, faccuracy
 
     def test(self, dataset):
         _, _, test_index = dataset.data_split(0.8, 0.1, 0.1)
@@ -937,39 +895,27 @@ class Model:
             optimizer_state = checkpoint["optimizer"]
         mat_path = model_path[:-2] + "mat"
         if os.path.exists(mat_path):
-            mat_data = loadmat(mat_path)
+            self.tracker.load(mat_path)
         else:
             LOG.warning(f"Error while loading checkpoint from {model_path}")
-        return net_state, optimizer_state, mat_data
+        return net_state, optimizer_state
 
     def load(self, model_path=None):
         """Load model from file."""
         try:
-            net_state, optimizer_state, mat_data = self._load_net(model_path)
+            net_state, optimizer_state = self._load_net(model_path)
             if net_state[list(net_state.keys())[-1]].shape[0] == self.n_outputs:
                 self.net.load_state_dict(net_state)
                 self.optimizer.load_state_dict(optimizer_state)
-                self.results = mat_data
             else:
                 feat_state_dict = OrderedDict()
                 for key, value in net_state.items():
                     if key.startswith("feature"):
                         feat_state_dict[".".join(key.split(".")[1:])] = value
                 self.net.feature_extraction.load_state_dict(feat_state_dict)
+                self.tracker = TrainingTracker(self.save_path, self.name)
         except FileNotFoundError:
             LOG.error(f"Model file not found: {model_path}")
-
-    def save(self, model_path: str = None) -> None:
-        """Save model to file."""
-        try:
-            LOG.error(f"Error saving model to file: {model_path}")
-            if model_path is None:
-                model_path = os.path.join(self.save_path, self.name + ".pt")
-            mat_path = model_path[:-2] + "mat"
-            torch.save(self.checkpoint, model_path)
-            savemat(mat_path, self.results)
-        except OSError:
-            LOG.error(f"Error saving model to file: {model_path}")
 
     def compute_accuracy(self, y_pred, target):
         # Compute accuracy from 2 vectors of labels.
@@ -989,3 +935,58 @@ class Model:
             if hasattr(layer, "weight"):
                 weights.append(layer.weight.detach().numpy())
         return weights
+
+
+class TrainingTracker:
+    def __init__(self, save_path, name):
+        self.progress = {
+            "validation_accuracies": [],
+            "train_accuracies": [],
+            "validation_losses": [],
+            "train_losses": [],
+        }
+        self.best = {
+            "validation_accuracy": 0,
+            "train_accuracy": 0,
+            "validation_loss": float("inf"),
+            "train_loss": float("inf"),
+            "epoch": 0,
+        }
+        self.patience_state = 0
+        self.save_path = save_path
+        self.name = name
+
+    def update(self, epoch, tloss, vloss, tacc, vacc, net, optimizer):
+        self.progress["validation_accuracies"].append(vacc)
+        self.progress["train_accuracies"].append(tacc)
+        self.progress["validation_losses"].append(vloss)
+        self.progress["train_losses"].append(tloss)
+        self.patience_state += 1
+
+        if vacc > self.best["validation_accuracy"]:
+            self.best["train_loss"] = tloss
+            self.best["validation_loss"] = vloss
+            self.best["train_accuracy"] = tacc
+            self.best["valid_accuracy"] = vacc
+            self.best["epoch"] = epoch
+            self.best["net"] = net
+            self.best["optimizer"] = optimizer
+            self.patience_state = 0
+            checkpoint = {"state_dict": net.state_dict, "optimizer": optimizer}
+            self.save(checkpoint, self.name)
+
+    def save(self, checkpoint, name: str, model_path: str = None) -> None:
+        """Save model to file."""
+        if model_path is None:
+            model_path = os.path.join(self.save_path, name + ".pt")
+        mat_path = model_path[:-2] + "mat"
+        try:
+            torch.save(checkpoint, model_path)
+            savemat(mat_path, {"progress": self.progress, "best": self.best})
+        except OSError:
+            LOG.error(f"Error saving model to file: {model_path}")
+
+    def load(self, mat_path):
+        data = loadmat(mat_path)
+        self.progress = data["progress"]
+        self.best = data["best"]
