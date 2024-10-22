@@ -372,7 +372,7 @@ class EpochedDataset:
             "plannar1": [1],
             "GRAD2": [2],
             "plannar2": [2],
-            "ALL": [1, 2, 3],
+            "ALL": [0, 1, 2],
         }
         return sensor_mapping.get(sensortype)
 
