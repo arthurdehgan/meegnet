@@ -171,14 +171,61 @@ class EpochedDataset:
         random.seed(self.random_state)
         torch.manual_seed(self.random_state)
 
-    def _load_csv(self, data_path, csv_name="participants_info.csv"):
-        csv_file = os.path.join(data_path, csv_name)
+    def _load_csv(self, csv_file: str) -> pd.DataFrame:
+        """Loads a CSV file, handling index column."""
+        with open(csv_file) as f:
+            first_line = f.readline()
+        return pd.read_csv(csv_file, index_col=0 if first_line.startswith(",") else None)
+
+    def preload(self, data_path: str, csv_path: str = None) -> pd.DataFrame:
+        """
+        Loads the subject list from a CSV file.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to the folder containing the dataset.
+        csv_path : str, optional
+            Path to the CSV file. Defaults to "participants_info.csv" in the data_path.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame containing participant information.
+        """
+
+        # Determine CSV file path
+        csv_file = csv_path or os.path.join(data_path, "participants_info.csv")
+        assert os.path.exists(csv_file), f"CSV file not found: {csv_file}"
+
+        # Load CSV file
+        dataframe = self._load_csv(csv_file)
+
+        # Sample participants (if needed)
+        if self.n_subjects < len(dataframe):
+            dataframe = dataframe.sample(frac=1, random_state=self.random_state).reset_index(
+                drop=True
+            )[: self.n_subjects]
+
+        # Update instance attributes
+        LOG.info(f"Logging subjects and labels from {data_path}...")
+        self.data_path = data_path
+        self.subject_list = dataframe["sub"].tolist()
+
+        return dataframe
+
+    def _check_index_and_load_csv(self, csv_file) -> pd.DataFrame:
         with open(csv_file) as f:
             first_line = f.readline()
         if first_line.startswith(","):
             df = pd.read_csv(csv_file, index_col=0)
         else:
             df = pd.read_csv(csv_file)
+        return df
+
+    def _load_csv(self, data_path, csv_name="participants_info.csv") -> pd.DataFrame:
+        csv_file = os.path.join(data_path, csv_name)
+        df = self._check_index_and_load_csv(csv_file)
         participants_df = df.sample(frac=1, random_state=self.random_state).reset_index(
             drop=True
         )[: self.n_subjects]
@@ -202,14 +249,10 @@ class EpochedDataset:
         """
 
         # Determine CSV file path
-        if csv_path is None:
-            csv_path = os.path.join(data_path, "participants_info.csv")
-
-        # Load CSV file
-        if csv_path.startswith(","):
-            dataframe = pd.read_csv(csv_path, index_col=0)
+        if csv_path is not None and os.path.exists(csv_path):
+            dataframe = self._check_index_and_load_csv(csv_path)
         else:
-            dataframe = pd.read_csv(csv_path)
+            dataframe = self._load_csv(data_path)
 
         # Update instance attributes
         LOG.info(f"Logging subjects and labels from {data_path}...")
