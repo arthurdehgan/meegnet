@@ -1,8 +1,5 @@
-meegnet package
-===============
-
-Submodules
-----------
+API Documentation
+=================
 
 meegnet.network module
 -------------------------
@@ -30,14 +27,6 @@ meegnet.viz module
 ------------------
 
 .. automodule:: meegnet.viz
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: meegnet
    :members:
    :undoc-members:
    :show-inheritance:
