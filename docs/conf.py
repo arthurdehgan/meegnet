@@ -9,7 +9,8 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../meegnet"))
+sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.abspath("../meegnet/"))
 
 project = "MEEGNet"
 copyright = "2024, Arthur Dehgan"
