@@ -785,19 +785,20 @@ class Model:
         LOG.info(f"Learning rate: {self.lr}")
         LOG.info(f"Patience: {patience}")
 
+        epoch = 1
         while self.tracker.patience_state < patience and (
             max_epoch is None or epoch <= max_epoch
         ):
-            epoch += 1
-            self.train_epoch(trainloader, validloader)
+            self.train_epoch(epoch, trainloader)
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
             self.tracker.update(
                 epoch, train_loss, valid_loss, train_acc, valid_acc, self.net, self.optimizer
             )
-            LOG.info("Epoch: {}".format(epoch))
-            LOG.info(" [LOSS] TRAIN {} / VALID {}".format(train_loss, valid_loss))
-            LOG.info(" [ACC] TRAIN {} / VALID {}".format(train_acc, valid_acc))
+            LOG.info(f"Epoch: {epoch}")
+            LOG.info(f" [LOSS] TRAIN {train_loss} / VALID {valid_loss}")
+            LOG.info(f" [ACC] TRAIN {train_acc} / VALID {valid_acc}")
+            epoch += 1
 
     def fit(self, *args, **kwargs):
         return self.train(args, *kwargs)
@@ -969,8 +970,6 @@ class TrainingTracker:
             self.best["train_accuracy"] = tacc
             self.best["valid_accuracy"] = vacc
             self.best["epoch"] = epoch
-            self.best["net"] = net
-            self.best["optimizer"] = optimizer
             self.patience_state = 0
             checkpoint = {"state_dict": net.state_dict, "optimizer": optimizer}
             self.save(checkpoint, self.name)
@@ -982,11 +981,16 @@ class TrainingTracker:
         mat_path = model_path[:-2] + "mat"
         try:
             torch.save(checkpoint, model_path)
-            savemat(mat_path, {"progress": self.progress, "best": self.best})
+            save_dict = {key: value for key, value in self.progress.items()}
+            save_dict.update({key: value for key, value in self.best.items()})
+            savemat(mat_path, save_dict)
         except OSError:
             LOG.error(f"Error saving model to file: {model_path}")
 
     def load(self, mat_path):
         data = loadmat(mat_path)
-        self.progress = data["progress"]
-        self.best = data["best"]
+        for key, value in data.items():
+            if key in self.progress.keys():
+                self.progress[key] = value
+            elif key in self.best.keys():
+                self.best[key] = value
