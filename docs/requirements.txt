@@ -1,5 +1,13 @@
 sphinx_rtd_theme
 nbsphinx
-torch
-pandas
 mne
+torch
+numpy
+scipy
+pandas
+scikit-learn
+configargparse
+torchvision
+huggingface_hub
+grad-cam
+
