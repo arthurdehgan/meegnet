@@ -11,7 +11,7 @@
    features
    install
    tutorials
-   modules
+   meegnet
    contribute
    references
 
