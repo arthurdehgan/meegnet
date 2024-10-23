@@ -1,2 +1,5 @@
 sphinx_rtd_theme
 nbsphinx
+torch
+pandas
+mne
