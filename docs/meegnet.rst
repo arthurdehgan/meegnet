@@ -4,10 +4,10 @@ meegnet package
 Submodules
 ----------
 
-meegnet.algorithms module
+meegnet.network module
 -------------------------
 
-.. automodule:: meegnet.algorithms
+.. automodule:: meegnet.network
    :members:
    :undoc-members:
    :show-inheritance:
