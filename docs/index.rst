@@ -3,17 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. include:: ../README.rst
+
 .. toctree::
    :maxdepth: 2
 
-   features
    install
    tutorials
    meegnet
    contribute
    references
-
-.. include:: ../README.rst
 
 Indices and tables
 ==================
