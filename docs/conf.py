@@ -36,8 +36,14 @@ napoleon_use_param = False
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
+import guzzle_sphinx_theme
+
+html_theme_path = guzzle_sphinx_theme.html_theme_path()
 html_theme = "guzzle_sphinx_theme"
-html_static_path = ["_static"]
+
+# Register the theme as an extension to generate a sitemap.xml
+extensions.append("guzzle_sphinx_theme")
+
 html_theme_options = {
     # Set the name of the project to appear in the sidebar
     "project_nav_name": "MEEGNet",
