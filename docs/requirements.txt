@@ -1,4 +1,4 @@
-sphinx_rtd_theme
+guzzle_sphinx_theme
 nbsphinx
 mne
 torch

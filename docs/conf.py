@@ -20,7 +20,7 @@ release = "0.1.1"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ["nbsphinx", "sphinx.ext.autodoc", "sphinx_rtd_theme", "sphinx.ext.napoleon"]
+extensions = ["nbsphinx", "sphinx.ext.autodoc", "guzzle_sphinx_theme", "sphinx.ext.napoleon"]
 
 # generate autosummary pages
 autosummary_generate = True
@@ -36,5 +36,9 @@ napoleon_use_param = False
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "guzzle_sphinx_theme"
 html_static_path = ["_static"]
+html_theme_options = {
+    # Set the name of the project to appear in the sidebar
+    "project_nav_name": "MEEGNet",
+}
