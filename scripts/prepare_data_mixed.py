@@ -61,7 +61,7 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
         df.to_csv(f)
 
 
-def process_data(data, sfreq, datatype, n_epochs=None):
+def process_data(data, sfreq, dataset, n_epochs=None):
     # TODO HARD-CODED = bad !!
     length = 400
     ignore = 30  # to ignore the first 30s of resting-state signals
@@ -77,7 +77,7 @@ def process_data(data, sfreq, datatype, n_epochs=None):
             ]
         )
         # Ugly but, this means that we will select n_epochs trials only when data is not passive
-        if datatype == "passive":
+        if dataset == "passive":
             data = data.swapaxes(0, 1)
         elif n_epochs is not None:
             # Generating fake epochs from continuous data like resting-state:
@@ -269,7 +269,7 @@ if __name__ == "__main__":
     data_filepath = os.path.join(
         args.raw_path,
         "cc700/meg/pipeline/release005/BIDSsep/",
-        f"derivatives_{args.datatype}",
+        f"derivatives_{args.dataset}",
         "aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/",
     )
 
@@ -277,7 +277,8 @@ if __name__ == "__main__":
     ### LOADING AND PREPARING DATA ###
     ##################################
 
-    for label in ("auditory", "visual"):
+    # for label in ("auditory", "visual"):
+    for label in ["auditory", "visual"]:
         np.random.seed(args.seed)
         save_path = os.path.join(args.save_path, f"mixed_{label}")
         if not os.path.exists(save_path):
