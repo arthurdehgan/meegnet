@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 import numpy as np
 from huggingface_hub import hf_hub_download
-from meegnet.layer import DepthwiseConv2d, Flatten, SeparableConv2d, DeMixing
 
 LOG = logging.getLogger("meegnet")
 
@@ -31,6 +30,7 @@ def create_net(
         Number of output neurons.
     net_params : dict, optional
         Network parameters (required for "MLP" and "custom" options).
+
     Returns
     -------
     nn.Module
@@ -78,6 +78,104 @@ def create_net(
     return net_options[net_option.lower()]()
 
 
+class Flatten(nn.Module):
+    """
+    Flatten layer to connect feature extraction and classification parts of a network.
+
+    Parameters
+    ----------
+    None
+
+    Attributes
+    ----------
+    None
+
+    Methods
+    -------
+    forward(x)
+        Flattens the input tensor.
+    """
+
+    def forward(self, x):
+        """Flattens the input tensor."""
+        return x.view(x.size(0), -1)
+
+
+class DepthwiseConv2d(nn.Module):
+    """
+    Depthwise separable convolutional layer.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    kernel_size : int or tuple
+        Size of the convolutional kernel.
+    depthwise_multiplier : int, optional
+        Multiplier for depthwise convolution. Defaults to 1.
+
+    Attributes
+    ----------
+    depthwise : nn.Conv2d
+        Depthwise convolutional layer.
+
+    Methods
+    -------
+    forward(x)
+        Applies depthwise convolution to the input tensor.
+    """
+
+    def __init__(self, in_channels, kernel_size, depthwise_multiplier=1, **kwargs):
+        super().__init__()
+        self.depthwise = nn.Conv2d(
+            in_channels,
+            in_channels * depthwise_multiplier,
+            kernel_size,
+            groups=in_channels,
+            **kwargs,
+        )
+
+    def forward(self, x):
+        """Applies depthwise convolution to the input tensor."""
+        return self.depthwise(x)
+
+
+class SeparableConv2d(nn.Module):
+    """
+    Separable convolutional layer (depthwise + pointwise convolution).
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels.
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple
+        Size of the convolutional kernel.
+
+    Attributes
+    ----------
+    depthwise : DepthwiseConv2d
+        Depthwise convolutional layer.
+    pointwise : nn.Conv2d
+        Pointwise convolutional layer.
+
+    Methods
+    -------
+    forward(x)
+        Applies separable convolution to the input tensor.
+    """
+
+    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
+        super().__init__()
+        self.depthwise = DepthwiseConv2d(in_channels, kernel_size, **kwargs)
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, **kwargs)
+
+    def forward(self, x):
+        """Applies separable convolution to the input tensor."""
+        return self.pointwise(self.depthwise(x))
+
+
 class CustomNet(nn.Module):
     """
     Base class for custom neural networks.
@@ -116,7 +214,7 @@ class CustomNet(nn.Module):
         input_size (tuple): Input shape of the network.
         n_outputs (int): Number of output neurons.
         """
-        super(CustomNet, self).__init__()
+        super().__init__()
         self.input_size = input_size
         self.n_outputs = n_outputs
 
@@ -196,7 +294,7 @@ class EEGNet(CustomNet):
         dropout_type = nn.Dropout2d if dropout_option == "SpatialDropout2D" else nn.Dropout
 
         n_channels = input_size[1]
-        layer_list = [
+        self.feature_extraction = nn.Sequential(
             nn.Conv2d(
                 input_size[0],
                 n_filters,
@@ -228,9 +326,7 @@ class EEGNet(CustomNet):
             nn.AvgPool2d((1, 8)),
             dropout_type(dropout),
             Flatten(),
-        ]
-
-        self.feature_extraction = nn.Sequential(*layer_list)
+        )
 
         lin_size = self._get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(nn.Linear(lin_size, n_outputs))
@@ -251,10 +347,10 @@ class VGG16(CustomNet):
     """
 
     def __init__(self, input_size: tuple, n_outputs: int) -> None:
-        super(VGG16, self).__init__(input_size, n_outputs)
+        super().__init__(input_size, n_outputs)
 
         in_channels = input_size[0]
-        layer_list = [
+        self.feature_extraction = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
@@ -280,23 +376,17 @@ class VGG16(CustomNet):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             Flatten(),
-        ]
-        layers = nn.ModuleList(layer_list)
-        self.feature_extraction = nn.Sequential(*layers)
+        )
 
-        lin_size = self._get_lin_size(layers)
+        lin_size = self._get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
-            *nn.ModuleList(
-                [
-                    nn.Linear(lin_size, 4096),
-                    nn.ReLU(),
-                    nn.Dropout(),
-                    nn.Linear(4096, 4096),
-                    nn.ReLU(),
-                    nn.Dropout(),
-                    nn.Linear(4096, n_outputs),
-                ]
-            )
+            nn.Linear(lin_size, 4096),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(4096, n_outputs),
         )
 
 
@@ -318,7 +408,7 @@ class MLP(CustomNet):
     """
 
     def __init__(self, input_size: tuple, n_outputs: int, hparams: dict) -> None:
-        super(MLP, self).__init__(input_size, n_outputs)
+        super().__init__(input_size, n_outputs)
         n_inputs = np.prod(input_size)
 
         self.feature_extraction = nn.Sequential(
@@ -362,7 +452,7 @@ class MEEGNet(CustomNet):
         n_linear: int = 2000,
         dropout: float = 0.5,
     ) -> None:
-        super(MEEGNet, self).__init__(input_size, n_outputs)
+        super().__init__(input_size, n_outputs)
 
         maxpool = nn.MaxPool2d(kernel_size=(1, 20), stride=1)
 
@@ -389,7 +479,7 @@ class MEEGNet(CustomNet):
         )
 
 
-class FullNet(nn.Module):
+class FullNet(CustomNet):
     """
     FullNet architecture implementation.
 
@@ -427,7 +517,7 @@ class FullNet(nn.Module):
         batchnorm: bool = False,
         maxpool: int = 0,
     ) -> None:
-        super(FullNet, self).__init__()
+        super().__init__()
 
         self.feature_extraction = nn.Sequential(
             nn.Conv2d(input_size[0], nchan, (input_size[1], 1)),
@@ -496,10 +586,11 @@ class VanPutNet(CustomNet):
     """
 
     def __init__(self, input_size: tuple, n_output: int, dropout: float = 0.25) -> None:
-        super(VanPutNet, self).__init__(input_size, n_output)
+        super().__init__(input_size, n_output)
 
-        conv_layers = nn.Sequential(
-            nn.Conv2d(1, 100, 3),
+        in_channels = input_size[0]
+        self.feature_extraction = nn.Sequential(
+            nn.Conv2d(in_channels, 100, 3),
             nn.ReLU(),
             nn.MaxPool2d((2, 2)),
             nn.Dropout(dropout),
@@ -517,9 +608,8 @@ class VanPutNet(CustomNet):
             Flatten(),
         )
 
-        lin_size = self._get_lin_size(conv_layers)
-        self.model = nn.Sequential(
-            conv_layers,
+        lin_size = self._get_lin_size(self.feature_extraction)
+        self.classif = nn.Sequential(
             nn.Linear(lin_size, n_output),
             nn.Softmax(dim=1),
         )
@@ -553,62 +643,6 @@ class AutoEncoder(CustomNet):
 
 
 class Model:
-    """
-    A class representing a neural network model.
-
-    Attributes
-    ----------
-    name : str
-        Model name.
-    net : nn.Module
-        Neural network architecture.
-    input_size : tuple
-        Input shape (C, H, W) or (S, C, T) for EEG data.
-    n_outputs : int
-        Number of output classes.
-    save_path : str
-        Model save path.
-    lr : float
-        Learning rate.
-    optimizer : callable
-        Optimizer function.
-    criterion : callable
-        Loss function.
-    n_folds : int
-        Number of folds for cross-validation.
-    device : str
-        Device to use (cuda or cpu).
-    tracker : TrainingTracker
-        Training progress tracker.
-
-    Methods
-    -------
-    train(dataset, batch_size=128, patience=20, max_epoch=None, model_path=None, num_workers=4)
-        Train the model on the provided dataset.
-    fit(*args, **kwargs)
-        Alias for train method.
-    train_batch(batch)
-        Train on a single batch.
-    display_progress(i, epoch, loss, n_batches)
-        Display training progress.
-    train_epoch(epoch, trainloader)
-        Train loop for a single epoch.
-    evaluate(dataloader)
-        Evaluate model on a dataloader.
-    test(dataset)
-        Evaluate model on a test dataset.
-    from_huggingface(repo=None)
-        Load pre-trained model from repository.
-    load(model_path=None)
-        Load model from file.
-    compute_accuracy(y_pred, target)
-        Compute accuracy from predictions and targets.
-    get_feature_weights()
-        Get feature extraction weights.
-    get_clf_weights()
-        Get classification weights.
-    """
-
     def __init__(
         self,
         name: str,
@@ -624,7 +658,7 @@ class Model:
         net_params: dict = None,
     ) -> None:
         """
-        Initializes the Model class.
+        Initialize the Model class.
 
         Parameters
         ----------
@@ -650,16 +684,6 @@ class Model:
             Device to use (cuda or cpu). Defaults to "cuda".
         net_params : dict, optional
             Network architecture parameters. Defaults to None.
-
-        Raises
-        ------
-        AssertionError
-            If input size is not a tuple or does not have 3 dimensions.
-
-        Notes
-        -----
-        This method initializes the model with the provided parameters and sets up the
-        neural network architecture, optimizer, and loss function.
         """
         assert isinstance(name, str), "Name must be a string"
         assert isinstance(input_size, tuple), "Input size must be a tuple"
@@ -696,7 +720,7 @@ class Model:
         num_workers: int = 4,
     ) -> None:
         """
-        Trains the model on the provided dataset.
+        Train the model on the provided dataset.
 
         Parameters
         ----------
@@ -705,7 +729,7 @@ class Model:
         batch_size : int, optional
             Batch size for training. Defaults to 128.
         patience : int, optional
-            Number of epochs without improvement before early stopping. Defaults to 20.
+            Patience for early stopping. Defaults to 20.
         max_epoch : int, optional
             Maximum number of epochs to train. Defaults to None.
         model_path : str, optional
@@ -713,21 +737,13 @@ class Model:
         num_workers : int, optional
             Number of workers for data loading. Defaults to 4.
 
-        Raises
-        ------
-        AssertionError
-            If dataset sample dimensions does not match network input size.
-
         Notes
         -----
         This method trains the model using the provided dataset and hyperparameters.
-        It uses early stopping based on the validation loss and saves the model periodically.
-        The training process is logged to the console.
-
-        Returns
-        -------
-        None
+        It uses early stopping based on the validation loss and saves the model
+        periodically.
         """
+        # Check dataset compatibility
         assert (
             dataset.data[0].shape == self.input_size
         ), "Dataset sample size must match network input size."
@@ -772,41 +788,14 @@ class Model:
                 epoch, train_loss, valid_loss, train_acc, valid_acc, self.net, self.optimizer
             )
             LOG.info(f"Epoch: {epoch}")
-            LOG.info(f" [LOSS] TRAIN {train_loss} / VALID {valid_loss}")
-            LOG.info(f" [ACC] TRAIN {train_acc} / VALID {valid_acc}")
+            LOG.info(f" [LOSS] TRAIN {train_loss:.4f} / VALID {valid_loss:.4f}")
+            LOG.info(f" [ACC] TRAIN {100*train_acc:.2f}% / VALID {100*valid_acc:.2f}%")
             epoch += 1
 
     def fit(self, *args, **kwargs):
-        """
-        Alias for the train method, provided for compatibility purposes.
-
-        Parameters
-        ----------
-        *args : list
-            Variable length argument list passed to the train method.
-        **kwargs : dict
-            Keyword arguments passed to the train method.
-
-        See Also
-        --------
-        train : The method that performs the actual training.
-        """
         return self.train(args, *kwargs)
 
     def train_batch(self, batch):
-        """
-        Trains the model on a single batch.
-
-        Parameters
-        ----------
-        batch : tuple
-            Batch of data, containing input and target tensors.
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Training loss for the batch.
-        """
         self.optimizer.zero_grad()
         if len(batch) > 2:
             X, y, groups = batch
@@ -822,28 +811,6 @@ class Model:
         return loss
 
     def display_progress(self, i, epoch, loss, n_batches):
-        """
-        Displays training progress.
-
-        Parameters
-        ----------
-        i : int
-            Current batch index.
-        epoch : int
-            Current epoch number.
-        loss : float
-            Current batch loss.
-        n_batches : int
-            Total number of batches.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Logs progress at regular intervals, providing updates on epoch, batch, and loss.
-        """
         progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
         if n_batches > 10:
             if i % (n_batches // 10) == 0:
@@ -852,25 +819,6 @@ class Model:
             LOG.info(progress)
 
     def train_epoch(self, epoch, trainloader):
-        """
-        Trains the model for a single epoch.
-
-        Parameters
-        ----------
-        epoch : int
-            Current epoch number.
-        trainloader : DataLoader
-            Training data loader.
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Iterates over the training dataset, calling train_batch for each batch.
-        Displays training progress using display_progress.
-        """
         # Train loop for a single epoch
         n_batches = len(trainloader)
         for i, batch in enumerate(trainloader):
@@ -878,26 +826,6 @@ class Model:
             self.display_progress(i, epoch, loss, n_batches)
 
     def evaluate(self, dataloader):
-        """
-        Evaluates the model's performance on a given dataset.
-
-        Parameters
-        ----------
-        dataloader : DataLoader
-            Data loader for evaluation.
-
-        Returns
-        -------
-        loss : float
-            Average loss over the dataset.
-        accuracy : float
-            Average accuracy over the dataset.
-
-        Notes
-        -----
-        Disables gradient computation during evaluation.
-        Computes loss and accuracy for each batch and returns averages.
-        """
         with torch.no_grad():
             losses = 0
             accuracy = 0
@@ -922,26 +850,6 @@ class Model:
             return floss, faccuracy
 
     def test(self, dataset):
-        """
-        Evaluates the model's performance on a test dataset.
-
-        Parameters
-        ----------
-        dataset
-            The complete datset, data_split will be performed according to the parameters set in the dataset object.
-
-        Returns
-        -------
-        loss : float
-            Average loss over the test dataset.
-        accuracy : float
-            Average accuracy over the test dataset.
-
-        Notes
-        -----
-        Splits the dataset into test batches and evaluates the model using evaluate.
-        Logs the test loss and accuracy.
-        """
         _, _, test_index = dataset.data_split(0.8, 0.1, 0.1)
         test_loader = DataLoader(
             dataset.torchDataset(test_index),
@@ -956,24 +864,6 @@ class Model:
         return test_loss, test_acc
 
     def _get_from_hub(self, repo=None):
-        """
-        Retrieves a pre-trained model from the Hugging Face Model Hub.
-
-        Parameters
-        ----------
-        repo : str, optional
-            Repository name on the Hugging Face Model Hub. Defaults to "lamaroufle/meegnet".
-
-        Returns
-        -------
-        model_path : str
-            Path to the downloaded model file.
-
-        Notes
-        -----
-        Downloads the model and its corresponding metadata file.
-        Uses the model name, input size, and number of outputs to construct the file name.
-        """
         if repo is None:
             repo = "lamaroufle/meegnet"
         model_name = "_".join(self.name.split("_")[:-2])
@@ -983,45 +873,12 @@ class Model:
         hf_hub_download(repo_id="lamaroufle/meegnet", filename=filename + ".mat")
         return model_path
 
-    def from_huggingface(self, repo=None):
-        """
-        Loads a pre-trained model from the Hugging Face Model Hub.
-
-        Parameters
-        ----------
-        repo : str, optional
-            Repository name on the Hugging Face Model Hub. Defaults to "lamaroufle/meegnet".
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Downloads the pre-trained model using _get_from_hub and loads its weights.
-        Calls load to initialize the model with the downloaded weights.
-        """
+    def from_pretrained(self, repo=None):
         model_path = self._get_from_hub(repo)
         self.load(model_path)
 
     def _load_net(self, model_path: str = None) -> Tuple:
-        """
-        Loads a pre-trained neural network model from a file.
-
-        Parameters
-        ----------
-        model_path : str
-            Path to the model file (.pth, .pt, or .ckpt).
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Loads the model architecture and weights from the file using PyTorch.
-        Initializes the network with the loaded weights.
-        """
+        """Load network state and optimizer state from file."""
         if model_path is None:
             model_path = os.path.join(self.save_path, self.name + ".pt")
         if os.path.exists(model_path):
@@ -1037,26 +894,7 @@ class Model:
         return net_state, optimizer_state
 
     def load(self, model_path=None):
-        """
-        Loads a pre-trained model from a file.
-
-        Parameters
-        ----------
-        model_path : str, optional
-            Path to the model file (.pth, .pt, or .ckpt). Defaults to None.
-        map_location : str, optional
-            Device to load the model onto (e.g., "cuda", "cpu", "cuda:0"). Defaults to "cuda".
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        Supports loading models from PyTorch checkpoints and TorchScript models.
-        Calls _load_net to load the model architecture and weights.
-        Moves the model to the specified device.
-        """
+        """Load model from file."""
         try:
             net_state, optimizer_state = self._load_net(model_path)
             if net_state[list(net_state.keys())[-1]].shape[0] == self.n_outputs:
@@ -1073,33 +911,11 @@ class Model:
             LOG.error(f"Model file not found: {model_path}")
 
     def compute_accuracy(self, y_pred, target):
-        """
-        Computes the accuracy of the model's predictions.
-
-        Parameters
-        ----------
-        outputs : torch.Tensor
-            Model's output predictions (shape: [batch_size, num_classes]).
-        targets : torch.Tensor
-            Ground truth labels (shape: [batch_size]).
-
-        Returns
-        -------
-        accuracy : float
-            Accuracy of the model's predictions.
-        """
+        # Compute accuracy from 2 vectors of labels.
         correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
         return correct / len(target)
 
     def get_feature_weights(self):
-        """
-        Retrieves the feature weights learned by the model.
-
-        Returns
-        -------
-        weights : Dict[str, float]
-            Dictionary with layer names as keys and weights as values.
-        """
         weights = []
         for layer in self.net.feature_extraction:
             if hasattr(layer, "weight"):
@@ -1107,14 +923,6 @@ class Model:
         return weights
 
     def get_clf_weights(self):
-        """
-        Retrieves the classification weights learned by the model.
-
-        Returns
-        -------
-        weights : Dict[str, float]
-            Dictionary with layer names as keys and weights as values.
-        """
         weights = []
         for layer in self.net.classif:
             if hasattr(layer, "weight"):
@@ -1123,43 +931,7 @@ class Model:
 
 
 class TrainingTracker:
-    """
-    Tracks and saves the progress of neural network training.
-
-    Attributes
-    ----------
-    progress : dict
-        Stores training and validation accuracy and loss histories.
-    best : dict
-        Stores the best validation accuracy, loss, and corresponding training metrics.
-    patience_state : int
-        Tracks the number of epochs without improvement.
-    save_path : str
-        Path to save model checkpoints.
-    name : str
-        Model name.
-
-    Methods
-    -------
-    update(epoch, tloss, vloss, tacc, vacc, net, optimizer)
-        Updates progress and saves model if validation accuracy improves.
-    save(checkpoint, name, model_path=None)
-        Saves model checkpoint to file.
-    load(mat_path)
-        Loads training progress from saved .mat file.
-    """
-
     def __init__(self, save_path, name):
-        """
-        Initializes the TrainingTracker.
-
-        Parameters
-        ----------
-        save_path : str
-            Path to save model checkpoints.
-        name : str
-            Model name.
-        """
         self.progress = {
             "validation_accuracies": [],
             "train_accuracies": [],
@@ -1178,26 +950,6 @@ class TrainingTracker:
         self.name = name
 
     def update(self, epoch, tloss, vloss, tacc, vacc, net, optimizer):
-        """
-        Updates progress and saves model if validation accuracy improves.
-
-        Parameters
-        ----------
-        epoch : int
-            Current training epoch.
-        tloss : float
-            Training loss.
-        vloss : float
-            Validation loss.
-        tacc : float
-            Training accuracy.
-        vacc : float
-            Validation accuracy.
-        net
-            Neural network model.
-        optimizer
-            Model optimizer.
-        """
         self.progress["validation_accuracies"].append(vacc)
         self.progress["train_accuracies"].append(tacc)
         self.progress["validation_losses"].append(vloss)
@@ -1215,18 +967,7 @@ class TrainingTracker:
             self.save(checkpoint, self.name)
 
     def save(self, checkpoint, name: str, model_path: str = None) -> None:
-        """
-        Saves model checkpoint to file.
-
-        Parameters
-        ----------
-        checkpoint : dict
-            Model checkpoint dictionary.
-        name : str
-            Model name.
-        model_path : str, optional
-            Custom model path. Use object save_path and model name for saving if left at default (None).
-        """
+        """Save model to file."""
         if model_path is None:
             model_path = os.path.join(self.save_path, name + ".pt")
         mat_path = model_path[:-2] + "mat"
@@ -1239,14 +980,6 @@ class TrainingTracker:
             LOG.error(f"Error saving model to file: {model_path}")
 
     def load(self, mat_path):
-        """
-        Loads training progress from saved .mat file.
-
-        Parameters
-        ----------
-        mat_path : str
-            Path to saved .mat file.
-        """
         data = loadmat(mat_path)
         for key, value in data.items():
             if key in self.progress.keys():
