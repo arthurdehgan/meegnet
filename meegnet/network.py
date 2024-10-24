@@ -839,6 +839,9 @@ class Model:
                 weights.append(layer.weight.detach().numpy())
         return weights
 
+    def plot_accuracy(self, option="both"):
+        return self.tracker.plot_accuracy(option)
+
     def plot_loss(self, option="both"):
         return self.tracker.plot_loss(option)
 
