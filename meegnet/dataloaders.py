@@ -488,17 +488,17 @@ class EpochedDataset:
 
 class ContinuousDataset(EpochedDataset):
     """
-    Creates a dataset for deep learning models from REST data with windowing.
+    Creates a dataset from continuous data by loading continuous data and splitting it in segments according to set parameters.
 
     Parameters
     ----------
-    window : int, optional
+    window : float, optional
         Window size in seconds. Defaults to 2.
     overlap : float, optional
         Overlap between windows (0-1). Defaults to 0.
     offset : int, optional
         Offset in seconds. Defaults to 10.
-    sfreq : int, optional
+    sfreq : float, optional
         Sampling frequency. Defaults to 500.
     n_subjects : int, optional
         Number of subjects. Defaults to None (all subjects).
