@@ -1,6 +1,12 @@
 API Documentation
 =================
 
+meegnet.dataloaders module
+--------------------------
+
+.. automodule:: meegnet.dataloaders
+   :members:
+
 meegnet.network module
 -------------------------
 
@@ -9,11 +15,13 @@ meegnet.network module
    :undoc-members:
    :show-inheritance:
 
-meegnet.dataloaders module
---------------------------
+meegnet.layer module
+-------------------------
 
-.. automodule:: meegnet.dataloaders
+.. automodule:: meegnet.layer
    :members:
+   :undoc-members:
+   :show-inheritance:
 
 meegnet.utils module
 --------------------
