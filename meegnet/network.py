@@ -907,7 +907,6 @@ class TrainingTracker:
             "loss": vloss < self.best["validation_loss"],
             "accuracy": vacc > self.best["validation_accuracy"],
         }
-        print(check)
         if check[early_stop]:
             self.best["train_loss"] = tloss
             self.best["train_accuracy"] = tacc
@@ -937,26 +936,30 @@ class TrainingTracker:
             elif key in self.best.keys():
                 self.best[key] = value
 
-    def plot_accuracy(self, option="both"):
+    def plot_accuracy(self, option: str = "both", early_stop: bool = True):
         assert option in ["both", "train", "valid"]
         fig, ax = plt.subplots()
         if option in ("both", "train"):
             plt.plot(self.progress["train_accuracies"], label="Training Accuracy")
         if option in ("both", "valid"):
             plt.plot(self.progress["validation_accuracies"], label="Validation Accuracy")
+        if early_stop:
+            plt.axvline(x=self.best["epoch"] - 1, label="early stop")
         ax.set_ylabel("Accuracy")
         ax.set_xlabel("Epoch")
         plt.legend()
         plt.plot()
         return fig
 
-    def plot_loss(self, option="both"):
+    def plot_loss(self, option: str = "both", early_stop: bool = True):
         assert option in ["both", "train", "valid"]
         fig, ax = plt.subplots()
         if option in ("both", "train"):
             plt.plot(self.progress["train_losses"], label="Training Loss")
         if option in ("both", "valid"):
             plt.plot(self.progress["validation_losses"], label="Validation Loss")
+        if early_stop:
+            plt.axvline(x=self.best["epoch"] - 1, label="early stop")
         ax.set_ylabel("Loss")
         ax.set_xlabel("Epoch")
         plt.legend()
