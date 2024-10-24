@@ -488,7 +488,7 @@ class EpochedDataset:
 
 class ContinuousDataset(EpochedDataset):
     """
-    Creates a dataset for deep learning models from REST data with windowing.
+    Creates a dataset from continuous data by loading continuous data and splitting it in segments according to set parameters.
 
     Parameters
     ----------
