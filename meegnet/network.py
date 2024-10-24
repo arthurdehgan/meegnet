@@ -5,11 +5,11 @@ from typing import Tuple
 import torch
 from torch import nn, optim
 from torch.autograd import Variable
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 import numpy as np
 from huggingface_hub import hf_hub_download
+from layer import Flatten, DepthwiseConv2d, SeparableConv2d
 
 LOG = logging.getLogger("meegnet")
 
@@ -76,104 +76,6 @@ def create_net(
         raise ValueError("net_params is required for MLP and custom networks")
 
     return net_options[net_option.lower()]()
-
-
-class Flatten(nn.Module):
-    """
-    Flatten layer to connect feature extraction and classification parts of a network.
-
-    Parameters
-    ----------
-    None
-
-    Attributes
-    ----------
-    None
-
-    Methods
-    -------
-    forward(x)
-        Flattens the input tensor.
-    """
-
-    def forward(self, x):
-        """Flattens the input tensor."""
-        return x.view(x.size(0), -1)
-
-
-class DepthwiseConv2d(nn.Module):
-    """
-    Depthwise separable convolutional layer.
-
-    Parameters
-    ----------
-    in_channels : int
-        Number of input channels.
-    kernel_size : int or tuple
-        Size of the convolutional kernel.
-    depthwise_multiplier : int, optional
-        Multiplier for depthwise convolution. Defaults to 1.
-
-    Attributes
-    ----------
-    depthwise : nn.Conv2d
-        Depthwise convolutional layer.
-
-    Methods
-    -------
-    forward(x)
-        Applies depthwise convolution to the input tensor.
-    """
-
-    def __init__(self, in_channels, kernel_size, depthwise_multiplier=1, **kwargs):
-        super().__init__()
-        self.depthwise = nn.Conv2d(
-            in_channels,
-            in_channels * depthwise_multiplier,
-            kernel_size,
-            groups=in_channels,
-            **kwargs,
-        )
-
-    def forward(self, x):
-        """Applies depthwise convolution to the input tensor."""
-        return self.depthwise(x)
-
-
-class SeparableConv2d(nn.Module):
-    """
-    Separable convolutional layer (depthwise + pointwise convolution).
-
-    Parameters
-    ----------
-    in_channels : int
-        Number of input channels.
-    out_channels : int
-        Number of output channels.
-    kernel_size : int or tuple
-        Size of the convolutional kernel.
-
-    Attributes
-    ----------
-    depthwise : DepthwiseConv2d
-        Depthwise convolutional layer.
-    pointwise : nn.Conv2d
-        Pointwise convolutional layer.
-
-    Methods
-    -------
-    forward(x)
-        Applies separable convolution to the input tensor.
-    """
-
-    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
-        super().__init__()
-        self.depthwise = DepthwiseConv2d(in_channels, kernel_size, **kwargs)
-        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, **kwargs)
-
-    def forward(self, x):
-        """Applies separable convolution to the input tensor."""
-        return self.pointwise(self.depthwise(x))
 
 
 class CustomNet(nn.Module):
