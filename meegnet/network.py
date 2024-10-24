@@ -9,8 +9,9 @@ from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 from matplotlib import pyplot as plt
 import numpy as np
+from einops.layers.torch import Rearrange
 from huggingface_hub import hf_hub_download
-from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d
+from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d, Conv2dWithConstraint
 
 LOG = logging.getLogger("meegnet")
 
@@ -153,6 +154,135 @@ class CustomNet(nn.Module):
         int: Output size of the sequence.
         """
         return layers(torch.zeros((1, *self.input_size))).shape[-1]
+
+
+class EEGNetv4(CustomNet):
+    def __init__(
+        self,
+        input_size: tuple,
+        n_outputs: int,
+        final_conv_length: str | int = "auto",
+        pool_mode: str = "mean",
+        F1: int = 8,
+        D: int = 2,
+        F2: int | None = None,
+        kernel_length: int = 64,
+        depthwise_kernel_length: int = 16,
+        pool1_kernel_size: int = 4,
+        pool1_stride_size: int = 4,
+        pool2_kernel_size: int = 8,
+        pool2_stride_size: int = 8,
+        conv_spatial_max_norm: float = 1,
+        activation: nn.Module = nn.ELU,
+        batch_norm_momentum: float = 0.01,
+        batch_norm_affine: bool = True,
+        batch_norm_eps: float = 1e-3,
+        drop_prob: float = 0.25,
+    ) -> None:
+        super().__init__(input_size, n_outputs)
+
+        self.final_conv_length = final_conv_length
+        self.pool_mode = pool_mode
+        self.F1 = F1
+        self.D = D
+        self.F2 = F2 if F2 is not None else F1 * D
+        self.kernel_length = kernel_length
+        self.depthwise_kernel_length = depthwise_kernel_length
+        self.pool1_kernel_size = pool1_kernel_size
+        self.pool1_stride_size = pool1_stride_size
+        self.pool2_kernel_size = pool2_kernel_size
+        self.pool2_stride_size = pool2_stride_size
+        self.conv_spatial_max_norm = conv_spatial_max_norm
+        self.activation = activation
+        self.batch_norm_momentum = batch_norm_momentum
+        self.batch_norm_affine = batch_norm_affine
+        self.batch_norm_eps = batch_norm_eps
+        self.drop_prob = drop_prob
+
+        pool_class = nn.MaxPool2d if pool_mode == "max" else nn.AvgPool2d
+
+        self.feature_extraction = nn.Sequential(
+            Rearrange("batch ch t -> batch 1 ch t"),
+            nn.Conv2d(
+                1,
+                F1,
+                (1, kernel_length),
+                stride=1,
+                bias=False,
+                padding=(0, kernel_length // 2),
+            ),
+            nn.BatchNorm2d(
+                F1,
+                momentum=batch_norm_momentum,
+                affine=batch_norm_affine,
+                eps=batch_norm_eps,
+            ),
+            Conv2dWithConstraint(
+                F1,
+                F1 * D,
+                (input_size[0], 1),
+                max_norm=conv_spatial_max_norm,
+                stride=1,
+                bias=False,
+                groups=F1,
+                padding=(0, 0),
+            ),
+            nn.BatchNorm2d(
+                F1 * D,
+                momentum=batch_norm_momentum,
+                affine=batch_norm_affine,
+                eps=batch_norm_eps,
+            ),
+            activation(),
+            pool_class(
+                kernel_size=(1, pool1_kernel_size),
+                stride=(1, pool1_stride_size),
+            ),
+            nn.Dropout(p=drop_prob),
+            nn.Conv2d(
+                F1 * D,
+                F1 * D,
+                (1, depthwise_kernel_length),
+                stride=1,
+                bias=False,
+                groups=F1 * D,
+                padding=(0, depthwise_kernel_length // 2),
+            ),
+            nn.Conv2d(
+                F1 * D,
+                F2,
+                (1, 1),
+                stride=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(
+                F2,
+                momentum=batch_norm_momentum,
+                affine=batch_norm_affine,
+                eps=batch_norm_eps,
+            ),
+            activation(),
+            pool_class(
+                kernel_size=(1, pool2_kernel_size),
+                stride=(1, pool2_stride_size),
+            ),
+            nn.Dropout(p=drop_prob),
+        )
+        feat_size = self._get_lin_size(self.feature_extraction)
+        n_out_virtual_chans = feat_size // self.feature_extraction[-1].kernel_size[0][0]
+        if self.final_conv_length == "auto":
+            self.final_conv_length = feat_size // n_out_virtual_chans
+
+        self.classif = nn.Sequential(
+            nn.Conv2d(
+                self.F2,
+                n_outputs,
+                (n_out_virtual_chans, self.final_conv_length),
+                bias=True,
+            ),
+            Rearrange("batch x y z -> batch x z y"),
+            nn.Squeeze(),
+        )
 
 
 class EEGNet(CustomNet):
