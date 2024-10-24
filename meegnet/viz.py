@@ -29,7 +29,7 @@ def compute_saliency_maps(
     sal_path,
     net,
     threshold,
-    clf_type="",
+    epoched=False,
 ):
 
     device = cuda_check()
@@ -38,7 +38,7 @@ def compute_saliency_maps(
     # Load all trials and corresponding labels for a specific subject.
     data = dataset.data
     targets = dataset.labels
-    if clf_type == "eventclf":
+    if epoched:
         target_saliencies = [[[], []], [[], []]]
     else:
         target_saliencies = [[], []]
@@ -48,7 +48,7 @@ def compute_saliency_maps(
         X = trial
         while len(X.shape) < 4:
             X = X[np.newaxis, :]
-        X = X.to(device)
+        X = X.to(torch.float64).to(device)
         # Compute predictions of the trained network, and confidence
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
@@ -64,7 +64,7 @@ def compute_saliency_maps(
             pos_saliency, neg_saliency = get_positive_negative_saliency(guided_grads)
 
             # Depending on the task, add saliencies in lists
-            if clf_type == "eventclf":
+            if epoched:
                 target_saliencies[label][0].append(pos_saliency)
                 target_saliencies[label][1].append(neg_saliency)
             else:
@@ -76,7 +76,7 @@ def compute_saliency_maps(
     n_saliencies += sum([len(e) for e in target_saliencies[1]])
     LOG.info(f"{n_saliencies} saliency maps computed for {sub}")
     for j, sal_type in enumerate(("pos", "neg")):
-        if clf_type == "eventclf":
+        if epoched:
             for i, label in enumerate(labels):
                 sal_filepath = os.path.join(
                     sal_path,
@@ -84,7 +84,7 @@ def compute_saliency_maps(
                 )
                 np.save(sal_filepath, np.array(target_saliencies[i][j]))
         else:
-            lab = "" if clf_type == "subclf" else f"_{labels[label]}"
+            lab = "" if not epoched else f"_{labels[label]}"
             sal_filepath = os.path.join(
                 sal_path,
                 f"{sub}{lab}_{sal_type}_sal_{threshold}confidence.npy",
@@ -761,14 +761,13 @@ def generate_saliency_figure(
     suffix: str = "",
     title: str = "",
     sensors: list = [""],
-    clf_type="",
-    datatype="passive",
     sfreq=500,
-    edge=50,
+    edge=100,
     cmap="coolwarm",
-    stim_tick=75,
+    stim_tick=None,
     show=False,
     outlines=None,
+    topomap="window",
 ):
     """
     Generates a figure visualizing saliency maps for MEG data.
@@ -792,17 +791,18 @@ def generate_saliency_figure(
         Title for the figure. Default is an empty string.
     sensors : list, optional
         List of sensor types to include in the visualization. Default is [""].
-    clf_type : str, optional
-        Flag indicating whether the saliency maps are for event classification if set to "clf".
-        the y-axis ticks and labels are adjusted accordingly.
     sfreq : int, optional
         Sampling frequency for computation of  xticks. Default is  500.
     cmap : str, optional
         Colormap to use for displaying the topo- and saliency maps. Default is "coolwarm".
     stim_tick : int, optional
-        Tick position for the stimulus event in the time axis. Default is  75.
+        Tick position for the stimulus event in the time axis. Default is None,
     show : bool, optional
         Wether to show the figure or not. Useful for ipynb.
+    topomap : str, optional
+        Must be "window", "average" or "timing". if " average, the average saliency across time is used. If
+        timing, then the saliency at to the highest saliency timing is used. if "window" is used,
+        then the saliency window around the max saliency timing is used.
 
     Returns
     -------
@@ -817,14 +817,19 @@ def generate_saliency_figure(
     The function creates a grid layout with a subplot for each sensor channel and a subplot for the
     topomap. The grid layout is dynamically adjusted based on the number of sensors.
 
-    The "eventclf" flag allows for adjustments in the y-axis ticks and labels for event classification
-    scenarios, where the stimulus event is marked with a specific tick position.
-
     The function does not handle exceptions that may occur during the plotting process, such as issues with
     file I/O or invalid input data.
     """
 
-    stim_tick -= int(edge / 2)
+    assert topomap in (
+        "timing",
+        "average",
+        "window",
+    ), f"{topomap} is not a valid option for the topomap parameter. ('timing', 'average', 'window')"
+    tick_ratio = 1000 / sfreq
+    padding = int(edge / tick_ratio)
+    if stim_tick is not None:
+        stim_tick -= edge
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
     n_blocs = len(sensors)  # number of blocs of figures in a line
@@ -835,19 +840,18 @@ def generate_saliency_figure(
     plt.title(title)
     plt.axis("off")
     axes = []
-    tick_ratio = int(1000 / sfreq)
     # First pass to gather vlim values:
     vlim = 0
     for i, label in enumerate(saliencies.keys()):
-        gradient = saliencies[label].squeeze()
+        gradient = copy.copy(saliencies[label].squeeze())
         gradient /= np.abs(gradient).max()
         for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
             idx = j // 3
-            grads = gradient[idx][:, edge:-edge]
+            grads = gradient[idx][:, padding:-padding]
             segment_length = grads.shape[1]
-            mid_slice = (0, segment_length)
-            gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
-            grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
+            # mid_slice = (0, segment_length)
+            # gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
+            # grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
             vmax = grads.max()
             vmin = grads.min()
             vlim_curr = max(abs(vmax), abs(vmin))
@@ -865,17 +869,18 @@ def generate_saliency_figure(
             # grads = gradient[idx]
             # In an attempt to remove the edge effect:
             # We remove the first and last edge points -> therefore tick is moved to 25 (was 75)
-            grads = gradient[idx][:, edge:-edge]
+            grads = gradient[idx][:, padding:-padding]
 
             segment_length = grads.shape[1]
             # We add the mid_slice variable in an attempt to tackle the edge effects by removing mean from center values for example
             # But it was uneffective. This could still be useful so we leave it here...
-            mid_slice = (0, segment_length)
+            # mid_slice = (0, segment_length)
             # mid_slice = (int(segment_length / 4), int(3 * segment_length / 4))
-            gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
-            grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
+            # gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
+            # grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
             n_sensors = grads.shape[0]
-            max_idx = np.argmax([avg_range(arr) for arr in grads.T])
+            max_idx = np.unravel_index(abs(grads).argmax(), grads.shape)[1]
+            # max_idx = np.argmax([avg_range(arr) for arr in grads.T])
             # max_idx = np.argmax(np.mean(grads, axis=0))
             axes.append(fig.add_subplot(grid[i, j : j + 2]))
             plt.imshow(
@@ -890,16 +895,18 @@ def generate_saliency_figure(
             axes[-1].spines["right"].set_visible(False)
             axes[-1].yaxis.tick_right()
 
-            if clf_type == "eventclf":
-                x_ticks = sorted(
-                    [0, stim_tick, int(segment_length / 2), segment_length] + [max_idx]
-                )
-                ticks_values = [(x_tick - stim_tick) * tick_ratio for x_tick in x_ticks]
-                plt.axvline(x=max_idx, color="green", linestyle="--", linewidth=1)
+            if stim_tick is not None:
                 plt.axvline(x=stim_tick, color="black", linestyle="--", linewidth=1)
-            else:
-                x_ticks = [0, int(segment_length / tick_ratio), segment_length]
-                ticks_values = [x_tick * tick_ratio for x_tick in x_ticks]
+
+            stim_tick_index = 0 if stim_tick is None else stim_tick
+            x_ticks = [0, stim_tick_index, int(segment_length / tick_ratio), segment_length]
+            if topomap != "average":
+                plt.axvline(x=max_idx, color="green", linestyle="--", linewidth=1)
+                x_ticks += [max_idx]
+            x_ticks = sorted(x_ticks)
+            ticks_values = [
+                (x_tick - stim_tick_index) * tick_ratio + edge for x_tick in x_ticks
+            ]
             plt.xticks(x_ticks, ticks_values, fontsize=8)
             plt.yticks([0, n_sensors], [n_sensors, 0])
 
@@ -913,10 +920,20 @@ def generate_saliency_figure(
             if i == 1:
                 plt.xlabel("time (ms)")
             axes.append(fig.add_subplot(grid[i, j + 2]))
-            if clf_type == "eventclf":
+            if topomap == "timing":
                 data = grads[:, max_idx]
+            elif topomap == "window":
+                start = max_idx - int(segment_length / 8)
+                end = max_idx + int(segment_length / 8)
+                if start < 0:
+                    start = 0
+                    end = start + int(segment_length / 4)
+                elif end > segment_length:
+                    end = segment_length
+                    start = 3 * int(segment_length / 4)
+                data = grads[:, start:end].mean(axis=1)
             else:
-                data = gradmeans
+                data = grads.mean(axis=1)
 
             im, _ = plot_topomap(
                 data.ravel(),
