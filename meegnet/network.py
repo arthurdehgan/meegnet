@@ -944,7 +944,7 @@ class TrainingTracker:
         if option in ("both", "valid"):
             plt.plot(self.progress["validation_accuracies"], label="Validation Accuracy")
         if early_stop:
-            plt.axvline(x=self.best["epoch"] - 1, label="early stop")
+            plt.axvline(x=self.best["epoch"] - 1, label="early stop", color="green")
         ax.set_ylabel("Accuracy")
         ax.set_xlabel("Epoch")
         plt.legend()
@@ -959,7 +959,7 @@ class TrainingTracker:
         if option in ("both", "valid"):
             plt.plot(self.progress["validation_losses"], label="Validation Loss")
         if early_stop:
-            plt.axvline(x=self.best["epoch"] - 1, label="early stop")
+            plt.axvline(x=self.best["epoch"] - 1, label="early stop", color="green")
         ax.set_ylabel("Loss")
         ax.set_xlabel("Epoch")
         plt.legend()
