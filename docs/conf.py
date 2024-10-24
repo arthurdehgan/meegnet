@@ -40,6 +40,9 @@ import guzzle_sphinx_theme
 
 html_theme_path = guzzle_sphinx_theme.html_theme_path()
 html_theme = "guzzle_sphinx_theme"
+html_sidebars = {
+    "**": ["globaltoc.html", "relations.html", "sourcelink.html", "searchbox.html"]
+}
 
 # Register the theme as an extension to generate a sitemap.xml
 extensions.append("guzzle_sphinx_theme")
