@@ -627,6 +627,7 @@ class Model:
         patience: int = 20,
         max_epoch: int = None,
         model_path: str = None,
+        early_stop: str = "loss",
         num_workers: int = 4,
     ) -> None:
         """
@@ -657,6 +658,13 @@ class Model:
         assert (
             dataset.data[0].shape == self.input_size
         ), "Dataset sample size must match network input size."
+        assert early_stop in (
+            "loss",
+            "accuracy",
+        ), f"{early_stop} is not a valid early_stop option."
+
+        # Setting model_path
+        self.tracker.set_model_path(model_path)
 
         # Set training mode and batch size
         self.net.train()
@@ -695,7 +703,14 @@ class Model:
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
             self.tracker.update(
-                epoch, train_loss, valid_loss, train_acc, valid_acc, self.net, self.optimizer
+                epoch,
+                train_loss,
+                train_acc,
+                valid_loss,
+                valid_acc,
+                self.net,
+                self.optimizer,
+                early_stop=early_stop,
             )
             LOG.info(f"Epoch: {epoch}")
             LOG.info(f" [LOSS] TRAIN {train_loss:.4f} / VALID {valid_loss:.4f}")
@@ -790,7 +805,7 @@ class Model:
     def _load_net(self, model_path: str = None) -> Tuple:
         """Load network state and optimizer state from file."""
         if model_path is None:
-            model_path = os.path.join(self.save_path, self.name + ".pt")
+            model_path = self.tracker.model_path
         if os.path.exists(model_path):
             LOG.info("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
@@ -847,53 +862,72 @@ class Model:
 
 
 class TrainingTracker:
-    def __init__(self, save_path, name):
+    def __init__(self, save_path, name, model_path: str = None):
         self.progress = {
-            "validation_accuracies": [],
+            "train_losses": [],
             "train_accuracies": [],
             "validation_losses": [],
-            "train_losses": [],
+            "validation_accuracies": [],
         }
         self.best = {
-            "validation_accuracy": 0,
+            "train_loss": float("inf"),
             "train_accuracy": 0,
             "validation_loss": float("inf"),
-            "train_loss": float("inf"),
+            "validation_accuracy": 0,
             "epoch": 0,
         }
         self.patience_state = 0
         self.save_path = save_path
         self.name = name
 
-    def update(self, epoch, tloss, vloss, tacc, vacc, net, optimizer):
-        self.progress["validation_accuracies"].append(vacc)
+        self.set_model_path(model_path)
+
+    def set_model_path(self, model_path: str = None) -> None:
+        self.model_path = (
+            os.path.join(self.save_path, self.name + ".pt")
+            if model_path is None
+            else model_path
+        )
+
+    def update(
+        self, epoch, tloss, tacc, vloss, vacc, net, optimizer, early_stop: str = "loss"
+    ) -> None:
+        assert early_stop in (
+            "loss",
+            "accuracy",
+        ), f"{early_stop} is not a valid early_stop option."
+
+        self.progress["train_losses"].append(tloss)
         self.progress["train_accuracies"].append(tacc)
         self.progress["validation_losses"].append(vloss)
-        self.progress["train_losses"].append(tloss)
+        self.progress["validation_accuracies"].append(vacc)
         self.patience_state += 1
 
-        if vacc > self.best["validation_accuracy"]:
+        check = {
+            "loss": vloss < self.best["validation_loss"],
+            "accuracy": vacc > self.best["validation_accuracy"],
+        }
+        print(check)
+        if check[early_stop]:
             self.best["train_loss"] = tloss
-            self.best["validation_loss"] = vloss
             self.best["train_accuracy"] = tacc
-            self.best["valid_accuracy"] = vacc
+            self.best["validation_loss"] = vloss
+            self.best["validation_accuracy"] = vacc
             self.best["epoch"] = epoch
             self.patience_state = 0
             checkpoint = {"state_dict": net.state_dict, "optimizer": optimizer}
-            self.save(checkpoint, self.name)
+            self.save(checkpoint)
 
-    def save(self, checkpoint, name: str, model_path: str = None) -> None:
+    def save(self, checkpoint) -> None:
         """Save model to file."""
-        if model_path is None:
-            model_path = os.path.join(self.save_path, name + ".pt")
-        mat_path = model_path[:-2] + "mat"
+        mat_path = self.model_path[:-2] + "mat"
         try:
-            torch.save(checkpoint, model_path)
+            torch.save(checkpoint, self.model_path)
             save_dict = {key: value for key, value in self.progress.items()}
             save_dict.update({key: value for key, value in self.best.items()})
             savemat(mat_path, save_dict)
         except OSError:
-            LOG.error(f"Error saving model to file: {model_path}")
+            LOG.error(f"Error saving model to file: {self.model_path}")
 
     def load(self, mat_path):
         data = loadmat(mat_path)
