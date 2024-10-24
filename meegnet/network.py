@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 import numpy as np
 from huggingface_hub import hf_hub_download
-from layer import Flatten, DepthwiseConv2d, SeparableConv2d
+from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d
 
 LOG = logging.getLogger("meegnet")
 
