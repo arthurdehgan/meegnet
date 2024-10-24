@@ -42,6 +42,13 @@ def create_net(
         If net_option is invalid.
     """
 
+    if net_params is None:
+        net_params = {
+            "linear": 100,
+            "hlayers": 2,
+            "dropout": 0.5,
+        }
+
     net_options = {
         "mlp": lambda: MLP(
             input_size=input_size,
