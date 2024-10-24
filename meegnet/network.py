@@ -7,6 +7,7 @@ from torch import nn, optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
+from matplotlib import pyplot as plt
 import numpy as np
 from huggingface_hub import hf_hub_download
 from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d
@@ -838,6 +839,9 @@ class Model:
                 weights.append(layer.weight.detach().numpy())
         return weights
 
+    def plot_loss(self, option="both"):
+        return self.tracker.plot_loss(option)
+
 
 class TrainingTracker:
     def __init__(self, save_path, name):
@@ -895,3 +899,29 @@ class TrainingTracker:
                 self.progress[key] = value
             elif key in self.best.keys():
                 self.best[key] = value
+
+    def plot_accuracy(self, option="both"):
+        assert option in ["both", "train", "valid"]
+        fig, ax = plt.subplots()
+        if option in ("both", "train"):
+            plt.plot(self.progress["train_accuracies"], label="Training Accuracy")
+        if option in ("both", "balid"):
+            plt.plot(self.progress["validation_accuracies"], label="Validation Accuracy")
+        ax.set_ylabel("Accuracy")
+        ax.set_xlabel("Epoch")
+        plt.legend()
+        plt.plot()
+        return fig
+
+    def plot_loss(self, option="both"):
+        assert option in ["both", "train", "valid"]
+        fig, ax = plt.subplots()
+        if option in ("both", "train"):
+            plt.plot(self.progress["train_losses"], label="Training Loss")
+        if option in ("both", "balid"):
+            plt.plot(self.progress["validation_losses"], label="Validation Loss")
+        ax.set_ylabel("Loss")
+        ax.set_xlabel("Epoch")
+        plt.legend()
+        plt.plot()
+        return fig
