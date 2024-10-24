@@ -4,7 +4,6 @@
    contain the root `toctree` directive.
 
 .. toctree::
-   :hidden:
    :maxdepth: 2
 
    index
