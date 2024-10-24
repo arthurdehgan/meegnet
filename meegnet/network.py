@@ -75,6 +75,7 @@ def create_net(
         ),
         "vgg": lambda: VGG16(input_size, n_outputs),
         "eegnet": lambda: EEGNet(input_size, n_outputs),
+        # "eegnet": lambda: EEGNetv4(input_size, n_outputs),
         "vanputnet": lambda: VanPutNet(input_size, n_outputs),
     }
 
@@ -109,8 +110,8 @@ class CustomNet(nn.Module):
     -------
     forward(x)
         Defines the forward pass through the network.
-    _get_lin_size(layers)
-        Computes the output size of a sequence of layers.
+    get_output_shape(layers)
+        Computes the output shape of a sequence of layers.
     feature_extraction(x)
         Defines the feature extraction part of the network (must be implemented).
     classif(x)
@@ -143,7 +144,12 @@ class CustomNet(nn.Module):
         outs = self.classif(feats)
         return outs
 
-    def _get_lin_size(self, layers: nn.Sequential) -> int:
+    def get_output_shape(self, layers: nn.Sequential = None) -> tuple:
+        if layers is None:
+            layers = self.feature_extraction
+        return layers(torch.zeros((1, *self.input_size))).shape
+
+    def get_lin_size(self, layers: nn.Sequential) -> int:
         """
         Computes the output size of a sequence of layers.
 
@@ -153,7 +159,7 @@ class CustomNet(nn.Module):
         Returns:
         int: Output size of the sequence.
         """
-        return layers(torch.zeros((1, *self.input_size))).shape[-1]
+        return self.get_output_shape(layers)[-1]
 
 
 class EEGNetv4(CustomNet):
@@ -185,7 +191,7 @@ class EEGNetv4(CustomNet):
         self.pool_mode = pool_mode
         self.F1 = F1
         self.D = D
-        self.F2 = F2 if F2 is not None else F1 * D
+        self.F2 = F2 if F2 is not None else self.F1 * D
         self.kernel_length = kernel_length
         self.depthwise_kernel_length = depthwise_kernel_length
         self.pool1_kernel_size = pool1_kernel_size
@@ -199,12 +205,12 @@ class EEGNetv4(CustomNet):
         self.batch_norm_eps = batch_norm_eps
         self.drop_prob = drop_prob
 
-        pool_class = nn.MaxPool2d if pool_mode == "max" else nn.AvgPool2d
+        pool_class = {"mean": nn.AvgPool2d, "max": nn.MaxPool2d}
 
         self.feature_extraction = nn.Sequential(
-            Rearrange("batch ch t -> batch 1 ch t"),
+            # Rearrange("batch ch t -> batch 1 ch t"),
             nn.Conv2d(
-                1,
+                input_size[0],
                 F1,
                 (1, kernel_length),
                 stride=1,
@@ -212,66 +218,70 @@ class EEGNetv4(CustomNet):
                 padding=(0, kernel_length // 2),
             ),
             nn.BatchNorm2d(
-                F1,
+                self.F1,
                 momentum=batch_norm_momentum,
                 affine=batch_norm_affine,
                 eps=batch_norm_eps,
             ),
             Conv2dWithConstraint(
-                F1,
-                F1 * D,
+                self.F1,
+                self.F1 * self.D,
                 (input_size[0], 1),
                 max_norm=conv_spatial_max_norm,
                 stride=1,
                 bias=False,
-                groups=F1,
+                groups=self.F1,
                 padding=(0, 0),
             ),
             nn.BatchNorm2d(
-                F1 * D,
+                self.F1 * self.D,
                 momentum=batch_norm_momentum,
                 affine=batch_norm_affine,
                 eps=batch_norm_eps,
             ),
             activation(),
-            pool_class(
+            pool_class[pool_mode](
                 kernel_size=(1, pool1_kernel_size),
                 stride=(1, pool1_stride_size),
             ),
             nn.Dropout(p=drop_prob),
             nn.Conv2d(
-                F1 * D,
-                F1 * D,
+                self.F1 * self.D,
+                self.F1 * self.D,
                 (1, depthwise_kernel_length),
                 stride=1,
                 bias=False,
-                groups=F1 * D,
+                groups=self.F1 * self.D,
                 padding=(0, depthwise_kernel_length // 2),
             ),
             nn.Conv2d(
-                F1 * D,
-                F2,
+                self.F1 * self.D,
+                self.F2,
                 (1, 1),
                 stride=1,
                 bias=False,
+                padding=(0, 0),
             ),
             nn.BatchNorm2d(
-                F2,
+                self.F2,
                 momentum=batch_norm_momentum,
                 affine=batch_norm_affine,
                 eps=batch_norm_eps,
             ),
             activation(),
-            pool_class(
+            pool_class[pool_mode](
                 kernel_size=(1, pool2_kernel_size),
                 stride=(1, pool2_stride_size),
             ),
             nn.Dropout(p=drop_prob),
         )
-        feat_size = self._get_lin_size(self.feature_extraction)
-        n_out_virtual_chans = feat_size // self.feature_extraction[-1].kernel_size[0][0]
+
+        output_shape = self.get_output_shape()
+        n_out_virtual_chans = output_shape[2]
+
         if self.final_conv_length == "auto":
-            self.final_conv_length = feat_size // n_out_virtual_chans
+            n_out_time = output_shape[3]
+            self.final_conv_length = n_out_time
 
         self.classif = nn.Sequential(
             nn.Conv2d(
@@ -280,8 +290,7 @@ class EEGNetv4(CustomNet):
                 (n_out_virtual_chans, self.final_conv_length),
                 bias=True,
             ),
-            Rearrange("batch x y z -> batch x z y"),
-            nn.Squeeze(),
+            # Rearrange("batch x y z -> batch x z y"),
         )
 
 
@@ -368,7 +377,7 @@ class EEGNet(CustomNet):
             Flatten(),
         )
 
-        lin_size = self._get_lin_size(self.feature_extraction)
+        lin_size = self.get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(nn.Linear(lin_size, n_outputs))
 
 
@@ -418,7 +427,7 @@ class VGG16(CustomNet):
             Flatten(),
         )
 
-        lin_size = self._get_lin_size(self.feature_extraction)
+        lin_size = self.get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
             nn.Linear(lin_size, 4096),
             nn.ReLU(),
@@ -512,7 +521,7 @@ class MEEGNet(CustomNet):
             nn.Dropout(dropout),
         )
 
-        lin_size = self._get_lin_size(self.feature_extraction)
+        lin_size = self.get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
             nn.Linear(lin_size, n_linear // 2),
             nn.Linear(n_linear // 2, n_outputs),
@@ -567,7 +576,7 @@ class FullNet(CustomNet):
             nn.Dropout(dropout),
         )
 
-        lin_size = self._get_lin_size(self.feature_extraction)
+        lin_size = self.get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
             nn.Linear(lin_size, n_linear // 2),
             nn.Linear(n_linear // 2, n_outputs),
@@ -648,7 +657,7 @@ class VanPutNet(CustomNet):
             Flatten(),
         )
 
-        lin_size = self._get_lin_size(self.feature_extraction)
+        lin_size = self.get_lin_size(self.feature_extraction)
         self.classif = nn.Sequential(
             nn.Linear(lin_size, n_output),
             nn.Softmax(dim=1),
