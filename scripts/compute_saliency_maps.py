@@ -25,28 +25,14 @@ if __name__ == "__main__":
     save_config(vars(args), args.config)
 
     fold = None if args.fold == -1 else int(args.fold)
-    if args.clf_type == "eventclf":
-        assert (
-            args.datatype != "rest"
-        ), "datatype must be set to passive in order to run event classification"
 
-    if args.clf_type == "eventclf":
-        labels = ["visual", "auditory"]  # image is label 0 and sound label 1
-    elif args.clf_type == "subclf":
-        labels = []
+    labels = ["visual", "auditory"]  # image is label 0 and sound label 1
+    # labels = [] # use this for subject classification
 
     input_size = get_input_size(args)
     name = get_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
-    if args.clf_type == "subclf":
-        data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
-        n_subjects = len(os.listdir(data_path))
-        n_outputs = min(n_subjects, args.max_subj)
-        lso = False
-    else:
-        n_outputs = 2
-        lso = True
 
     ######################
     ### LOGGING CONFIG ###
@@ -68,6 +54,18 @@ if __name__ == "__main__":
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
+    ####################
+    ### LOADING DATA ###
+    ####################
+
+    csv_file = os.path.join(args.save_path, f"participants_info.csv")
+    dataframe = (
+        pd.read_csv(csv_file, index_col=0)
+        .sample(frac=1, random_state=args.seed)
+        .reset_index(drop=True)[: args.max_subj]
+    )
+    subj_list = dataframe["sub"]
+
     #####################
     ### LOADING MODEL ###
     #####################
@@ -81,28 +79,17 @@ if __name__ == "__main__":
         LOG.info(f"{model_path} does not exist. Creating folders")
         os.makedirs(model_path)
 
+    n_outputs = len(labels) if labels != [] else len(subj_list)
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     my_model.from_pretrained()
     # my_model.load()
-
-    ####################
-    ### LOADING DATA ###
-    ####################
-
-    csv_file = os.path.join(args.save_path, f"participants_info.csv")
-    dataframe = (
-        pd.read_csv(csv_file, index_col=0)
-        .sample(frac=1, random_state=args.seed)
-        .reset_index(drop=True)[: args.max_subj]
-    )
-    subj_list = dataframe["sub"]
 
     #################
     ### MAIN LOOP ###
     #################
 
     for sub in subj_list:
-        dataset = load_single_subject(sub, n_samples, lso, args)
+        dataset = load_single_subject(sub, n_samples, args.lso, args)
         compute_saliency_maps(
             dataset,
             labels,

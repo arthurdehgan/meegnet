@@ -18,6 +18,8 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
 
+LOG.warning("This script is deprecated, prefer using the jupyter notebook instead")
+
 warnings.filterwarnings("ignore")
 
 

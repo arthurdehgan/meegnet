@@ -9,7 +9,13 @@ import logging
 from mne.viz import plot_topomap
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
-from meegnet_functions import load_single_subject, prepare_logging, get_name, get_input_size, load_info
+from meegnet_functions import (
+    load_single_subject,
+    prepare_logging,
+    get_name,
+    get_input_size,
+    load_info,
+)
 
 
 LOG = logging.getLogger("meegnet")
@@ -19,6 +25,7 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
 
+LOG.warning("This script is deprecated, prefer using the jupyter notebook instead")
 
 if __name__ == "__main__":
 

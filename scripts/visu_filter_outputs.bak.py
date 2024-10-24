@@ -32,6 +32,8 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
 
+LOG.warning("This script is deprecated, prefer using the jupyter notebook instead")
+
 def compute_save_guided_bprop(net, X, y):
     GBP = GuidedBackpropReLUModel(net)
     guided_grads = GBP.generate_gradients(X, y)
