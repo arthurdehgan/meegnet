@@ -9,7 +9,6 @@ from torch.utils.data import DataLoader
 from scipy.io import loadmat, savemat
 from matplotlib import pyplot as plt
 import numpy as np
-from einops.layers.torch import Rearrange
 from huggingface_hub import hf_hub_download
 from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d, Conv2dWithConstraint
 
