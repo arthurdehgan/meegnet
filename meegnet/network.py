@@ -747,7 +747,6 @@ class Model:
         self.save_path = save_path
         self.lr = learning_rate
         self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
-        self.checkpoint = defaultdict(lambda: 0)
         self.tracker = TrainingTracker(self.save_path, self.name)
 
         if torch.cuda.is_available():
@@ -950,6 +949,8 @@ class Model:
             checkpoint = torch.load(model_path)
             net_state = checkpoint["state_dict"]
             optimizer_state = checkpoint["optimizer"]
+            # net_state = checkpoint["state_dict"]()
+            # optimizer_state = checkpoint["optimizer"].state_dict()
         mat_path = model_path[:-2] + "mat"
         if os.path.exists(mat_path):
             self.tracker.load(mat_path)
@@ -998,6 +999,14 @@ class Model:
 
     def plot_loss(self, option="both"):
         return self.tracker.plot_loss(option)
+
+    def save(self, model_path: str = None):
+        self.tracker.set_model_path(model_path)
+        checkpoint = {
+            "state_dict": self.net.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+        }
+        self.tracker.save(checkpoint)
 
 
 class TrainingTracker:
@@ -1053,7 +1062,7 @@ class TrainingTracker:
             self.best["validation_accuracy"] = vacc
             self.best["epoch"] = epoch
             self.patience_state = 0
-            checkpoint = {"state_dict": net.state_dict, "optimizer": optimizer}
+            checkpoint = {"state_dict": net.state_dict(), "optimizer": optimizer.state_dict()}
             self.save(checkpoint)
 
     def save(self, checkpoint) -> None:
