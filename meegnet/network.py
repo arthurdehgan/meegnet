@@ -946,10 +946,10 @@ class Model:
         if os.path.exists(model_path):
             LOG.info("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
-            net_state = checkpoint["state_dict"]
-            optimizer_state = checkpoint["optimizer"]
-            # net_state = checkpoint["state_dict"]()
-            # optimizer_state = checkpoint["optimizer"].state_dict()
+            # net_state = checkpoint["state_dict"]
+            # optimizer_state = checkpoint["optimizer"]
+            net_state = checkpoint["state_dict"]()
+            optimizer_state = checkpoint["optimizer"].state_dict()
         mat_path = model_path[:-2] + "mat"
         if os.path.exists(mat_path):
             self.tracker.load(mat_path)
