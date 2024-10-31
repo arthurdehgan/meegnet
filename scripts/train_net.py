@@ -78,7 +78,14 @@ if __name__ == "__main__":
     #####################
 
     LOG.info("Training model:")
-    my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
+    my_model = Model(
+        name,
+        args.net_option,
+        input_size,
+        n_outputs,
+        learning_rate=float(args.lr),
+        save_path=args.save_path,
+    )
 
     LOG.info(my_model.name)
     LOG.info(my_model.net)
