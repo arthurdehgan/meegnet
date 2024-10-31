@@ -48,7 +48,7 @@ def compute_saliency_maps(
         X = trial
         while len(X.shape) < 4:
             X = X[np.newaxis, :]
-        X = X.to(torch.float64).to(device)
+        X = X.to(device)
         # Compute predictions of the trained network, and confidence
         preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
         pred = preds.argmax().item()
