@@ -766,6 +766,7 @@ class Model:
         model_path: str = None,
         early_stop: str = "loss",
         num_workers: int = 4,
+        continue_training: bool = False,
     ) -> None:
         """
         Train the model on the provided dataset.
@@ -832,7 +833,10 @@ class Model:
         LOG.info(f"Learning rate: {self.lr}")
         LOG.info(f"Patience: {patience}")
 
-        epoch = 1
+        if continue_training:
+            epoch = self.tracker.best["epoch"]
+        else:
+            epoch = 1
         while self.tracker.patience_state < patience and (
             max_epoch is None or epoch <= max_epoch
         ):
@@ -946,10 +950,10 @@ class Model:
         if os.path.exists(model_path):
             LOG.info("=> loading checkpoint '{}'".format(model_path))
             checkpoint = torch.load(model_path)
-            # net_state = checkpoint["state_dict"]
-            # optimizer_state = checkpoint["optimizer"]
-            net_state = checkpoint["state_dict"]()
-            optimizer_state = checkpoint["optimizer"].state_dict()
+            net_state = checkpoint["state_dict"]
+            optimizer_state = checkpoint["optimizer"]
+            # net_state = checkpoint["state_dict"]()
+            # optimizer_state = checkpoint["optimizer"].state_dict()
         mat_path = model_path[:-2] + "mat"
         if os.path.exists(mat_path):
             self.tracker.load(mat_path)
