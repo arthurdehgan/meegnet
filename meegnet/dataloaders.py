@@ -145,11 +145,18 @@ class EpochedDataset:
         sfreq: float = 500,
         n_subjects: int = None,
         zscore: bool = True,
+        split_sizes: tuple = (0.8, 0.1, 0.1),
         n_samples: int = None,
         sensortype: str = None,
         lso: bool = False,
         random_state: int = 0,
     ):
+        if split_sizes.isinstance(float):
+            split_sizes = split_sizes, (1 - split_sizes) / 2, (1 - split_sizes) / 2
+
+        self._assert_sizes(*split_sizes)
+        self.split_sizes = split_sizes
+
         self.sfreq = sfreq
         self.n_subjects = n_subjects
         self.zscore = zscore
@@ -447,7 +454,9 @@ class EpochedDataset:
         indexes = zip(*[random_split(group, sizes, generator) for group in index_groups])
         return tuple(sum(map(list, index), []) for index in indexes)
 
-    def data_split(self, train_size: float, valid_size: float, test_size: float = None):
+    def split_data(
+        self, train_size: float = None, valid_size: float = None, test_size: float = None
+    ):
         """
         Splits data into training, validation, and test sets.
 
@@ -465,6 +474,13 @@ class EpochedDataset:
         tuple
             Indices for the splits.
         """
+        if train_size is None:
+            train_size = self.split_sizes[0]
+        if valid_size is None:
+            valid_size = self.split_sizes[1]
+            # if test_size is None:
+            test_size = self.split_sizes[2]
+
         self._assert_sizes(train_size, valid_size, test_size)
         generator = torch.Generator().manual_seed(self.random_state)
 

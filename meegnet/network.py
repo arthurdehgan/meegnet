@@ -811,7 +811,7 @@ class Model:
 
         # Create data loaders
         LOG.info("Creating DataLoaders...")
-        train_index, valid_index, _ = dataset.data_split(0.8, 0.1, 0.1)
+        train_index, valid_index, _ = dataset.split_data()
         trainloader = DataLoader(
             dataset.torchDataset(train_index),
             batch_size=batch_size,
@@ -916,7 +916,7 @@ class Model:
             return floss, faccuracy
 
     def test(self, dataset):
-        _, _, test_index = dataset.data_split(0.8, 0.1, 0.1)
+        _, _, test_index = dataset.split_data()
         test_loader = DataLoader(
             dataset.torchDataset(test_index),
             batch_size=self.batch_size,
