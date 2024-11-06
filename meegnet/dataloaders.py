@@ -145,13 +145,13 @@ class EpochedDataset:
         sfreq: float = 500,
         n_subjects: int = None,
         zscore: bool = True,
-        split_sizes: tuple = (0.8, 0.1, 0.1),
         n_samples: int = None,
+        split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
         lso: bool = False,
         random_state: int = 0,
     ):
-        if split_sizes.isinstance(float):
+        if isinstance(split_sizes, float):
             split_sizes = split_sizes, (1 - split_sizes) / 2, (1 - split_sizes) / 2
 
         self._assert_sizes(*split_sizes)
@@ -522,6 +522,9 @@ class ContinuousDataset(EpochedDataset):
         Apply z-scoring. Defaults to True.
     n_samples : int, optional
         Number of samples per subject. Defaults to None.
+    split_sizes(tuple or int), optional
+        A tuple of (train_size, valid_size, test_size) for splits or a float <= 1,
+        in which case the valid sizes and test sizes are deduced to be as half or the remaining.
     sensortype : str, optional
         Sensor type. Defaults to None.
     lso : bool, optional
@@ -567,6 +570,7 @@ class ContinuousDataset(EpochedDataset):
         n_subjects: int = None,
         zscore: bool = True,
         n_samples: int = None,
+        split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
         lso: bool = False,
         random_state: int = 0,
@@ -582,12 +586,17 @@ class ContinuousDataset(EpochedDataset):
         n_subjects (int): Number of subjects.
         zscore (bool): Apply z-scoring.
         n_samples (int): Number of samples per subject.
+        split_sizes(tuple or int): a tuple of (train_size, valid_size, test_size)
+            for splits or a float <= 1, in which case the valid sizes and test sizes
+            are deduced to be as half or the remaining.
         sensortype (str): Sensor type.
         lso (bool): Leave subjects out.
         random_state (int): Random state for reproducibility.
         """
 
-        super().__init__(sfreq, n_subjects, zscore, n_samples, sensortype, lso, random_state)
+        super().__init__(
+            sfreq, n_subjects, zscore, n_samples, split_sizes, sensortype, lso, random_state
+        )
 
         assert 0 <= overlap < 1, "Overlap must be between 0 and 1."
         self.window = window
