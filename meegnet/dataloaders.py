@@ -108,7 +108,7 @@ class EpochedDataset:
     n_subjects : int, optional
         The number of subjects. Default value is None, which means all subjects are processed.
     zscore : bool, optional
-        If True, z-scoring is applied to the data, by default True.
+        If True, z-scoring is applied to each subject's data, by default False.
     n_samples : int, optional
         The number of samples to include, by default None.
     sensortype : str, optional
@@ -144,7 +144,7 @@ class EpochedDataset:
         self,
         sfreq: float = 500,
         n_subjects: int = None,
-        zscore: bool = True,
+        zscore: bool = False,
         n_samples: int = None,
         split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
@@ -519,7 +519,7 @@ class ContinuousDataset(EpochedDataset):
     n_subjects : int, optional
         Number of subjects. Defaults to None (all subjects).
     zscore : bool, optional
-        Apply z-scoring. Defaults to True.
+        If True, z-scoring is applied to each subject's data, by default False.
     n_samples : int, optional
         Number of samples per subject. Defaults to None.
     split_sizes(tuple or int), optional
@@ -568,7 +568,7 @@ class ContinuousDataset(EpochedDataset):
         offset: int = 10,
         sfreq: int = 500,
         n_subjects: int = None,
-        zscore: bool = True,
+        zscore: bool = False,
         n_samples: int = None,
         split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
