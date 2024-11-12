@@ -630,6 +630,8 @@ class ContinuousDataset(EpochedDataset):
                     if not np.isnan(trial).any():
                         if self.zscore:
                             trial = zscore(trial, axis=-1)
+                        else:
+                            trial = trial / max(trial)
                         data.append(trial)
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
