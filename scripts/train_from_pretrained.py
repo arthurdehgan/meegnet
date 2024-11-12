@@ -54,6 +54,7 @@ if __name__ == "__main__":
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
+            split_sizes=args.train_size,
             sensortype=args.sensors,
             lso=args.lso,
             random_state=args.seed,
@@ -65,6 +66,7 @@ if __name__ == "__main__":
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
+            split_sizes=args.train_size,
             sensortype=args.sensors,
             lso=args.lso,
             random_state=args.seed,
@@ -83,7 +85,7 @@ if __name__ == "__main__":
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     my_model.load(model_path)
 
-    my_model.name = my_model.name + "_from_pretrained"
+    my_model.name = my_model.name + f"_from_pretrained_{args.train_size}"
     LOG.info(my_model.name)
     LOG.info(my_model.net)
 
