@@ -101,6 +101,3 @@ if __name__ == "__main__":
     #####################
 
     my_model.test(dataset)
-
-    # LOG.info("Evaluating model:")
-    # evaluate(fold, datasets, args.net_option, args=args)
