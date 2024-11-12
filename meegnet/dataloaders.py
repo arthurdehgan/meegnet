@@ -397,7 +397,10 @@ class EpochedDataset:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         if self.zscore:
-            data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
+            standardize = lambda x: zscore(x, axis=-1)
+        else:
+            standardize = lambda x: x / max(x)
+        data = np.array(list(map(standardize, data)))
         return torch.Tensor(np.array(data))
 
     def _select_sensors(self, sensortype: str) -> list:
