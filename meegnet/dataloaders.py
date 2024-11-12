@@ -397,10 +397,7 @@ class EpochedDataset:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         if self.zscore:
-            standardize = lambda x: zscore(x, axis=-1)
-        else:
-            standardize = lambda x: x / max(x)
-        data = np.array(list(map(standardize, data)))
+            data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
         return torch.Tensor(np.array(data))
 
     def _select_sensors(self, sensortype: str) -> list:
@@ -633,8 +630,6 @@ class ContinuousDataset(EpochedDataset):
                     if not np.isnan(trial).any():
                         if self.zscore:
                             trial = zscore(trial, axis=-1)
-                        else:
-                            trial = trial / max(trial)
                         data.append(trial)
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
