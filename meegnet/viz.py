@@ -826,10 +826,11 @@ def generate_saliency_figure(
         "average",
         "window",
     ), f"{topomap} is not a valid option for the topomap parameter. ('timing', 'average', 'window')"
+
     tick_ratio = 1000 / sfreq
     padding = int(edge / tick_ratio)
     if stim_tick is not None:
-        stim_tick -= edge
+        assert stim_tick > edge, "Can't have stim_tick lower than the edge parameter."
     if suffix != "" and not suffix.endswith("_"):
         suffix += "_"
     n_blocs = len(sensors)  # number of blocs of figures in a line
@@ -847,7 +848,8 @@ def generate_saliency_figure(
         gradient /= np.abs(gradient).max()
         for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
             idx = j // 3
-            grads = gradient[idx][:, padding:-padding]
+            length = gradient[idx].shape[1]
+            grads = gradient[idx][:, padding : length - padding]
             segment_length = grads.shape[1]
             # mid_slice = (0, segment_length)
             # gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
@@ -869,7 +871,8 @@ def generate_saliency_figure(
             # grads = gradient[idx]
             # In an attempt to remove the edge effect:
             # We remove the first and last edge points -> therefore tick is moved to 25 (was 75)
-            grads = gradient[idx][:, padding:-padding]
+            length = gradient[idx].shape[1]
+            grads = gradient[idx][:, padding : length - padding]
 
             segment_length = grads.shape[1]
             # We add the mid_slice variable in an attempt to tackle the edge effects by removing mean from center values for example
@@ -895,19 +898,25 @@ def generate_saliency_figure(
             axes[-1].spines["right"].set_visible(False)
             axes[-1].yaxis.tick_right()
 
-            if stim_tick is not None:
-                plt.axvline(x=stim_tick, color="black", linestyle="--", linewidth=1)
+            x_ticks = [0, int(segment_length / 2), segment_length]
 
-            stim_tick_index = 0 if stim_tick is None else stim_tick
-            x_ticks = [0, stim_tick_index, int(segment_length / tick_ratio), segment_length]
+            if stim_tick is not None:
+                stim_tick_index = int(stim_tick / tick_ratio)
+                x_ticks.append(stim_tick_index)
+                plt.axvline(x=stim_tick_index, color="black", linestyle="--", linewidth=1)
+            else:
+                stim_tick_index = 0
+
             if topomap != "average":
                 plt.axvline(x=max_idx, color="green", linestyle="--", linewidth=1)
-                x_ticks += [max_idx]
+                x_ticks.append(max_idx)
+
             x_ticks = sorted(x_ticks)
-            ticks_values = [
-                (x_tick - stim_tick_index) * tick_ratio + edge for x_tick in x_ticks
-            ]
-            plt.xticks(x_ticks, ticks_values, fontsize=8)
+            tick_labels = [(x_tick - stim_tick_index) * tick_ratio for x_tick in x_ticks]
+            tick_labels[0] += edge
+            tick_labels[-1] -= edge
+
+            plt.xticks(x_ticks, tick_labels, fontsize=8)
             plt.yticks([0, n_sensors], [n_sensors, 0])
 
             if j == 0:
