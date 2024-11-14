@@ -944,9 +944,16 @@ def generate_saliency_figure(
             else:
                 data = grads.mean(axis=1)
 
+            if isinstance(info, str):
+                linfo = np.load(
+                    os.path.join(info, f"camcan_info_{sensor_type.lower()}.npy"),
+                    allow_pickle=True,
+                )
+            else:
+                linfo = info
             im, _ = plot_topomap(
                 data.ravel(),
-                info,
+                linfo,
                 res=300,
                 cmap=cmap,
                 vlim=(-vlim, vlim),
