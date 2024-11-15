@@ -353,7 +353,7 @@ class EpochedDataset:
                 self.groups += [sub] * len(labels)
             else:
                 LOG.warning(
-                    f"{sub} does not have an equal number of trials and labels. Skipping."
+                    f"Warning: Number of trials for {sub} does not match number of labels."
                 )
                 continue
 
