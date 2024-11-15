@@ -347,9 +347,15 @@ class EpochedDataset:
                 sub_data = sub_data[random_samples]
                 labels = labels[random_samples]
 
-            self.data.append(torch.Tensor(sub_data))
-            self.labels.append(np.array(labels))
-            self.groups += [sub] * len(labels)
+            if len(sub_data) == len(labels):
+                self.data.append(torch.Tensor(sub_data))
+                self.labels.append(np.array(labels))
+                self.groups += [sub] * len(labels)
+            else:
+                LOG.warning(
+                    f"{sub} does not have an equal number of trials and labels. Skipping."
+                )
+                continue
 
         # Format data and labels
         if len(self) == 0:
