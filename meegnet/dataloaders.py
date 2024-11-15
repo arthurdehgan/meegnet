@@ -106,8 +106,8 @@ class EpochedDataset:
         The sampling frequency, by default 500.
     n_subjects : int, optional
         The number of subjects. Default value is None, which means all subjects are processed.
-    zscore : bool, optional
-        If True, z-scoring is applied to each subject's data, by default False.
+    scaling : str, optional
+        The scaling method. available options are "zscore" and "minmax". By default, minmax.
     n_samples : int, optional
         The number of samples to include, by default None.
     sensortype : str, optional
@@ -143,7 +143,7 @@ class EpochedDataset:
         self,
         sfreq: float = 500,
         n_subjects: int = None,
-        zscore: bool = False,
+        scaling: str = "minmax",
         n_samples: int = None,
         split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
@@ -158,7 +158,12 @@ class EpochedDataset:
 
         self.sfreq = sfreq
         self.n_subjects = n_subjects
-        self.zscore = zscore
+        if scaling == "zscore":
+            self.scaler = lambda x: zscore(x, axis=-1)
+        elif scaling == "minmax":
+            self.scaler = lambda x: (x - x.min()) / (x.max() - x.min())
+        else:
+            raise ValueError(f"{scaling} is an invalid scaling option.")
         self.n_samples = n_samples
         self.lso = lso
         self.sensors = self._select_sensors(sensortype)
@@ -395,12 +400,7 @@ class EpochedDataset:
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
-        if self.zscore:
-            data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
-            scaler = lambda x: zscore(x, axis=-1)
-        else:
-            scaler = lambda x: (x - x.min()) / (x.max() - x.min())
-        data = np.array([list(map(scaler, sensor_data)) for sensor_data in data])
+        data = np.array([list(map(self.scaler, sensor_data)) for sensor_data in data])
         return torch.Tensor(np.array(data))
 
     def _select_sensors(self, sensortype: str) -> list:
@@ -521,8 +521,8 @@ class ContinuousDataset(EpochedDataset):
         Sampling frequency. Defaults to 500.
     n_subjects : int, optional
         Number of subjects. Defaults to None (all subjects).
-    zscore : bool, optional
-        If True, z-scoring is applied to each subject's data, by default False.
+    scaling : str, optional
+        The scaling method. available options are "zscore" and "minmax". By default, minmax.
     n_samples : int, optional
         Number of samples per subject. Defaults to None.
     split_sizes(tuple or int), optional
@@ -571,7 +571,7 @@ class ContinuousDataset(EpochedDataset):
         offset: int = 10,
         sfreq: int = 500,
         n_subjects: int = None,
-        zscore: bool = False,
+        scaling: str = "minmax",
         n_samples: int = None,
         split_sizes: tuple = (0.8, 0.1, 0.1),
         sensortype: str = None,
@@ -587,7 +587,7 @@ class ContinuousDataset(EpochedDataset):
         offset (int): Offset in seconds.
         sfreq (int): Sampling frequency.
         n_subjects (int): Number of subjects.
-        zscore (bool): Apply z-scoring.
+        scaling (str): The scaling method used.
         n_samples (int): Number of samples per subject.
         split_sizes(tuple or int): a tuple of (train_size, valid_size, test_size)
             for splits or a float <= 1, in which case the valid sizes and test sizes
@@ -598,9 +598,15 @@ class ContinuousDataset(EpochedDataset):
         """
 
         super().__init__(
-            sfreq, n_subjects, zscore, n_samples, split_sizes, sensortype, lso, random_state
+            sfreq, n_subjects, scaling, n_samples, split_sizes, sensortype, lso, random_state
         )
 
+        if scaling == "zscore":
+            self.scaler = lambda x: zscore(x, axis=-1)
+        elif scaling == "minmax":
+            self.scaler = lambda x: (x - x.min()) / (x.max() - x.min())
+        else:
+            raise ValueError(f"{scaling} is an invalid scaling option.")
         assert 0 <= overlap < 1, "Overlap must be between 0 and 1."
         self.window = window
         self.overlap = overlap
@@ -631,14 +637,7 @@ class ContinuousDataset(EpochedDataset):
                 trial = sub_data[:, :, i : i + step]
                 if trial.shape[-1] == step:
                     if not np.isnan(trial).any():
-                        if self.zscore:
-                            trial = zscore(trial, axis=-1)
-                        else:
-                            trial = [
-                                (sensor_data - sensor_data.min())
-                                / (sensor_data.max() - sensor_data.min())
-                                for sensor_data in trial
-                            ]
+                        trial = [self.scaler(sensor_data) for sensor_data in trial]
                         data.append(trial)
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
