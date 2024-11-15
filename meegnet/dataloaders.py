@@ -6,7 +6,6 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 from scipy.stats import zscore
-from sklearn.preprocessing import minmax_scale
 from meegnet.utils import strip_string
 
 LOG = logging.getLogger("meegnet")
@@ -400,8 +399,7 @@ class EpochedDataset:
             data = np.array(list(map(lambda x: zscore(x, axis=-1), data)))
             scaler = lambda x: zscore(x, axis=-1)
         else:
-            # scaler = lambda x: (x - x.min()) / (x.max() - x.min())
-            scaler = minmax_scale
+            scaler = lambda x: (x - x.min()) / (x.max() - x.min())
         data = np.array([list(map(scaler, sensor_data)) for sensor_data in data])
         return torch.Tensor(np.array(data))
 
@@ -636,12 +634,11 @@ class ContinuousDataset(EpochedDataset):
                         if self.zscore:
                             trial = zscore(trial, axis=-1)
                         else:
-                            trial = minmax_scale(trial)
-                            # trial = [
-                            #     (sensor_data - sensor_data.min())
-                            #     / (sensor_data.max() - sensor_data.min())
-                            #     for sensor_data in trial
-                            # ]
+                            trial = [
+                                (sensor_data - sensor_data.min())
+                                / (sensor_data.max() - sensor_data.min())
+                                for sensor_data in trial
+                            ]
                         data.append(trial)
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
