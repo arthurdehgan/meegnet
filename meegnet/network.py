@@ -929,6 +929,12 @@ class Model:
         LOG.info(f" [ACC] TEST {test_acc}")
         return test_loss, test_acc
 
+    def n_parameters(self, model: nn.Module = None):
+        if model is None:
+            model = self.net
+        model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+        return sum([np.prod(p.size()) for p in model_parameters])
+
     def _get_from_hub(self, repo=None):
         if repo is None:
             repo = "lamaroufle/meegnet"
