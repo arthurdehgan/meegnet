@@ -109,9 +109,9 @@ def load_data(
     sub = sub_folder.split("-")[1]
     if epoched:
         assert args.dataset != "rest", "Cannot generate epochs for resting-state data"
-        filename = f"{dataset}_{sub}_epoched.npy"
+        filename = f"{sub}_{dataset}_epoched.npy"
     else:
-        filename = f"{dataset}_{sub}.npy"
+        filename = f"{sub}_{dataset}.npy"
     out_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
     if not os.path.exists(out_path):
         os.makedirs(out_path)
