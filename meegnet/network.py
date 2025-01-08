@@ -792,6 +792,7 @@ class Model:
         It uses early stopping based on the validation loss and saves the model
         periodically.
         """
+        assert len(dataset.data) > 0, "Dataset is empty."
         # Check dataset compatibility
         assert (
             dataset.data[0].shape == self.input_size
