@@ -948,7 +948,11 @@ def generate_saliency_figure(
                 linfo = np.load(
                     os.path.join(info, f"camcan_info_{sensor_type.lower()}.npy"),
                     allow_pickle=True,
+<<<<<<< HEAD
                 ).tolist()
+=======
+                )
+>>>>>>> 821e34007b1c997f0516335ff6758f812a35b553
             else:
                 linfo = info
             im, _ = plot_topomap(
