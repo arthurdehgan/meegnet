@@ -74,7 +74,7 @@ def get_input_size(args, default_values):
 
 
 def get_name(args):
-    name = f"{args.model_name}_{args.seed}_{args.sensors}"
+    name = f"{args.model_name}_{args.net_option}_{args.seed}_{args.sensors}"
     suffixes = ""
     if args.net_option == "custom_net":
         if args.batchnorm:
