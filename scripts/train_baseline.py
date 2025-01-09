@@ -1,11 +1,13 @@
+import os
 import logging
-from meegnet.dataloaders import EpochedDataset
+import configparser
 import numpy as np
+from meegnet.dataloaders import EpochedDataset, ContinuousDataset
+from meegnet.parsing import parser, save_config
+from joblib import Parallel, delayed
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import accuracy_score
-from joblib import Parallel, delayed
-import os
 from meegnet.utils import compute_psd
 
 logging.basicConfig(
@@ -14,24 +16,16 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %I:%M:%S %p",
 )
 
-data_path = "/home/arthur/data/camcan/eventclf"
-fs = 500
-
-# Define function to process a single sensor
+LOG = logging.getLogger("meegnet")
 
 
-def process_sensor(sensor_type, sensor, data_slice, labels, fs):
-    logging.info(f"Processing sensor_type {sensor_type}, sensor {sensor}")
+def process_sensor(sensor_type, sensor, train_index, test_index, data, labels, fs):
+    LOG.info(f"Processing sensor_type {sensor_type}, sensor {sensor}")
 
     # Compute PSD for the specific sensor
-    psd_data = compute_psd(data_slice, fs=fs)
+    psd_data = compute_psd(data[:, sensor_type, sensor], fs=fs)
 
     # Split data into train and test sets
-    n_samples = len(labels)
-    train_size = int(0.9 * n_samples)
-    train_index = np.arange(train_size)
-    test_index = np.arange(train_size, n_samples)
-
     X_train, y_train = psd_data[train_index], labels[train_index]
     X_test, y_test = psd_data[test_index], labels[test_index]
 
@@ -78,38 +72,84 @@ def process_sensor(sensor_type, sensor, data_slice, labels, fs):
         "test_accuracy": test_accuracy,
         "best_parameters": best_params,
     }
-    logging.info(f"Finished processing sensor_type {sensor_type}, sensor {sensor}")
+    LOG.info(f"Finished processing sensor_type {sensor_type}, sensor {sensor}")
     return results
 
 
 if __name__ == "__main__":
-    # Initialize dataset
-    dataset = EpochedDataset(
-        sfreq=fs,
-        n_subjects=50,
-        n_samples=None,
-        sensortype="ALL",
-        lso=True,
-    )
 
-    dataset.load(data_path)
+    ###############
+    ### PARSING ###
+    ###############
 
-    # Extract data and labels once
+    args = parser.parse_args()
+    save_config(vars(args), args.config)
+
+    script_path = os.getcwd()
+    config_path = os.path.join(script_path, "../default_values.ini")
+    default_values = configparser.ConfigParser()
+    assert os.path.exists(config_path), "default_values.ini not found"
+    default_values.read(config_path)
+    default_values = default_values["config"]
+
+    fold = None if args.fold == -1 else int(args.fold)
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
+
+    ####################
+    ### LOADING DATA ###
+    ####################
+
+    if args.epoched:
+        dataset = EpochedDataset(
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=args.lso,
+        )
+    else:
+        dataset = ContinuousDataset(
+            window=args.segment_length,
+            overlap=args.overlap,
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=args.lso,
+        )
+
+    dataset.load(args.save_path)
     data, labels = dataset.data, dataset.labels
 
-    # Run parallel processing using joblib
-    logging.info("Starting parallel processing...")
+    # Split data into train and test sets
+    train_index, test_index, _ = dataset.split_data(0.9, 0.1, 0)
+
+    ########################
+    ### START PROCESSING ###
+    ########################
+
+    LOG.info("Starting parallel processing...")
     all_results = Parallel(n_jobs=-1)(
         delayed(process_sensor)(
-            sensor_type, sensor, data[:, sensor_type, sensor].copy(), labels, fs
+            sensor_type, sensor, train_index, test_index, data, labels, args.sfreq
         )
         for sensor_type in [0, 1, 2]
         for sensor in range(102)
     )
 
-    # Save all results
-    output_file = "model_performance.npy"
+    #######################
+    ### FIND BEST RESULT ###
+    #######################
+
+    best_result = max(all_results, key=lambda x: x["validation_accuracy"])
+    LOG.info("Best sensor combination:")
+    LOG.info(best_result)
+
+    #######################
+    ### SAVING RESULTS ###
+    #######################
+
+    output_file = os.path.join(args.save_path, f"baseline_performance.npy")
     np.save(output_file, all_results)
 
-    logging.info("Performance metrics saved:")
-    logging.info(all_results)
+    LOG.info("Performance metrics saved.")
