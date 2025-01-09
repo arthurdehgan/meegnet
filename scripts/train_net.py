@@ -92,6 +92,8 @@ if __name__ == "__main__":
     LOG.info(my_model.name)
     LOG.info(my_model.net)
 
+    LOG.info(f"dataset contains a total of {len(dataset)} trials.")
+
     ######################
     ### TRAINING MODEL ###
     ######################
