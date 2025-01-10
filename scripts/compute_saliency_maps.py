@@ -1,4 +1,5 @@
 import os
+import configparser
 import logging
 import pandas as pd
 from meegnet.parsing import parser, save_config
@@ -24,12 +25,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
     save_config(vars(args), args.config)
 
+    script_path = os.getcwd()
+    config_path = os.path.join(script_path, "../default_values.ini")
+    default_values = configparser.ConfigParser()
+    assert os.path.exists(config_path), "default_values.ini not found"
+    default_values.read(config_path)
+    default_values = default_values["config"]
+
     fold = None if args.fold == -1 else int(args.fold)
 
     labels = ["visual", "auditory"]  # image is label 0 and sound label 1
     # labels = [] # use this for subject classification
 
-    input_size = get_input_size(args)
+    input_size = get_input_size(args, default_values)
     name = get_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
@@ -50,7 +58,9 @@ if __name__ == "__main__":
         if not os.path.exists(psd_path):
             os.makedirs(psd_path)
 
-    sal_path = os.path.join(args.save_path, "saliency_maps", name)
+    sal_path = os.path.join(
+        args.save_path, "saliency_maps", name, f"{args.confidence}confidence"
+    )
     if not os.path.exists(sal_path):
         os.makedirs(sal_path)
 
@@ -81,21 +91,21 @@ if __name__ == "__main__":
 
     n_outputs = len(labels) if labels != [] else len(subj_list)
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
-    my_model.from_pretrained()
-    # my_model.load()
+    # my_model.from_pretrained()
+    my_model.load()
 
     #################
     ### MAIN LOOP ###
     #################
 
     for sub in subj_list:
-        dataset = load_single_subject(sub, n_samples, args.lso, args)
+        dataset = load_single_subject(sub, n_samples, args)
         compute_saliency_maps(
             dataset,
             labels,
             sub,
             sal_path,
             my_model.net,
-            args.confidence,
-            args.clf_type,
+            threshold=args.confidence,
+            epoched=args.epoched,
         )
