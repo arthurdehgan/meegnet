@@ -14,6 +14,15 @@ MEEGNet is an open-source Python toolbox for neuroscientists interested in using
 - **Documentation:** https://meegnet.readthedocs.io/en/latest/index.html
 
 
+Installation
+============
+
+.. code-block:: bash
+
+   python -m pip install -U pip
+
+More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
+
 Key Features
 ============
 
@@ -44,14 +53,6 @@ The package currently supports the following architectures:
 * EEGNet 
 * MEEGNet
 
-Installation
-============
-
-.. code-block:: bash
-
-   python -m pip install -U pip
-
-More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
 
 Tutorials
 =========
