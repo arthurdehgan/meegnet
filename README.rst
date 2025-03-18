@@ -35,7 +35,7 @@ Prepare your data by following the instructions
 Learn the basics of how to train and evaluate using a pre-made network
 `here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/train_network.ipynb>`__
 
-Genreate saliency maps for your network
+Generate saliency maps for your network
 `here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_saliency.ipynb>`__
 
 Visualize latent space with Gradcam
@@ -59,7 +59,7 @@ Future Features
 
 * BIDS compatibility
 
-MeegNet Architecture
+MEEGNet Architecture
 --------------------
 
 .. image:: https://github.com/arthurdehgan/meegnet/blob/master/architecture.png
