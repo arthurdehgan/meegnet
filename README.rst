@@ -3,7 +3,7 @@ Welcome to MEEGNet!
 
 .. image:: https://img.shields.io/pypi/v/meegnet.svg
    :target: https://pypi.org/project/meegnet/
-   
+
 .. image:: https://img.shields.io/pypi/pyversions/meegnet.svg
    :target: https://pypi.org/project/meegnet/
 
@@ -19,7 +19,7 @@ Installation
 
 .. code-block:: bash
 
-   python -m pip install -U pip
+   pip install meegnet
 
 More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
 
@@ -67,18 +67,18 @@ MeegNet Architecture
 Other Available Architectures
 -----------------------------
 
-The package currently supports the following architectures: 
+The package currently supports the following architectures:
 
 * MLP
 * VGG-16
-* EEGNet 
+* EEGNet
 * MEEGNet
 
 
 Alternatives
 ============
 
-Maybe this package doesn’t suit your needs, in which case we can recommend similar packages with similar goals: 
+Maybe this package doesn’t suit your needs, in which case we can recommend similar packages with similar goals:
 
 * https://mneflow.readthedocs.io/en/latest/
 * https://braindecode.org/stable/index.html
