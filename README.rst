@@ -47,9 +47,9 @@ The package currently supports the following architectures:
 Installation
 ============
 
-Install the package using pip:
+.. code-block:: bash
 
-    > python -m pip install -U pip
+   python -m pip install -U pip
 
 More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
 
