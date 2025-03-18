@@ -74,6 +74,17 @@ The package currently supports the following architectures:
 * EEGNet
 * MEEGNet
 
+License Information
+===================
+
+MEEGNet is released under the MIT License. This license is permissive, allowing you to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software. The full text of the license can be found in the `LICENSE` file in the repository.
+
+By using MEEGNet, you agree to the terms of the MIT License. In summary, the MIT License allows you to:
+
+- Use the software for any purpose, including commercial use.
+- Modify and distribute the software, as long as the original copyright notice and license notice are included in all copies or substantial portions of the software.
+
+For more details, please refer to the `LICENSE` file or visit the Open Source Initiative's `MIT License page <https://opensource.org/licenses/MIT>`_.
 
 Alternatives
 ============
