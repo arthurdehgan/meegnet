@@ -11,7 +11,38 @@ MEEGNet is an open-source Python toolbox for neuroscientists interested in using
 
 - **Source:** https://github.com/arthurdehgan/meegnet
 - **Bug Reports:** https://github.com/arthurdehgan/meegnet/issues
+- **Documentation:** https://meegnet.readthedocs.io/en/latest/index.html
 
+
+Installation
+============
+
+.. code-block:: bash
+
+   python -m pip install -U pip
+
+More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
+
+Tutorials and Examples
+======================
+
+Jupyter Notebook tutorials:
+---------------------------
+
+Prepare your data by following the instructions
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
+
+Learn the basics of how to train and evaluate using a pre-made network
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/train_network.ipynb>`__
+
+Genreate saliency maps for your network
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_saliency.ipynb>`__
+
+Visualize latent space with Gradcam
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_gradcam.ipynb>`__
+
+Learn about your model using filter visualizations
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_filters.ipynb>`__
 
 Key Features
 ============
@@ -38,35 +69,11 @@ Other Available Architectures
 
 The package currently supports the following architectures: 
 
-* LF-CNN 
-* VAR-CNN 
+* MLP
+* VGG-16
 * EEGNet 
+* MEEGNet
 
-Documentation
-=============
-
-For a full documentation of the package as well as tutorials on how to use the library, click the `Readthedocs <https://meegnet.readthedocs.io/en/latest/index.html>`_ link.
-
-Tutorials
-=========
-
-Jupyter Notebook tutorials:
----------------------------
-
-Prepare your data by following the instructions
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
-
-Learn the basics of how to train and evaluate using a pre-made network
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/train_network.ipynb>`__
-
-Genreate saliency maps for your network
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_saliency.ipynb>`__
-
-Visualize latent space with Gradcam
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_gradcam.ipynb>`__
-
-Learn about your model using filter visualizations
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_filters.ipynb>`__
 
 Alternatives
 ============
