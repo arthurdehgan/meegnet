@@ -55,6 +55,7 @@ Future Features
 ---------------
 
 * BIDS compatibility
+* VAR-CNN and LF-CNN from Zubarev et al. (2019)
 
 MEEGNet Architecture
 --------------------
