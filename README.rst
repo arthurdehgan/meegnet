@@ -26,9 +26,6 @@ More installation options can be found in the `online documentation <https://mee
 Tutorials and Examples
 ======================
 
-Jupyter Notebook tutorials:
----------------------------
-
 Prepare your data by following the instructions
 `here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
 
