@@ -827,6 +827,7 @@ def generate_saliency_figure(
         "window",
     ), f"{topomap} is not a valid option for the topomap parameter. ('timing', 'average', 'window')"
 
+    block_size = 3
     tick_ratio = 1000 / sfreq
     padding = int(edge / tick_ratio)
     if stim_tick is not None:
@@ -835,22 +836,25 @@ def generate_saliency_figure(
         suffix += "_"
     n_blocs = len(sensors)  # number of blocs of figures in a line
     n_lines = len(saliencies)  # number of lines for the pyplot figure
-    n_cols = n_blocs * 3 + 1  # number of columns for the pyplot figure
+    n_cols = n_blocs * block_size + 1  # number of columns for the pyplot figure
     grid = GridSpec(n_lines, n_cols)
     fig = plt.figure(figsize=(n_cols * 2, n_lines * 2))
     plt.title(title)
     plt.axis("off")
     axes = []
     # First pass to gather vlim values:
-    vlim = 0
     for i, label in enumerate(saliencies.keys()):
+        vlim = 0
         gradient = copy.copy(saliencies[label].squeeze())
+        assert (
+            len(gradient) == n_blocs
+        ), "Can't generate figures for all sensors, check if the saliencies have been properly computed."
         gradient /= np.abs(gradient).max()
-        for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
-            idx = j // 3
+        for j, sensor_type in zip(range(0, n_blocs * block_size, block_size), sensors):
+            idx = j // block_size
             length = gradient[idx].shape[1]
-            grads = gradient[idx][:, padding : length - padding]
-            segment_length = grads.shape[1]
+            grads = copy.copy(gradient[idx])[:, padding : length - padding]
+            # segment_length = grads.shape[1]
             # mid_slice = (0, segment_length)
             # gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
             # grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
@@ -860,14 +864,8 @@ def generate_saliency_figure(
             if vlim_curr > vlim:
                 vlim = vlim_curr
 
-    for i, label in enumerate(saliencies.keys()):
-        gradient = saliencies[label].squeeze()
-        assert (
-            len(gradient) == n_blocs
-        ), "Can't generate figures for all sensors, check if the saliencies have been properly computed."
-        gradient /= np.abs(gradient).max()
-        for j, sensor_type in zip(range(0, n_blocs * 3, n_blocs), sensors):
-            idx = j // 3
+        for j, sensor_type in zip(range(0, n_blocs * block_size, block_size), sensors):
+            idx = j // block_size
             # grads = gradient[idx]
             # In an attempt to remove the edge effect:
             # We remove the first and last edge points -> therefore tick is moved to 25 (was 75)
@@ -939,7 +937,7 @@ def generate_saliency_figure(
                     end = start + int(segment_length / 4)
                 elif end > segment_length:
                     end = segment_length
-                    start = 3 * int(segment_length / 4)
+                    start = block_size * int(segment_length / 4)
                 data = grads[:, start:end].mean(axis=1)
             else:
                 data = grads.mean(axis=1)
