@@ -23,6 +23,27 @@ Installation
 
 More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
 
+Tutorials and Examples
+======================
+
+Jupyter Notebook tutorials:
+---------------------------
+
+Prepare your data by following the instructions
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
+
+Learn the basics of how to train and evaluate using a pre-made network
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/train_network.ipynb>`__
+
+Genreate saliency maps for your network
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_saliency.ipynb>`__
+
+Visualize latent space with Gradcam
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_gradcam.ipynb>`__
+
+Learn about your model using filter visualizations
+`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_filters.ipynb>`__
+
 Key Features
 ============
 
@@ -53,27 +74,6 @@ The package currently supports the following architectures:
 * EEGNet 
 * MEEGNet
 
-
-Tutorials
-=========
-
-Jupyter Notebook tutorials:
----------------------------
-
-Prepare your data by following the instructions
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
-
-Learn the basics of how to train and evaluate using a pre-made network
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/train_network.ipynb>`__
-
-Genreate saliency maps for your network
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_saliency.ipynb>`__
-
-Visualize latent space with Gradcam
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_gradcam.ipynb>`__
-
-Learn about your model using filter visualizations
-`here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_filters.ipynb>`__
 
 Alternatives
 ============
