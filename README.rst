@@ -44,10 +44,14 @@ The package currently supports the following architectures:
 * EEGNet 
 * MEEGNet
 
-Documentation
-=============
+Installation
+============
 
-For a full documentation of the package as well as tutorials on how to use the library, click the `Readthedocs <https://meegnet.readthedocs.io/en/latest/index.html>`_ link.
+Install the package using pip:
+
+    > python -m pip install -U pip
+
+More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
 
 Tutorials
 =========
