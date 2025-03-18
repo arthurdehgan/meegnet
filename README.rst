@@ -11,6 +11,7 @@ MEEGNet is an open-source Python toolbox for neuroscientists interested in using
 
 - **Source:** https://github.com/arthurdehgan/meegnet
 - **Bug Reports:** https://github.com/arthurdehgan/meegnet/issues
+- **Documentation:** https://meegnet.readthedocs.io/en/latest/index.html
 
 
 Key Features
@@ -38,9 +39,10 @@ Other Available Architectures
 
 The package currently supports the following architectures: 
 
-* LF-CNN 
-* VAR-CNN 
+* MLP
+* VGG-16
 * EEGNet 
+* MEEGNet
 
 Documentation
 =============
