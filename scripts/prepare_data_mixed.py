@@ -189,7 +189,8 @@ def load_and_process(
                     )
                     return None, None
                 # mixing up the timing of the stimulus
-                tmin = (np.random.random_sample() / 5) + 0.01
+                # tmin = (np.random.random_sample() / 5) + 0.01
+                tmin = .15
                 data = mne.Epochs(raw, events, tmin=-tmin, tmax=0.8 - tmin, preload=True)
                 if len(events) != len(data):
                     bad_subj_found(

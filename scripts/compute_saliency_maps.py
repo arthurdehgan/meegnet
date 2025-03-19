@@ -34,13 +34,12 @@ if __name__ == "__main__":
 
     fold = None if args.fold == -1 else int(args.fold)
 
-    labels = ["visual", "auditory"]  # image is label 0 and sound label 1
-    # labels = [] # use this for subject classification
-
     input_size = get_input_size(args, default_values)
     name = get_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
+
+    n_outputs = 2
 
     ######################
     ### LOGGING CONFIG ###
@@ -89,7 +88,6 @@ if __name__ == "__main__":
         LOG.info(f"{model_path} does not exist. Creating folders")
         os.makedirs(model_path)
 
-    n_outputs = len(labels) if labels != [] else len(subj_list)
     my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
     # my_model.from_pretrained()
     my_model.load()
@@ -100,12 +98,13 @@ if __name__ == "__main__":
 
     for sub in subj_list:
         dataset = load_single_subject(sub, n_samples, args)
-        compute_saliency_maps(
-            dataset,
-            labels,
-            sub,
-            sal_path,
-            my_model.net,
-            threshold=args.confidence,
-            epoched=args.epoched,
-        )
+        if len(dataset) != 0:
+            compute_saliency_maps(
+                dataset,
+                dataset.target_labels,
+                sub,
+                sal_path,
+                my_model.net,
+                threshold=args.confidence,
+                epoched=args.epoched,
+            )

@@ -1098,10 +1098,14 @@ class TrainingTracker:
         assert option in ["both", "train", "valid"]
         fig, ax = plt.subplots()
         if option in ("both", "train"):
-            plt.plot(np.array(self.progress["train_accuracies"]).squeeze(), label="Training Accuracy")
+            plt.plot(
+                np.array(self.progress["train_accuracies"]).squeeze(),
+                label="Training Accuracy",
+            )
         if option in ("both", "valid"):
             plt.plot(
-                np.array(self.progress["validation_accuracies"]).squeeze(), label="Validation Accuracy"
+                np.array(self.progress["validation_accuracies"]).squeeze(),
+                label="Validation Accuracy",
             )
         if early_stop:
             plt.axvline(x=self.best["epoch"] - 1, label="early stop", color="green")
@@ -1117,7 +1121,9 @@ class TrainingTracker:
         if option in ("both", "train"):
             plt.plot(np.array(self.progress["train_losses"]).squeeze(), label="Training Loss")
         if option in ("both", "valid"):
-            plt.plot(np.array(self.progress["validation_losses"]).squeeze(), label="Validation Loss")
+            plt.plot(
+                np.array(self.progress["validation_losses"]).squeeze(), label="Validation Loss"
+            )
         if early_stop:
             plt.axvline(x=self.best["epoch"] - 1, label="early stop", color="green")
         ax.set_ylabel("Loss")

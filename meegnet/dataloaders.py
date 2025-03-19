@@ -91,9 +91,10 @@ class InfiniteDataLoader:
 
 def _string_to_int(array):
     array = np.array(array)
-    for i, element in enumerate(np.unique(array)):
+    target_labels = np.unique(array)
+    for i, element in enumerate(target_labels):
         array[array == element] = i
-    return array.astype(int)
+    return array.astype(int), target_labels
 
 
 class EpochedDataset:
@@ -127,14 +128,12 @@ class EpochedDataset:
         The number of samples for each subject.
     data : torch.Tensor
         The data.
-    labels : torch.Tensor
-        The labels.
+    targets : torch.Tensor
+        The targets.
     groups : list
         The groups.
     subject_list : list
         The subject list.
-    targets : torch.Tensor
-        The targets (aliases for labels).
     data_path : str
         The path to the data.
     """
@@ -171,11 +170,11 @@ class EpochedDataset:
         self._reset_seed()
 
         self.data = []
-        self.labels = []
+        self.targets = []
         self.groups = []
         self.subject_list = []
-        self.targets = self.labels
         self.data_path = None
+        self.target_labels = None
 
     def _reset_seed(self):
         np.random.seed(self.random_state)
@@ -219,7 +218,7 @@ class EpochedDataset:
             )[: self.n_subjects]
 
         # Update instance attributes
-        LOG.info(f"Logging subjects and labels from {data_path}...")
+        LOG.info(f"Logging subjects and targets from {data_path}...")
         self.data_path = data_path
         self.subject_list = dataframe["sub"].tolist()
 
@@ -266,7 +265,7 @@ class EpochedDataset:
             dataframe = self._load_csv(data_path)
 
         # Update instance attributes
-        LOG.info(f"Logging subjects and labels from {data_path}...")
+        LOG.info(f"Logging subjects and targets from {data_path}...")
         self.data_path = data_path
         self.subject_list = dataframe["sub"].tolist()
 
@@ -278,7 +277,7 @@ class EpochedDataset:
         csv_path: str = None,
         one_sub: str = None,
         verbose: int = 2,
-        label_col: str = "label",
+        target_col: str = "label",
     ) -> None:
         """
         Loads data from the "downsampled_[sfreq]" folder in the data_path.
@@ -293,8 +292,8 @@ class EpochedDataset:
             Subject ID or "random" to select a random subject.
         verbose : int, optional
             Logging verbosity level (0-2).
-        label_col : str, optional
-            Column name for labels in the CSV file.
+        target_col : str, optional
+            Column name for targets in the CSV file.
         """
 
         # Ensure data_path is set
@@ -333,11 +332,11 @@ class EpochedDataset:
             if sub_data is None:
                 continue  # skip subject if there are no data in the loaded file
 
-            # Process data and labels
+            # Process data and targets
             if self.sensors is not None:
                 sub_data = sub_data[:, self.sensors, :, :]
-            label = row[label_col].item()
-            labels = self._process_labels(label, len(sub_data))
+            target = row[target_col].item()
+            targets = self._process_targets(target, len(sub_data))
 
             # Handle sampling
             if self.n_samples is not None:
@@ -345,52 +344,52 @@ class EpochedDataset:
                     np.arange(len(sub_data)), self.n_samples, replace=False
                 )
                 sub_data = sub_data[random_samples]
-                labels = labels[random_samples]
+                targets = targets[random_samples]
 
-            if len(sub_data) == len(labels):
+            if len(sub_data) == len(targets):
                 self.data.append(torch.Tensor(sub_data))
-                self.labels.append(np.array(labels))
-                self.groups += [sub] * len(labels)
+                self.targets.append(np.array(targets))
+                self.groups += [sub] * len(targets)
             else:
                 LOG.warning(
-                    f"Warning: Number of trials for {sub} does not match number of labels."
+                    f"Warning: Number of trials for {sub} does not match number of targets."
                 )
                 continue
 
-        # Format data and labels
+        # Format data and targets
         if len(self) == 0:
             return
         elif len(self) == 1:
             self.data = self.data[0]
-            self.labels = self.labels[0]
+            self.targets = self.targets[0]
         else:
             self.data = torch.cat(self.data, 0)
-            self.labels = np.concatenate(self.labels, axis=0)
+            self.targets = np.concatenate(self.targets, axis=0)
 
         if len(self.data.shape) != 4:
             self.data = self.data[:, np.newaxis]
 
-        self.set_labels(self.labels)
+        self.set_targets(self.targets)
 
         if type(self.groups[0]) != int:
-            self.groups = _string_to_int(self.groups)
+            self.groups, _ = _string_to_int(self.groups)
         self.groups = torch.tensor(self.groups, dtype=int)
 
         self.n_subjects = len(np.unique(self.groups))
 
-    def _process_labels(self, label: str, n_samples: int) -> list:
-        """Process label(s) for a subject."""
-        if isinstance(label, str):
-            labels = label.split(", ")
-            labels = list(map(strip_string, labels))
+    def _process_targets(self, target: str, n_samples: int) -> list:
+        """Process target(s) for a subject."""
+        if isinstance(target, str):
+            targets = target.split(", ")
+            targets = list(map(strip_string, targets))
         else:
-            labels = [label]
-        if len(labels) == 1:
-            if labels[0] in self.subject_list:
-                labels = [self.subject_list.index(labels[0])] * n_samples
+            targets = [target]
+        if len(targets) == 1:
+            if targets[0] in self.subject_list:
+                targets = [self.subject_list.index(targets[0])] * n_samples
             else:
-                labels = [labels[0]] * n_samples
-        return np.array(labels)
+                targets = [targets[0]] * n_samples
+        return np.array(targets)
 
     def random_sub(self):
         return np.random.choice(self.subject_list)
@@ -503,12 +502,14 @@ class EpochedDataset:
 
     def torchDataset(self, index):
         """Returns a Torch dataset instance of the torch Dataset class for the given index."""
-        return torch.utils.data.TensorDataset(self.data[index], self.labels[index])
+        return torch.utils.data.TensorDataset(self.data[index], self.targets[index])
 
-    def set_labels(self, labels):
-        if type(labels[0]) in (str, np.str_):
-            labels = _string_to_int(labels)
-        self.labels = torch.Tensor(labels)
+    def set_targets(self, targets):
+        if type(targets[0]) in (str, np.str_):
+            targets, target_labels = _string_to_int(targets)
+
+        self.targets = torch.Tensor(targets)
+        self.target_labels = target_labels
 
 
 class ContinuousDataset(EpochedDataset):
@@ -557,8 +558,8 @@ class ContinuousDataset(EpochedDataset):
         Number of samples per subject.
     data : torch.Tensor
         Data.
-    labels : torch.Tensor
-        Labels.
+    targets : torch.Tensor
+        targets.
     groups : list
         Groups.
     subject_list : list

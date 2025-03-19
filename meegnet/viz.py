@@ -37,7 +37,7 @@ def compute_saliency_maps(
 
     # Load all trials and corresponding labels for a specific subject.
     data = dataset.data
-    targets = dataset.labels
+    targets = dataset.targets
     if epoched:
         target_saliencies = [[[], []], [[], []]]
     else:
