@@ -761,12 +761,13 @@ class Model:
         self,
         dataset,
         batch_size: int = 128,
-        patience: int = 20,
+        patience: int = 10,
         max_epoch: int = None,
         model_path: str = None,
         early_stop: str = "loss",
         num_workers: int = 4,
         continue_training: bool = False,
+        verbose: int = 3,
     ) -> None:
         """
         Train the model on the provided dataset.
@@ -778,13 +779,21 @@ class Model:
         batch_size : int, optional
             Batch size for training. Defaults to 128.
         patience : int, optional
-            Patience for early stopping. Defaults to 20.
+            Patience for early stopping. Defaults to 10.
         max_epoch : int, optional
             Maximum number of epochs to train. Defaults to None.
         model_path : str, optional
             Path to save the model. Defaults to None.
         num_workers : int, optional
             Number of workers for data loading. Defaults to 4.
+        continue_training : bool, optional
+            Wether to pick up training from last checkpoint. By default False. Use when
+            training stopped abbruptly because of an error, or to re-train or fine-tune
+            the model.
+        verbose : int, optional
+            The verbosity level. By default 3.
+            Values under 3 will display less detailed progress during training.
+            Values under 2 will not display any update on performance epoch per epoch during training.
 
         Notes
         -----
@@ -841,7 +850,7 @@ class Model:
         while self.tracker.patience_state < patience and (
             max_epoch is None or epoch <= max_epoch
         ):
-            self.train_epoch(epoch, trainloader)
+            self.train_epoch(epoch, trainloader, verbose=verbose)
             train_loss, train_acc = self.evaluate(trainloader)
             valid_loss, valid_acc = self.evaluate(validloader)
             self.tracker.update(
@@ -854,9 +863,10 @@ class Model:
                 self.optimizer,
                 early_stop=early_stop,
             )
-            LOG.info(f"Epoch: {epoch}")
-            LOG.info(f" [LOSS] TRAIN {train_loss:.4f} / VALID {valid_loss:.4f}")
-            LOG.info(f" [ACC] TRAIN {100*train_acc:.2f}% / VALID {100*valid_acc:.2f}%")
+            if verbose >= 2:
+                LOG.info(f"Epoch: {epoch}")
+                LOG.info(f" [LOSS] TRAIN {train_loss:.4f} / VALID {valid_loss:.4f}")
+                LOG.info(f" [ACC] TRAIN {100*train_acc:.2f}% / VALID {100*valid_acc:.2f}%")
             epoch += 1
 
     def fit(self, *args, **kwargs):
@@ -877,20 +887,20 @@ class Model:
         self.optimizer.step()
         return loss
 
-    def display_progress(self, i, epoch, loss, n_batches):
+    def display_progress(self, i, epoch, loss, n_batches, verbose=3):
         progress = f"Epoch: {epoch} // Batch {i+1}/{n_batches} // loss = {loss:.5f}"
         if n_batches > 10:
-            if i % (n_batches // 10) == 0:
+            if i % (n_batches // 10) == 0 and verbose > 2:
                 LOG.info(progress)
-        else:
+        elif verbose > 2:
             LOG.info(progress)
 
-    def train_epoch(self, epoch, trainloader):
+    def train_epoch(self, epoch, trainloader, verbose):
         # Train loop for a single epoch
         n_batches = len(trainloader)
         for i, batch in enumerate(trainloader):
             loss = self.train_batch(batch)
-            self.display_progress(i, epoch, loss, n_batches)
+            self.display_progress(i, epoch, loss, n_batches, verbose=verbose)
 
     def evaluate(self, dataloader):
         with torch.no_grad():
