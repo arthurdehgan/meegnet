@@ -17,6 +17,13 @@ from collections.abc import Iterable
 from joblib import Parallel, delayed
 from meegnet.utils import compute_psd, cuda_check
 from pytorch_grad_cam import GuidedBackpropReLUModel
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image, deprocess_image, preprocess_image
+import torch.nn.functional as F
+import cv2
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 LOG = logging.getLogger("meegnet")
 mne.set_log_level(False)
@@ -24,16 +31,18 @@ mne.set_log_level(False)
 
 def compute_saliency_maps(
     dataset,
-    labels,
-    sub,
-    sal_path,
     net,
-    threshold,
+    sal_path,
+    threshold=0.95,
+    labels=None,
     epoched=False,
 ):
 
     device = cuda_check()
     GBP = GuidedBackpropReLUModel(net, device=device)
+
+    if labels is None:
+        labels = dataset.target_labels
 
     # Load all trials and corresponding labels for a specific subject.
     data = dataset.data
@@ -74,6 +83,8 @@ def compute_saliency_maps(
     n_saliencies = 0
     n_saliencies += sum([len(e) for e in target_saliencies[0]])
     n_saliencies += sum([len(e) for e in target_saliencies[1]])
+
+    sub = dataset.subject_list[0]
     LOG.info(f"{n_saliencies} saliency maps computed for {sub}")
     for j, sal_type in enumerate(("pos", "neg")):
         if epoched:
@@ -1039,3 +1050,90 @@ def plot_epoch(data, title: str = None):
     # plt.savefig(out_path, dpi=300)
     # return out_path
     return fig, axes
+
+
+def compute_cams(net, target_layers, dataset, verbose=3):
+    assert (
+        len(dataset.subject_list) != 0
+    ), "No subject in the dataset, please use dataset.preload before using this function."
+    assert len(dataset.data) == 0, "Do not load the dataset before using this function."
+    all_cams = [[], []]
+
+    for sub in dataset.subject_list:
+        sub_dataset = copy.deepcopy(dataset)
+        if verbose > 2:
+            print(f"Processing subject {sub}")
+        sub_dataset.load(dataset.data_path, one_sub=sub, verbose=verbose)
+        if len(sub_dataset) == 0:
+            continue
+
+        for i, _ in enumerate(sub_dataset.target_labels):
+            gradcam = GradCAM(model=net, target_layers=target_layers)
+            input_tensor = sub_dataset.data[sub_dataset.targets == i]
+
+            # Check model confidence
+            outputs = net(input_tensor.to("cuda"))  # Forward pass
+            probabilities = F.softmax(outputs, dim=1)
+            confidences = probabilities[:, i].cpu()  # Confidence for class `i`
+            high_conf_indices = confidences > 0.9  # Filter high-confidence predictions
+
+            if (
+                high_conf_indices.sum() > 0
+            ):  # Only proceed if there are high-confidence predictions
+                high_conf_input_tensor = input_tensor[high_conf_indices]
+
+                # Compute Grad-CAM only for high-confidence samples
+                grayscale_cam = gradcam(
+                    input_tensor=high_conf_input_tensor, targets=[ClassifierOutputTarget(i)]
+                )
+                valid_cams = [
+                    cam for cam in grayscale_cam if not np.isnan(cam).any() and cam.max() > 0
+                ]
+
+                if len(valid_cams) > 0:
+                    average_cam = np.mean(valid_cams, axis=0)
+                    all_cams[i].append(average_cam)
+
+    return [np.array(label_cams) for label_cams in all_cams]
+
+
+def plot_cam(input_tensor, cams, name, label, out_path=".", colorbar=True):
+    cam_output_path = os.path.join(out_path, f"{name}_{label}_GradCAM.png")
+
+    grayscale_cam = cams.mean(axis=0)
+    grayscale_cam = (grayscale_cam - grayscale_cam.min()) / (
+        grayscale_cam.max() - grayscale_cam.min()
+    )
+    img = np.moveaxis(np.array(input_tensor[0]), 0, 2)
+    img = np.array([img[:, :, 0]] * 3)
+    img = np.moveaxis(img, 0, 2)
+    cam_image = show_cam_on_image(img, grayscale_cam, use_rgb=True)
+    cam_image = cv2.cvtColor(cam_image, cv2.COLOR_RGB2BGR)
+
+    method = "GradCAM"
+
+    if os.path.exists(cam_output_path):
+        os.remove(cam_output_path)
+    cv2.imwrite(cam_output_path, cam_image)
+
+    # Plot with colorbar and axis labels
+    fig, ax = plt.subplots()
+    ax.imshow(img, aspect="auto")  # Show the original image
+    im = ax.imshow(grayscale_cam, cmap="jet", alpha=0.7)  # Overlay heatmap
+    ax.set_title(f"{name}_{method}_{label} Grad-CAM")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Sensors")
+    ax.set_xticks([0, 75, 150, 225, 300, 375])  # Set x-axis ticks
+    ax.set_xticklabels([-0.15, 0, 0.15, 0.3, 0.45, 0.6])
+    ax.set_yticks([])  # Remove y-axis ticks
+
+    if colorbar:
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.15)
+        cbar = plt.colorbar(im, cax=cax)
+        cbar.set_ticks([0, 0.5, 1])
+        cbar.set_ticklabels([0, 0.5, 1])
+
+    plt.savefig(os.path.join(out_path, f"{name}_{label}_GradCAM_with_colorbar.png"))
+    plt.show()
+    return fig

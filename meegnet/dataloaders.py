@@ -89,9 +89,10 @@ class InfiniteDataLoader:
         raise ValueError
 
 
-def _string_to_int(array):
+def _string_to_int(array, target_labels=None):
     array = np.array(array)
-    target_labels = np.unique(array)
+    if target_labels is None:
+        target_labels = np.unique(array)
     for i, element in enumerate(target_labels):
         array[array == element] = i
     return array.astype(int), target_labels
@@ -148,6 +149,7 @@ class EpochedDataset:
         sensortype: str = None,
         lso: bool = False,
         random_state: int = 0,
+        target_labels: list = None,
     ):
         if isinstance(split_sizes, float):
             split_sizes = split_sizes, (1 - split_sizes) / 2, (1 - split_sizes) / 2
@@ -167,6 +169,7 @@ class EpochedDataset:
         self.lso = lso
         self.sensors = self._select_sensors(sensortype)
         self.random_state = random_state
+        self.target_labels = target_labels
         self._reset_seed()
 
         self.data = []
@@ -174,7 +177,7 @@ class EpochedDataset:
         self.groups = []
         self.subject_list = []
         self.data_path = None
-        self.target_labels = None
+        self.dataframe = None
 
     def _reset_seed(self):
         np.random.seed(self.random_state)
@@ -187,61 +190,9 @@ class EpochedDataset:
             first_line = f.readline()
         return pd.read_csv(csv_file, index_col=0 if first_line.startswith(",") else None)
 
-    def preload(self, data_path: str, csv_path: str = None) -> pd.DataFrame:
-        """
-        Loads the subject list from a CSV file.
-
-        Parameters
-        ----------
-        data_path : str
-            Path to the folder containing the dataset.
-        csv_path : str, optional
-            Path to the CSV file. Defaults to "participants_info.csv" in the data_path.
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame containing participant information.
-        """
-
-        # Determine CSV file path
-        csv_file = csv_path or os.path.join(data_path, "participants_info.csv")
-        assert os.path.exists(csv_file), f"CSV file not found: {csv_file}"
-
-        # Load CSV file
-        dataframe = self._load_csv(csv_file)
-
-        # Sample participants (if needed)
-        if self.n_subjects < len(dataframe):
-            dataframe = dataframe.sample(frac=1, random_state=self.random_state).reset_index(
-                drop=True
-            )[: self.n_subjects]
-
-        # Update instance attributes
-        LOG.info(f"Logging subjects and targets from {data_path}...")
-        self.data_path = data_path
-        self.subject_list = dataframe["sub"].tolist()
-
-        return dataframe
-
-    def _check_index_and_load_csv(self, csv_file) -> pd.DataFrame:
-        with open(csv_file) as f:
-            first_line = f.readline()
-        if first_line.startswith(","):
-            df = pd.read_csv(csv_file, index_col=0)
-        else:
-            df = pd.read_csv(csv_file)
-        return df
-
-    def _load_csv(self, data_path, csv_name="participants_info.csv") -> pd.DataFrame:
-        csv_file = os.path.join(data_path, csv_name)
-        df = self._check_index_and_load_csv(csv_file)
-        participants_df = df.sample(frac=1, random_state=self.random_state).reset_index(
-            drop=True
-        )[: self.n_subjects]
-        return participants_df
-
-    def preload(self, data_path: str, csv_path: str = None) -> pd.DataFrame:
+    def preload(
+        self, data_path: str, csv_path: str = None, subject_col: str = "sub"
+    ) -> pd.DataFrame:
         """
         Loads the subject list from a CSV file.
 
@@ -264,12 +215,37 @@ class EpochedDataset:
         else:
             dataframe = self._load_csv(data_path)
 
+        # Sample participants (if needed)
+        if self.n_subjects < len(dataframe):
+            self.dataframe = dataframe.sample(
+                frac=1, random_state=self.random_state
+            ).reset_index(drop=True)[: self.n_subjects]
+        else:
+            self.dataframe = dataframe
+
         # Update instance attributes
         LOG.info(f"Logging subjects and targets from {data_path}...")
         self.data_path = data_path
-        self.subject_list = dataframe["sub"].tolist()
+        self.subject_list = self.dataframe[subject_col].tolist()
 
-        return dataframe
+        return self.dataframe
+
+    def _check_index_and_load_csv(self, csv_file) -> pd.DataFrame:
+        with open(csv_file) as f:
+            first_line = f.readline()
+        if first_line.startswith(","):
+            df = pd.read_csv(csv_file, index_col=0)
+        else:
+            df = pd.read_csv(csv_file)
+        return df
+
+    def _load_csv(self, data_path, csv_name="participants_info.csv") -> pd.DataFrame:
+        csv_file = os.path.join(data_path, csv_name)
+        df = self._check_index_and_load_csv(csv_file)
+        participants_df = df.sample(frac=1, random_state=self.random_state).reset_index(
+            drop=True
+        )[: self.n_subjects]
+        return participants_df
 
     def load(
         self,
@@ -278,6 +254,7 @@ class EpochedDataset:
         one_sub: str = None,
         verbose: int = 2,
         target_col: str = "label",
+        subject_col: str = "sub",
     ) -> None:
         """
         Loads data from the "downsampled_[sfreq]" folder in the data_path.
@@ -302,7 +279,7 @@ class EpochedDataset:
             data_path = self.data_path
 
         # Load participants info
-        dataframe = self.preload(data_path, csv_path)
+        self.preload(data_path, csv_path, subject_col=subject_col)
 
         # Set logging verbosity
         verbosity_levels = {0: logging.NOTSET, 1: logging.WARNING, 2: logging.INFO}
@@ -327,7 +304,7 @@ class EpochedDataset:
             if sub not in self.subject_list:
                 continue
 
-            row = dataframe.loc[dataframe["sub"] == sub]
+            row = self.dataframe.loc[self.dataframe[subject_col] == sub]
             sub_data = self._load_sub(os.path.join(numpy_filepath, file))
             if sub_data is None:
                 continue  # skip subject if there are no data in the loaded file
@@ -369,7 +346,7 @@ class EpochedDataset:
         if len(self.data.shape) != 4:
             self.data = self.data[:, np.newaxis]
 
-        self.set_targets(self.targets)
+        self.set_targets(self.targets, self.target_labels)
 
         if type(self.groups[0]) != int:
             self.groups, _ = _string_to_int(self.groups)
@@ -504,9 +481,9 @@ class EpochedDataset:
         """Returns a Torch dataset instance of the torch Dataset class for the given index."""
         return torch.utils.data.TensorDataset(self.data[index], self.targets[index])
 
-    def set_targets(self, targets):
+    def set_targets(self, targets, target_labels=None):
         if type(targets[0]) in (str, np.str_):
-            targets, target_labels = _string_to_int(targets)
+            targets, target_labels = _string_to_int(targets, target_labels)
 
         self.targets = torch.Tensor(targets)
         self.target_labels = target_labels
