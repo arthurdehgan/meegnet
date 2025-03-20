@@ -847,7 +847,7 @@ class Model:
 
         epoch = 0
         if continue_training:
-            epoch = self.tracker.best["epoch"] + 1 
+            epoch = self.tracker.best["epoch"] + 1
             self.tracker.patience_state = 0
 
         while self.tracker.patience_state < patience and (
@@ -999,7 +999,7 @@ class Model:
             LOG.error(f"Model file not found: {model_path}")
 
     def compute_accuracy(self, y_pred, target):
-        # Compute accuracy from 2 vectors of labels.
+        # Compute
         correct = torch.eq(y_pred.max(1)[1], target).sum().type(torch.FloatTensor)
         return correct / len(target)
 
@@ -1035,10 +1035,10 @@ class Model:
 class TrainingTracker:
     def __init__(self, save_path, name, model_path: str = None):
         self.progress = {
-            "train_loss": [],
-            "train_accuracy": [],
-            "validation_loss": [],
-            "validation_accuracy": [],
+            "train_losses": [],
+            "train_accuracies": [],
+            "validation_losses": [],
+            "validation_accuracies": [],
         }
         self.best = {
             "train_loss": float("inf"),
@@ -1068,17 +1068,17 @@ class TrainingTracker:
             "accuracy",
         ), f"{early_stop} is not a valid early_stop option."
 
-        if epoch < len(self.progress['train_loss']):
-            self.progress["train_loss"][epoch] = tloss
-            self.progress["train_accuracy"][epoch] = tacc
-            self.progress["validation_loss"][epoch] = vloss
-            self.progress["validation_accuracy"][epoch] = vacc
+        if epoch < len(self.progress["train_losses"]):
+            self.progress["train_losses"][epoch] = tloss
+            self.progress["train_accuracies"][epoch] = tacc
+            self.progress["validation_losses"][epoch] = vloss
+            self.progress["validation_accuracies"][epoch] = vacc
             self.patience_state += 1
         else:
-            self.progress["train_loss"].append(tloss)
-            self.progress["train_accuracy"].append(tacc)
-            self.progress["validation_loss"].append(vloss)
-            self.progress["validation_accuracy"].append(vacc)
+            self.progress["train_losses"].append(tloss)
+            self.progress["train_accuracies"].append(tacc)
+            self.progress["validation_losses"].append(vloss)
+            self.progress["validation_accuracies"].append(vacc)
             self.patience_state += 1
 
         check = {
@@ -1110,36 +1110,39 @@ class TrainingTracker:
         data = loadmat(mat_path)
         for key, value in data.items():
             if key in self.progress.keys():
-
-                self.progress[key] = value
+                self.progress[key] = np.array(value).squeeze()
             elif key in self.best.keys():
-                self.best[key] = value
+                self.best[key] = np.array(value).squeeze()
 
     def plot_metric(self, metric_type: str, option: str = "both", early_stop: bool = True):
         assert option in ["both", "train", "valid"]
         assert metric_type in ["accuracy", "loss"]
+        metric_key = {
+            "accuracy": "accuracies",
+            "loss": "losses",
+        }
 
         fig, ax = plt.subplots()
 
         if option in ("both", "train"):
             plt.plot(
-                np.array(self.progress[f"train_{metric_type}"]).squeeze(),
+                np.array(self.progress[f"train_{metric_key[metric_type]}"]).squeeze(),
                 label=f"Training {metric_type.capitalize()}",
             )
         if option in ("both", "valid"):
             plt.plot(
-                np.array(self.progress[f"validation_{metric_type}"]).squeeze(),
+                np.array(self.progress[f"validation_{metric_key[metric_type]}"]).squeeze(),
                 label=f"Validation {metric_type.capitalize()}",
             )
 
-        epochs = len(self.progress[f"train_{metric_type}"])
+        epochs = len(self.progress[f"train_{metric_key[metric_type]}"])
         step = max(1, epochs // 10)  # Ensure at most 10 ticks
         ticks = list(range(0, epochs, step))  # Use epoch indices for ticks
 
         if early_stop:
-            plt.axvline(x=self.best["epoch"] , label="early stop", color="green")
+            plt.axvline(x=self.best["epoch"], label="early stop", color="green")
             if self.best["epoch"] not in ticks:
-                ticks.append(self.best["epoch"] )
+                ticks.append(self.best["epoch"])
 
         ax.set_xticks(sorted(ticks))
         ax.set_xticklabels([x + 1 for x in sorted(ticks)])  # Labels should start from 1
