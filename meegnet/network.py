@@ -738,7 +738,7 @@ class Model:
         assert len(input_size) == 3, "Input size must have 3 dimensions"
 
         self.name = name
-        self.input_size = input_size  # TODO here put assertions on the shape
+        self.input_size = input_size
         self.net = create_net(net_option, input_size, n_outputs, net_params)
         self.n_outputs = n_outputs
         self.n_folds = n_folds
@@ -883,7 +883,7 @@ class Model:
             X, y = batch
         y = y.view(-1)
         targets = Variable(y.type(torch.LongTensor)).to(self.device)
-        X = X.view(-1, *self.input_size).to(self.device)
+        X = X.view(-1, *self.input_size).type(torch.FloatTensor).to(self.device)
         loss = self.criterion(self.net.forward(X), targets)
         loss = loss
         loss.backward()
@@ -917,7 +917,7 @@ class Model:
                     X, y = batch
                 y = y.view(-1)
                 targets = Variable(y.type(torch.LongTensor)).to(self.device)
-                X = X.view(-1, *self.input_size).to(self.device)
+                X = X.view(-1, *self.input_size).type(torch.FloatTensor).to(self.device)
                 out = self.net.forward(X)
                 loss = self.criterion(out, targets)
                 acc = self.compute_accuracy(out, targets)

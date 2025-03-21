@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 from scipy.stats import zscore
-from meegnet.utils import strip_string
+from meegnet.utils import strip_string, stratified_sampling
 
 LOG = logging.getLogger("meegnet")
 
@@ -231,6 +231,10 @@ class EpochedDataset:
         return self.dataframe
 
     def _check_index_and_load_csv(self, csv_file) -> pd.DataFrame:
+        # check parent folder if csv file not found, for backwards compatibility
+        if not os.path.exists(csv_file):
+            parent_dir = os.path.dirname(os.path.dirname(csv_file))
+            csv_file = os.path.join(parent_dir, os.path.basename(csv_file))
         with open(csv_file) as f:
             first_line = f.readline()
         if first_line.startswith(","):
@@ -247,7 +251,89 @@ class EpochedDataset:
         )[: self.n_subjects]
         return participants_df
 
-    def load(
+    def set_data(self, data, targets, groups=None, target_labels=None):
+        """
+        Sets the data, targets, and groups for the dataset, with optional random subject selection.
+
+        Parameters
+        ----------
+        data : torch.Tensor or np.ndarray
+            The dataset containing all subjects' data.
+        targets : torch.Tensor or np.ndarray
+            The target labels corresponding to the data.
+        groups : torch.Tensor or np.ndarray
+            The group labels indicating the subject for each sample.
+        target_labels : list, optional
+            The unique target labels. If None, they will be inferred from the targets.
+        """
+        if groups is None:
+            groups = np.arange(len(data))
+
+        assert (
+            len(data) == len(targets) == len(groups)
+        ), "Data, targets, and groups must have the same length."
+
+        targets, target_labels = _string_to_int(targets, target_labels)
+        # Convert data, targets, and groups to PyTorch tensors if they're not already
+        data, targets, groups = self._format_data(data, targets, groups)
+
+        # Randomly select a subset of subjects if n_subjects is specified
+        if self.n_subjects is not None:
+            unique_subjects = np.unique(groups)
+            if len(unique_subjects) > self.n_subjects:
+                random_subjects = torch.randperm(len(unique_subjects))[: self.n_subjects]
+                random_subjects = unique_subjects[random_subjects]
+                subject_mask = [sub in random_subjects for sub in groups]
+                data = data[subject_mask]
+                targets = targets[subject_mask]
+                groups = groups[subject_mask]
+
+        # Update subject list
+        self.subject_list = np.unique(groups)
+        self.n_subjects = len(self.subject_list)
+
+        # Handle stratified sampling if n_samples is specified
+        indexes = []
+        for subject in self.subject_list:
+            sub_index = (
+                list(stratified_sampling(data, targets, self.n_samples, subject, groups))
+                if self.n_samples is not None
+                else np.where(groups == subject)[0].tolist()
+            )
+            # Apply self.scaler directly on the selected data
+            data[sub_index] = torch.stack(
+                [self.scaler(sensor_data) for sensor_data in data[sub_index]]
+            )
+            indexes += sub_index
+
+        if self.n_samples is not None:
+            targets = targets[indexes]
+            groups = groups[indexes]
+            data = data[indexes]
+
+        # Update instance attributes
+        self.data = data
+        self.set_targets(targets, target_labels)
+        self.set_groups(groups)
+
+    def load(self, *args, **kwargs):
+        """
+        Wrapper for the load_from_path method.
+
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments to pass to load_from_path.
+        **kwargs : dict
+            Keyword arguments to pass to load_from_path.
+
+        Returns
+        -------
+        None
+        """
+        self.load_from_path(*args, **kwargs)
+
+    def load_from_path(
         self,
         data_path: str = None,
         csv_path: str = None,
@@ -257,7 +343,7 @@ class EpochedDataset:
         subject_col: str = "sub",
     ) -> None:
         """
-        Loads data from the "downsampled_[sfreq]" folder in the data_path.
+        Loads data from the data_path.
 
         Parameters
         ----------
@@ -294,8 +380,8 @@ class EpochedDataset:
             self.subject_list = [one_sub]
 
         # Load data for selected subject(s)
-        data_folder = f"downsampled_{self.sfreq}"
-        numpy_filepath = os.path.join(self.data_path, data_folder)
+        numpy_filepath = os.path.join(self.data_path)
+        data, targets, groups = [], [], []
         for file in os.listdir(numpy_filepath):
             self._reset_seed()
             sub = file.split("_")[0]  # The subject ID is placed first in the filename
@@ -310,49 +396,50 @@ class EpochedDataset:
                 continue  # skip subject if there are no data in the loaded file
 
             # Process data and targets
-            if self.sensors is not None:
-                sub_data = sub_data[:, self.sensors, :, :]
             target = row[target_col].item()
-            targets = self._process_targets(target, len(sub_data))
+            processed_targets = self._process_targets(target, len(sub_data))
 
-            # Handle sampling
-            if self.n_samples is not None:
-                random_samples = np.random.choice(
-                    np.arange(len(sub_data)), self.n_samples, replace=False
-                )
-                sub_data = sub_data[random_samples]
-                targets = targets[random_samples]
-
-            if len(sub_data) == len(targets):
-                self.data.append(torch.Tensor(sub_data))
-                self.targets.append(np.array(targets))
-                self.groups += [sub] * len(targets)
+            if len(sub_data) == len(processed_targets):
+                data.append(torch.Tensor(sub_data))
+                targets.append(torch.Tensor(processed_targets))
+                groups += [sub] * len(processed_targets)
             else:
                 LOG.warning(
                     f"Warning: Number of trials for {sub} does not match number of targets."
                 )
                 continue
 
-        # Format data and targets
-        if len(self) == 0:
-            return
-        elif len(self) == 1:
-            self.data = self.data[0]
-            self.targets = self.targets[0]
-        else:
-            self.data = torch.cat(self.data, 0)
-            self.targets = np.concatenate(self.targets, axis=0)
+        data = torch.cat(data, 0)
+        targets = torch.cat(targets, 0)
 
-        if len(self.data.shape) != 4:
-            self.data = self.data[:, np.newaxis]
+        self.set_data(data, targets, groups, target_labels=self.target_labels)
 
-        self.set_targets(self.targets, self.target_labels)
+    def _format_data(self, data, targets, groups=None):
+        """Formats the data, targets, and groups."""
+        if not isinstance(targets, torch.Tensor):
+            targets = torch.from_numpy(targets)
+        if not isinstance(data, torch.Tensor):
+            data = torch.from_numpy(data)
+        if groups is not None and not isinstance(groups, np.ndarray):
+            groups = np.array(groups)
 
+        if len(data.shape) < 4:
+            data = data.unsqueeze(1)
+
+        if self.sensors is not None:
+            sub_data = sub_data[:, self.sensors, :, :]
+
+        return data, targets, groups
+
+    def set_groups(self, groups):
+        self._clean_groups(groups)
+
+    def _clean_groups(self, groups=None):
+        if groups is not None:
+            self.groups = groups
         if type(self.groups[0]) != int:
             self.groups, _ = _string_to_int(self.groups)
         self.groups = torch.tensor(self.groups, dtype=int)
-
-        self.n_subjects = len(np.unique(self.groups))
 
     def _process_targets(self, target: str, n_samples: int) -> list:
         """Process target(s) for a subject."""
@@ -366,7 +453,10 @@ class EpochedDataset:
                 targets = [self.subject_list.index(targets[0])] * n_samples
             else:
                 targets = [targets[0]] * n_samples
-        return np.array(targets)
+        if self.target_labels is None:
+            self.target_labels = list(set(targets))
+        targets = [self.target_labels.index(t) for t in targets]
+        return torch.tensor(targets)
 
     def random_sub(self):
         return np.random.choice(self.subject_list)
@@ -383,7 +473,12 @@ class EpochedDataset:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         data = np.array([list(map(self.scaler, sensor_data)) for sensor_data in data])
-        return torch.Tensor(np.array(data))
+        data = torch.from_numpy(data)
+
+        if len(data.shape) < 4:
+            data = data.unsqueeze(1)
+
+        return data
 
     def _select_sensors(self, sensortype: str) -> list:
         """

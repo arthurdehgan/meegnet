@@ -76,6 +76,63 @@ def compute_psd(data: np.array, fs: int, option: str = "multitaper"):
     return extract_bands(psd, f)
 
 
+def stratified_sampling(data, targets, n_samples, subject=None, groups=None):
+    """
+    Performs stratified sampling for a single subject.
+
+    Parameters
+    ----------
+    data : torch.Tensor
+        The dataset containing all subjects' data.
+    targets : torch.Tensor
+        The target labels corresponding to the data.
+    n_samples : int
+        The number of samples to draw. If None, all samples are used in a stratified manner.
+    groups : torch.Tensor, optional
+        The group labels indicating the subject for each sample.
+    subject : int or str, optional
+        The subject ID for which to perform stratified sampling.
+
+    Returns
+    -------
+    sampled_indices : torch.Tensor
+        The indices of the stratified sampled data for the subject.
+    """
+    # Ensure that both `subject` and `groups` are either set or both are None
+    assert (subject is None and groups is None) or (
+        subject is not None and groups is not None
+    ), "Both `subject` and `groups` must be set, or both must be None."
+
+    # Filter data, targets, and groups for the given subject
+    if groups is not None:
+        subject_index = np.where(groups == subject)[0]
+    else:
+        subject_index = np.arange(len(data))
+
+    if len(subject_index) == 0:
+        LOG.warning(f"No data found for subject {subject}.")
+        return torch.empty(0, dtype=torch.long)
+
+    # Get unique classes and their counts
+    unique_labels = torch.unique(targets[subject_index])
+    if len(unique_labels) == 1:
+        return subject_index
+
+    # Determine the number of samples per class
+    samples_per_class = int(n_samples / len(unique_labels))
+
+    # Perform stratified sampling
+    sampled_indices = []
+    for label in unique_labels:
+        class_indices = subject_index[targets[subject_index] == label]
+        n_cls_samples = min(len(class_indices), samples_per_class)  # Avoid oversampling
+        sampled_indices.extend(
+            class_indices[torch.randperm(len(class_indices))[:n_cls_samples]].tolist()
+        )
+
+    return sampled_indices
+
+
 def cuda_check():
     """
     Checks if a CUDA device is available and returns it.
