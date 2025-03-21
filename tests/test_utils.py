@@ -2,6 +2,8 @@ import unittest
 import torch
 import numpy as np
 from meegnet.utils import stratified_sampling
+from meegnet.utils import extract_bands
+from meegnet.utils import compute_psd
 
 
 class TestStratifiedSampling(unittest.TestCase):
@@ -48,6 +50,55 @@ class TestStratifiedSampling(unittest.TestCase):
         with self.assertRaises(AssertionError):
             stratified_sampling(self.data, self.targets, n_samples=20, subject=0)
             stratified_sampling(self.data, self.targets, n_samples=20, groups=self.groups)
+            from meegnet.utils import extract_bands
+
+
+class TestExtractBands(unittest.TestCase):
+    def test_extract_bands_with_default_bins(self):
+        # Create mock data with shape (n_samples, n_channels, n_bins)
+        data = np.random.rand(5, 3, 240)  # 5 samples, 3 channels, 240 bins
+        result = extract_bands(data)
+
+        # Check the output shape
+        self.assertEqual(result.shape, (5, 3, 7))  # 7 frequency bands
+
+    def test_extract_bands_with_custom_bins(self):
+        # Create mock data with shape (n_channels, n_bins)
+        data = np.random.rand(3, 240)  # 3 channels, 240 bins
+        custom_bins = np.linspace(0, 120, 240)  # Custom frequency bins
+        result = extract_bands(data, f=custom_bins)
+
+        # Check the output shape
+        self.assertEqual(result.shape, (3, 7))  # 7 frequency bands
+
+
+class TestComputePSD(unittest.TestCase):
+    def test_compute_psd_multitaper(self):
+        # Create mock data with shape (n_channels, n_samples)
+        data = np.random.rand(3, 500)  # 3 channels, 500 samples
+        fs = 250  # Sampling frequency
+        result = compute_psd(data, fs, option="multitaper")
+
+        # Check the output shape
+        self.assertEqual(result.shape, (3, 7))  # 7 frequency bands
+
+    def test_compute_psd_welch(self):
+        # Create mock data with shape (n_channels, n_samples)
+        data = np.random.rand(3, 500)  # 3 channels, 500 samples
+        fs = 250  # Sampling frequency
+        result = compute_psd(data, fs, option="welch")
+
+        # Check the output shape
+        self.assertEqual(result.shape, (3, 7))  # 7 frequency bands
+
+    def test_compute_psd_invalid_option(self):
+        # Create mock data with shape (n_channels, n_samples)
+        data = np.random.rand(3, 500)  # 3 channels, 500 samples
+        fs = 250  # Sampling frequency
+
+        # Check that an invalid option raises an error
+        with self.assertRaises(Exception):
+            compute_psd(data, fs, option="invalid_option")
 
 
 if __name__ == "__main__":
