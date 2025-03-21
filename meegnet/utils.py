@@ -178,6 +178,52 @@ def load_psd_cc_subjects(PSD_PATH, sub_info_path, window, overlap):
     return np.array(psd), np.array(labels)
 
 
+def string_to_int(array, target_labels=None):
+    """
+    Converts an array of strings to integers based on unique labels.
+
+    Parameters
+    ----------
+    array : array-like
+        The input array of strings to be converted.
+    target_labels : list, optional
+        A predefined list of unique labels. If None, unique labels will be inferred from the input array.
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - An array of integers corresponding to the input strings.
+        - A list of unique labels used for the mapping.
+
+    Raises
+    ------
+    ValueError
+        If the input array is empty or if `target_labels` contains duplicates.
+    """
+    # Ensure the input is a numpy array
+    array = np.asarray(array)
+
+    if array.size == 0:
+        raise ValueError("Input array is empty.")
+
+    # Infer unique labels if not provided
+    if target_labels is None:
+        target_labels = np.unique(array)
+    else:
+        # Ensure target_labels is unique
+        if len(set(target_labels)) != len(target_labels):
+            raise ValueError("`target_labels` must contain unique values.")
+
+    # Create a mapping from labels to integers
+    label_to_int = {label: idx for idx, label in enumerate(target_labels)}
+
+    # Map the input array to integers
+    int_array = np.vectorize(label_to_int.get)(array)
+
+    return int_array.astype(int), target_labels
+
+
 def nice_time(time):
     """Returns time in a humanly readable format."""
     m, h, j = 60, 3600, 24 * 3600

@@ -4,6 +4,46 @@ import numpy as np
 from meegnet.utils import stratified_sampling
 from meegnet.utils import extract_bands
 from meegnet.utils import compute_psd
+from meegnet.utils import string_to_int
+
+
+class TestStringToInt(unittest.TestCase):
+    def test_string_to_int_with_unique_labels(self):
+        # Test with unique labels inferred from the array
+        array = ["cat", "dog", "cat", "bird"]
+        int_array, labels = string_to_int(array)
+        self.assertTrue(np.array_equal(int_array, [1, 2, 1, 0]))
+        self.assertEqual(labels.tolist(), ["bird", "cat", "dog"])
+
+    def test_string_to_int_with_predefined_labels(self):
+        # Test with predefined target labels
+        array = ["cat", "dog", "cat", "bird"]
+        target_labels = ["dog", "cat", "bird"]
+        int_array, labels = string_to_int(array, target_labels=target_labels)
+        self.assertTrue(np.array_equal(int_array, [1, 0, 1, 2]))
+        self.assertEqual(labels, target_labels)
+
+    def test_string_to_int_empty_array(self):
+        # Test with an empty array
+        array = []
+        with self.assertRaises(ValueError) as context:
+            string_to_int(array)
+        self.assertEqual(str(context.exception), "Input array is empty.")
+
+    def test_string_to_int_duplicate_target_labels(self):
+        # Test with duplicate target labels
+        array = ["cat", "dog", "cat", "bird"]
+        target_labels = ["dog", "cat", "cat"]
+        with self.assertRaises(ValueError) as context:
+            string_to_int(array, target_labels=target_labels)
+        self.assertEqual(str(context.exception), "`target_labels` must contain unique values.")
+
+    def test_string_to_int_with_numpy_array(self):
+        # Test with a numpy array as input
+        array = np.array(["cat", "dog", "cat", "bird"])
+        int_array, labels = string_to_int(array)
+        self.assertTrue(np.array_equal(int_array, [1, 2, 1, 0]))
+        self.assertEqual(labels.tolist(), ["bird", "cat", "dog"])
 
 
 class TestStratifiedSampling(unittest.TestCase):

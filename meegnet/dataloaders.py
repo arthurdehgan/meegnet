@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 from scipy.stats import zscore
-from meegnet.utils import strip_string, stratified_sampling
+from meegnet.utils import strip_string, stratified_sampling, string_to_int
 
 LOG = logging.getLogger("meegnet")
 
@@ -87,15 +87,6 @@ class InfiniteDataLoader:
 
     def __len__(self):
         raise ValueError
-
-
-def _string_to_int(array, target_labels=None):
-    array = np.array(array)
-    if target_labels is None:
-        target_labels = np.unique(array)
-    for i, element in enumerate(target_labels):
-        array[array == element] = i
-    return array.astype(int), target_labels
 
 
 class EpochedDataset:
@@ -273,7 +264,7 @@ class EpochedDataset:
             len(data) == len(targets) == len(groups)
         ), "Data, targets, and groups must have the same length."
 
-        targets, target_labels = _string_to_int(targets, target_labels)
+        targets, target_labels = string_to_int(targets, target_labels)
         # Convert data, targets, and groups to PyTorch tensors if they're not already
         data, targets, groups = self._format_data(data, targets, groups)
 
@@ -438,7 +429,7 @@ class EpochedDataset:
         if groups is not None:
             self.groups = groups
         if type(self.groups[0]) != int:
-            self.groups, _ = _string_to_int(self.groups)
+            self.groups, _ = string_to_int(self.groups)
         self.groups = torch.tensor(self.groups, dtype=int)
 
     def _process_targets(self, target: str, n_samples: int) -> list:
@@ -578,7 +569,7 @@ class EpochedDataset:
 
     def set_targets(self, targets, target_labels=None):
         if type(targets[0]) in (str, np.str_):
-            targets, target_labels = _string_to_int(targets, target_labels)
+            targets, target_labels = string_to_int(targets, target_labels)
 
         self.targets = torch.Tensor(targets)
         self.target_labels = target_labels
@@ -706,24 +697,27 @@ class ContinuousDataset(EpochedDataset):
             Loaded data.
         """
         try:
-            step = int(self.window * self.sfreq * (1 - self.overlap))
-            start = int(self.offset * self.sfreq)
             sub_data = np.load(filepath)
-            if len(sub_data.shape) < 3:
-                sub_data = sub_data[np.newaxis, :]
-            data = []
-            for i in range(start, sub_data.shape[-1], step):
-                trial = sub_data[:, :, i : i + step]
-                if trial.shape[-1] == step:
-                    if not np.isnan(trial).any():
-                        trial = [self.scaler(sensor_data) for sensor_data in trial]
-                        data.append(trial)
         except IOError:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
         except ValueError:
             LOG.warning(f"There was a problem loading subject {filepath}")
             return None
+        return self._split_window(sub_data)
+
+    def _split_window(self, sub_data):
+        step = int(self.window * self.sfreq * (1 - self.overlap))
+        start = int(self.offset * self.sfreq)
+        if len(sub_data.shape) < 3:
+            sub_data = sub_data[np.newaxis, :]
+        data = []
+        for i in range(start, sub_data.shape[-1], step):
+            trial = sub_data[:, :, i : i + step]
+            if trial.shape[-1] == step:
+                if not np.isnan(trial).any():
+                    trial = [self.scaler(sensor_data) for sensor_data in trial]
+                    data.append(trial)
         return torch.Tensor(np.array(data))
 
 
