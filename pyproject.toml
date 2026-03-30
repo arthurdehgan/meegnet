@@ -6,6 +6,7 @@ authors = [
     {name = "Arthur Dehgan", email = "arthurdehgan@hotmail.com"}
 ]
 readme = "README.rst"
+license = "LICENCE.txt"
 requires-python = ">=3.12,<3.15, !=3.14.1"
 dependencies = [
     "mne (>=1.11.0,<2.0.0)",
