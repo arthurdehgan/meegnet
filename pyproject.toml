@@ -1,0 +1,26 @@
+[project]
+name = "meegnet"
+version = "0.3"
+description = ""
+authors = [
+    {name = "Arthur Dehgan", email = "arthurdehgan@hotmail.com"}
+]
+readme = "README.rst"
+requires-python = ">=3.12,<3.15, !=3.14.1"
+dependencies = [
+    "mne (>=1.11.0,<2.0.0)",
+    "numpy (>=2.4.4,<3.0.0)",
+    "scipy (>=1.17.1,<2.0.0)",
+    "pandas (>=3.0.1,<4.0.0)",
+    "scikit-learn (>=1.8.0,<2.0.0)",
+    "configargparse (>=1.7.5,<2.0.0)",
+    "huggingface-hub (>=1.8.0,<2.0.0)",
+    "torch (>=2.11.0,<3.0.0)",
+    "torchvision (>=0.26.0,<0.27.0)",
+    "grad-cam (>=1.5.5,<2.0.0)"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
