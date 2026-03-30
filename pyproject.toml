@@ -1,7 +1,7 @@
 [project]
 name = "meegnet"
 version = "0.3"
-description = ""
+description = "MEEGNet is an open-source Python toolbox for neuroscientists interested in using Artificial Neural Networks (ANNs) and more specifically Convolutional Neural Networks (CNNs) for Magnetoencephalography (MEG) and Electroencephalography (EEG) data analysis. Our library focuses on providing tools for interpretability and visualization of latent space, making ANNs more transparent."
 authors = [
     {name = "Arthur Dehgan", email = "arthurdehgan@hotmail.com"}
 ]
