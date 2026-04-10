@@ -5,17 +5,13 @@ Things that don't belong anywhere else
 """
 
 import hashlib
-import json
-import os
 import sys
-from shutil import copyfile
 from collections import OrderedDict
 from numbers import Number
 import operator
 
 import numpy as np
 import torch
-import tqdm
 from collections import Counter
 
 
