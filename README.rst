@@ -60,7 +60,7 @@ Future Features
 MEEGNet Architecture
 --------------------
 
-.. image:: https://github.com/arthurdehgan/meegnet/blob/master/architecture.png
+.. image:: https://raw.githubusercontent.com/arthurdehgan/meegnet/master/architecture.png
 
 Other Available Architectures
 -----------------------------
