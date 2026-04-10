@@ -18,7 +18,7 @@ from meegnet.utils import compute_psd, cuda_check
 from pytorch_grad_cam import GuidedBackpropReLUModel
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-from pytorch_grad_cam.utils.image import show_cam_on_image, deprocess_image, preprocess_image
+from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
 import torch.nn.functional as F
 import cv2
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -229,7 +229,7 @@ def preprocess_image(pil_im, resize_im=True):
 	std = [0.229, 0.224, 0.225]
 
 	# ensure or transform incoming image to PIL image
-	if type(pil_im) != Image.Image:
+	if type(pil_im) is not Image.Image:
 		try:
 			pil_im = Image.fromarray(pil_im)
 		except Exception as e:
