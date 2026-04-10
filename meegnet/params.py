@@ -7,30 +7,30 @@ NBINS = 129
 
 
 def group1(age):
-    if 18 <= age <= 28:
-        return 0
-    elif 28 <= age <= 38:
-        return 1
-    elif 38 <= age <= 48:
-        return 2
-    elif 48 <= age <= 58:
-        return 3
-    elif 58 <= age <= 68:
-        return 4
-    elif 68 <= age <= 78:
-        return 5
-    elif 78 <= age <= 88:
-        return 6
+	if 18 <= age <= 28:
+		return 0
+	elif 28 <= age <= 38:
+		return 1
+	elif 38 <= age <= 48:
+		return 2
+	elif 48 <= age <= 58:
+		return 3
+	elif 58 <= age <= 68:
+		return 4
+	elif 68 <= age <= 78:
+		return 5
+	elif 78 <= age <= 88:
+		return 6
 
 
 FREQ_DICT = {
-    "Delta": (1, 4),
-    "Theta": (4, 8),
-    "Alpha": (8, 15),
-    "Beta": (15, 30),
-    "Gamma1": (30, 60),
-    "Gamma2": (60, 90),
-    "Gamma3": (90, 120),
+	'Delta': (1, 4),
+	'Theta': (4, 8),
+	'Alpha': (8, 15),
+	'Beta': (15, 30),
+	'Gamma1': (30, 60),
+	'Gamma2': (60, 90),
+	'Gamma3': (90, 120),
 }
 
 SF = 1000  # sampling frequency
