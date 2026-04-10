@@ -232,7 +232,7 @@ def preprocess_image(pil_im, resize_im=True):
 	if type(pil_im) is not Image.Image:
 		try:
 			pil_im = Image.fromarray(pil_im)
-		except Exception as e:
+		except Exception as _:
 			print('could not transform PIL_img to a PIL Image object. Please check input.')
 
 	# Resize image
