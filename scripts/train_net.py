@@ -68,7 +68,7 @@ if __name__ == '__main__':
 		)
 
 	dataset.load(args.save_path)
-	n_outputs = len(np.unique(dataset.labels))
+	n_outputs = len(np.unique(dataset.targets))
 
 	#####################
 	### LOADING MODEL ###
