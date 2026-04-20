@@ -705,7 +705,7 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 			input_tensor = sub_dataset.data[sub_dataset.targets == i]
 
 			# Check model confidence
-			outputs = net(input_tensor.to('cuda'))  # Forward pass
+			outputs = net(input_tensor.float().to('cuda'))  # Forward pass
 			probabilities = F.softmax(outputs, dim=1)
 			confidences = probabilities[:, i].cpu()  # Confidence for class `i`
 			high_conf_indices = confidences > 0.9  # Filter high-confidence predictions
@@ -714,7 +714,9 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 				high_conf_input_tensor = input_tensor[high_conf_indices]
 
 				# Compute Grad-CAM only for high-confidence samples
-				grayscale_cam = gradcam(input_tensor=high_conf_input_tensor, targets=[ClassifierOutputTarget(i)])
+				grayscale_cam = gradcam(
+					input_tensor=high_conf_input_tensor.float(), targets=[ClassifierOutputTarget(i)]
+				)
 				valid_cams = [cam for cam in grayscale_cam if not np.isnan(cam).any() and cam.max() > 0]
 
 				if len(valid_cams) > 0:
