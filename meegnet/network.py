@@ -70,6 +70,8 @@ def create_net(net_option: str, input_size: int, n_outputs: int, net_params: dic
 		'eegnet': lambda: EEGNet(input_size, n_outputs),
 		# "eegnet": lambda: EEGNetv4(input_size, n_outputs),
 		'vanputnet': lambda: VanPutNet(input_size, n_outputs),
+		'varcnn': lambda: VarCNN(input_size, n_outputs),
+		'lfcnn': lambda: LfCNN(input_size, n_outputs),
 	}
 
 	if net_option.lower() not in net_options:
@@ -583,6 +585,167 @@ class VanPutNet(CustomNet):
 
 		lin_size = self.get_lin_size(self.feature_extraction)
 		self.classif = nn.Sequential(nn.Linear(lin_size, n_output), nn.Softmax(dim=1))
+
+
+class VarCNN(CustomNet):
+	"""
+	VAR-CNN architecture implementation.
+
+	Spatial demixing followed by VAR temporal convolution and pooling.
+	For details see [1].
+
+	Parameters
+	----------
+	input_size : tuple
+	    Input shape (S, C, T) where S is the number of sensor types, C the number
+	    of channels and T the number of time samples.
+	n_outputs : int
+	    Number of output classes.
+	n_latent : int, optional
+	    Number of latent components after spatial demixing. Defaults to 32.
+	filter_length : int, optional
+	    Length of temporal convolution kernels. Defaults to 7.
+	pooling : int, optional
+	    Temporal pooling factor. Defaults to 2.
+	stride : int, optional
+	    Temporal pooling stride. Defaults to 2.
+	pool_type : str, optional
+	    Pooling type ('max' or 'avg'). Defaults to 'max'.
+	dropout : float, optional
+	    Dropout rate. Defaults to 0.5.
+	nonlin : nn.Module, optional
+	    Activation function class. Defaults to nn.ReLU.
+
+	References
+	----------
+	[1] I. Zubarev, et al., Adaptive neural network classifier for decoding MEG
+	    signals. Neuroimage. (2019) May 4;197:425-434
+	"""
+
+	def __init__(
+		self,
+		input_size: tuple,
+		n_outputs: int,
+		n_latent: int = 32,
+		filter_length: int = 7,
+		pooling: int = 2,
+		stride: int = 2,
+		pool_type: str = 'max',
+		dropout: float = 0.5,
+		nonlin: nn.Module = nn.ReLU,
+	) -> None:
+		super().__init__(input_size, n_outputs)
+
+		n_sensors = input_size[0]
+		n_channels = input_size[1]
+
+		if pool_type not in ('max', 'avg'):
+			raise ValueError("pool_type must be 'max' or 'avg'")
+		pool_layer = (
+			nn.MaxPool2d((1, pooling), stride=(1, stride))
+			if pool_type == 'max'
+			else nn.AvgPool2d((1, pooling), stride=(1, stride))
+		)
+
+		self.feature_extraction = nn.Sequential(
+			# Spatial demixing: (N, S, C, T) -> (N, n_latent, 1, T)
+			nn.Conv2d(n_sensors, n_latent, kernel_size=(n_channels, 1), bias=True),
+			nonlin(),
+			# VAR temporal convolution: (N, n_latent, 1, T) -> (N, n_latent, 1, T)
+			nn.Conv2d(n_latent, n_latent, kernel_size=(1, filter_length), padding=(0, filter_length // 2), bias=True),
+			nonlin(),
+			pool_layer,
+			nn.Dropout(dropout),
+			Flatten(),
+		)
+
+		lin_size = self.get_lin_size(self.feature_extraction)
+		self.classif = nn.Linear(lin_size, n_outputs)
+
+
+class LfCNN(CustomNet):
+	"""
+	LF-CNN architecture implementation.
+
+	Spatial demixing followed by depthwise (per-component) temporal convolution
+	and pooling. Each latent component has its own temporal filter, making the
+	model more interpretable than VAR-CNN.
+	For details see [1].
+
+	Parameters
+	----------
+	input_size : tuple
+	    Input shape (S, C, T) where S is the number of sensor types, C the number
+	    of channels and T the number of time samples.
+	n_outputs : int
+	    Number of output classes.
+	n_latent : int, optional
+	    Number of latent components after spatial demixing. Defaults to 32.
+	filter_length : int, optional
+	    Length of temporal convolution kernels. Defaults to 7.
+	pooling : int, optional
+	    Temporal pooling factor. Defaults to 2.
+	stride : int, optional
+	    Temporal pooling stride. Defaults to 2.
+	pool_type : str, optional
+	    Pooling type ('max' or 'avg'). Defaults to 'max'.
+	dropout : float, optional
+	    Dropout rate. Defaults to 0.5.
+	nonlin : nn.Module, optional
+	    Activation function class. Defaults to nn.ReLU.
+
+	References
+	----------
+	[1] I. Zubarev, et al., Adaptive neural network classifier for decoding MEG
+	    signals. Neuroimage. (2019) May 4;197:425-434
+	"""
+
+	def __init__(
+		self,
+		input_size: tuple,
+		n_outputs: int,
+		n_latent: int = 32,
+		filter_length: int = 7,
+		pooling: int = 2,
+		stride: int = 2,
+		pool_type: str = 'max',
+		dropout: float = 0.5,
+		nonlin: nn.Module = nn.ReLU,
+	) -> None:
+		super().__init__(input_size, n_outputs)
+
+		n_sensors = input_size[0]
+		n_channels = input_size[1]
+
+		if pool_type not in ('max', 'avg'):
+			raise ValueError("pool_type must be 'max' or 'avg'")
+		pool_layer = (
+			nn.MaxPool2d((1, pooling), stride=(1, stride))
+			if pool_type == 'max'
+			else nn.AvgPool2d((1, pooling), stride=(1, stride))
+		)
+
+		self.feature_extraction = nn.Sequential(
+			# Spatial demixing: (N, S, C, T) -> (N, n_latent, 1, T)
+			nn.Conv2d(n_sensors, n_latent, kernel_size=(n_channels, 1), bias=True),
+			nonlin(),
+			# LF depthwise temporal conv: each component gets its own filter
+			nn.Conv2d(
+				n_latent,
+				n_latent,
+				kernel_size=(1, filter_length),
+				padding=(0, filter_length // 2),
+				groups=n_latent,
+				bias=True,
+			),
+			nonlin(),
+			pool_layer,
+			nn.Dropout(dropout),
+			Flatten(),
+		)
+
+		lin_size = self.get_lin_size(self.feature_extraction)
+		self.classif = nn.Linear(lin_size, n_outputs)
 
 
 class AutoEncoder(CustomNet):
