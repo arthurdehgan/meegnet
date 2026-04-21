@@ -342,6 +342,12 @@ class EpochedDataset:
 			assert self.data_path is not None, 'data_path must be set'
 			data_path = self.data_path
 
+		# Use downsampled subfolder if available
+		downsampled_path = os.path.join(data_path, f'downsampled_{self.sfreq}')
+		if os.path.isdir(downsampled_path):
+			LOG.info(f'Found downsampled folder, using {downsampled_path}')
+			data_path = downsampled_path
+
 		# Load participants info
 		self.preload(data_path, csv_path, subject_col=subject_col)
 
