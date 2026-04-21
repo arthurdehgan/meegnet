@@ -437,7 +437,7 @@ def generate_saliency_figure(
 	sensors: list = [''],
 	sfreq=500,
 	edge=100,
-	cmap='viridis',
+	cmap='coolwarm',
 	stim_tick=None,
 	show=False,
 	outlines='head',
@@ -485,7 +485,7 @@ def generate_saliency_figure(
 	Notes
 	-----
 	The function assumes that the input saliency maps are normalized to have zero mean and
-	unit variance. The colormap used for displaying the saliency maps is "viridis" by default,
+	unit variance. The colormap used for displaying the saliency maps is "coolwarm" by default,
 	but can be changed with the `cmap` parameter.
 
 	The function creates a grid layout with a subplot for each sensor channel and a subplot for the
@@ -762,7 +762,7 @@ def plot_cam(input_tensor, cams, name, label, out_path='.', colorbar=True):
 	# Plot with colorbar and axis labels
 	fig, ax = plt.subplots()
 	ax.imshow(img, aspect='auto')  # Show the original image
-	im = ax.imshow(grayscale_cam, cmap='viridis', alpha=0.7)  # Overlay heatmap
+	im = ax.imshow(grayscale_cam, cmap='coolwarm', alpha=0.7)  # Overlay heatmap
 	ax.set_title(f'{name}_{method}_{label} Grad-CAM')
 	ax.set_xlabel('Time (s)')
 	ax.set_ylabel('Sensors')
