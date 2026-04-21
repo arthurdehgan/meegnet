@@ -73,8 +73,10 @@ def compute_saliency_maps(dataset, net, sal_path, threshold=0.95, labels=None, e
 				target_saliencies[1].append(neg_saliency)
 	# With all saliencies computed, we save them in the specified save-path
 	n_saliencies = 0
-	n_saliencies += sum([len(e) for e in target_saliencies[0]])
-	n_saliencies += sum([len(e) for e in target_saliencies[1]])
+	if epoched:
+		n_saliencies += sum(len(target_saliencies[i][0]) for i in range(len(target_saliencies)))
+	else:
+		n_saliencies += len(target_saliencies[0])
 
 	sub = dataset.subject_list[0]
 	LOG.info(f'{n_saliencies} saliency maps computed for {sub}')
@@ -358,8 +360,10 @@ def get_positive_negative_saliency(gradient):
 	returns:
 	    pos_saliency ( )
 	"""
-	pos_saliency = np.maximum(0, gradient) / gradient.max()
-	neg_saliency = np.maximum(0, -gradient) / -gradient.min()
+	pos_max = gradient.max()
+	neg_min = gradient.min()
+	pos_saliency = np.maximum(0, gradient) / pos_max if pos_max > 0 else np.zeros_like(gradient)
+	neg_saliency = np.maximum(0, -gradient) / -neg_min if neg_min < 0 else np.zeros_like(gradient)
 	return pos_saliency, neg_saliency
 
 
