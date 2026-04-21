@@ -251,7 +251,9 @@ class EpochedDataset:
 
 		assert len(data) == len(targets) == len(groups), 'Data, targets, and groups must have the same length.'
 
-		targets, target_labels = string_to_int(targets, target_labels)
+		targets = np.asarray(targets)
+		if not np.issubdtype(targets.dtype, np.integer):
+			targets, target_labels = string_to_int(targets, target_labels)
 		# Convert data, targets, and groups to PyTorch tensors if they're not already
 		data, targets, groups = self._format_data(data, targets, groups)
 
@@ -544,7 +546,8 @@ class EpochedDataset:
 		return torch.utils.data.TensorDataset(self.data[index], self.targets[index])
 
 	def set_targets(self, targets, target_labels=None):
-		if type(targets[0]) in (str, np.str_):
+		targets = np.asarray(targets)
+		if not np.issubdtype(targets.dtype, np.integer):
 			targets, target_labels = string_to_int(targets, target_labels)
 
 		self.targets = torch.Tensor(targets)
