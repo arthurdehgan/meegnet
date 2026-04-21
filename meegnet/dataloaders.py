@@ -377,16 +377,18 @@ class EpochedDataset:
 
 			if len(sub_data) == len(processed_targets):
 				data.append(torch.Tensor(sub_data))
-				targets.append(torch.Tensor(processed_targets))
+				targets.extend(processed_targets)
 				groups += [sub] * len(processed_targets)
 			else:
 				LOG.warning(f'Warning: Number of trials for {sub} does not match number of targets.')
 				continue
 
+		if len(data) == 0:
+			LOG.warning('No valid data loaded — subject skipped or all trials mismatched.')
+			return
 		data = torch.cat(data, 0)
-		targets = torch.cat(targets, 0)
 
-		self.set_data(data, targets, groups, target_labels=self.target_labels)
+		self.set_data(data, targets, groups)
 
 	def _format_data(self, data, targets, groups=None):
 		"""Formats the data, targets, and groups."""
@@ -401,7 +403,7 @@ class EpochedDataset:
 			data = data.unsqueeze(1)
 
 		if self.sensors is not None:
-			sub_data = sub_data[:, self.sensors, :, :]
+			data = data[:, self.sensors, :, :]
 
 		return data, targets, groups
 
@@ -411,7 +413,7 @@ class EpochedDataset:
 	def _clean_groups(self, groups=None):
 		if groups is not None:
 			self.groups = groups
-		if type(self.groups[0]) != int:
+		if not isinstance(self.groups[0], int):
 			self.groups, _ = string_to_int(self.groups)
 		self.groups = torch.tensor(self.groups, dtype=int)
 
@@ -427,10 +429,7 @@ class EpochedDataset:
 				targets = [self.subject_list.index(targets[0])] * n_samples
 			else:
 				targets = [targets[0]] * n_samples
-		if self.target_labels is None:
-			self.target_labels = list(set(targets))
-		targets = [self.target_labels.index(t) for t in targets]
-		return torch.tensor(targets)
+		return targets
 
 	def random_sub(self):
 		return np.random.choice(self.subject_list)
