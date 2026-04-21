@@ -436,7 +436,7 @@ def generate_saliency_figure(
 	cmap='viridis',
 	stim_tick=None,
 	show=False,
-	outlines=None,
+	outlines='head',
 	topomap='window',
 ):
 	"""
@@ -620,6 +620,7 @@ def generate_saliency_figure(
 				contours=0,
 				axes=axes[-1],
 				outlines=outlines,
+				sphere=0.1,
 			)
 			if topomap != 'average':
 				timing_ms = (max_idx - stim_tick_index) * tick_ratio
