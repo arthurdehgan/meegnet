@@ -198,7 +198,7 @@ class EpochedDataset:
 			dataframe = self._load_csv(data_path)
 
 		# Sample participants (if needed)
-		if self.n_subjects < len(dataframe):
+		if self.n_subjects is not None and self.n_subjects < len(dataframe):
 			self.dataframe = dataframe.sample(frac=1, random_state=self.random_state).reset_index(drop=True)[
 				: self.n_subjects
 			]
