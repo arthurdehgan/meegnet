@@ -505,7 +505,7 @@ def generate_saliency_figure(
 	n_blocs = len(sensors)  # number of blocs of figures in a line
 	n_lines = len(saliencies)  # number of lines for the pyplot figure
 	n_cols = n_blocs * block_size + 1  # number of columns for the pyplot figure
-	grid = GridSpec(n_lines, n_cols)
+	grid = GridSpec(n_lines, n_cols, wspace=0.5)
 	fig = plt.figure(figsize=(n_cols * 2, n_lines * 2))
 	plt.title(title)
 	plt.axis('off')
@@ -547,7 +547,7 @@ def generate_saliency_figure(
 			# mid_slice = (int(segment_length / 4), int(3 * segment_length / 4))
 			# gradmeans = grads[:, mid_slice[0] : mid_slice[1]].mean(axis=1)[:, np.newaxis]
 			# grads -= gradmeans  # We remove mean accross time to make the variations accross time pop-up more
-			n_sensors = grads.shape[0]
+			# n_sensors = grads.shape[0]
 			max_idx = np.unravel_index(abs(grads).argmax(), grads.shape)[1]
 			# max_idx = np.argmax([avg_range(arr) for arr in grads.T])
 			# max_idx = np.argmax(np.mean(grads, axis=0))
@@ -567,7 +567,7 @@ def generate_saliency_figure(
 				stim_tick_index = 0
 
 			if topomap != 'average':
-				plt.axvline(x=max_idx, color='green', linestyle='--', linewidth=1)
+				plt.axvline(x=max_idx, color='red', linestyle='--', linewidth=1)
 				x_ticks.append(max_idx)
 
 			x_ticks = sorted(x_ticks)
@@ -576,12 +576,13 @@ def generate_saliency_figure(
 			tick_labels[-1] -= edge
 
 			plt.xticks(x_ticks, tick_labels, fontsize=8)
-			plt.yticks([0, n_sensors], [n_sensors, 0])
+			axes[-1].set_yticks([])
+			# plt.yticks([0, n_sensors], [n_sensors, 0])
 
 			if j == 0:
-				axes[-1].text(-50, 50, label, ha='left', va='center', rotation='vertical')
-			if idx == n_blocs - 1:
-				axes[-1].yaxis.set_label_position('right')
+				axes[-1].text(
+					-100, 50, label.capitalize(), ha='left', va='center', rotation='vertical', fontweight='bold'
+				)
 				plt.ylabel('sensors')
 			if i == 0:
 				plt.title(sensor_type)
@@ -620,9 +621,14 @@ def generate_saliency_figure(
 				axes=axes[-1],
 				outlines=outlines,
 			)
+			if topomap != 'average':
+				timing_ms = (max_idx - stim_tick_index) * tick_ratio
+				axes[-1].set_xlabel(f't = {timing_ms:.0f} ms')
 			if idx == n_blocs - 1:
 				axes.append(fig.add_subplot(grid[i, n_blocs * 3]))
-				fig.colorbar(im, ax=axes[-1], location='right', shrink=0.9, ticks=(-vlim, 0, vlim))
+				divider = make_axes_locatable(axes[-1])
+				cax = divider.append_axes('left', size='17%', pad=0.05)
+				fig.colorbar(im, cax=cax, ticks=(-vlim, 0, vlim))
 				axes[-1].axis('off')
 
 	out_path = os.path.join(save_path, f'{suffix}saliencies.png')
@@ -661,7 +667,7 @@ def plot_epoch(data, title: str = None):
 
 	grid = GridSpec(len(data), 1, hspace=0)
 	fig = plt.figure(figsize=(10, 5))
-	plt.title(title)
+	plt.suptitle(title, y=1.05)
 	plt.axis('off')
 	axes = []
 	for i, chan in enumerate(data):
@@ -696,7 +702,12 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 		sub_dataset = copy.deepcopy(dataset)
 		if verbose > 2:
 			print(f'Processing subject {sub}')
-		sub_dataset.load(dataset.data_path, one_sub=sub, verbose=verbose)
+		try:
+			sub_dataset.load(dataset.data_path, one_sub=sub, verbose=verbose)
+		except Exception as e:
+			if verbose > 0:
+				print(f'Skipping subject {sub}: {e}')
+			continue
 		if len(sub_dataset) == 0:
 			continue
 
