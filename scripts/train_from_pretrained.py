@@ -3,6 +3,7 @@ import logging
 import configparser
 import numpy as np
 from meegnet.dataloaders import EpochedDataset, ContinuousDataset
+from torch.nn import MSELoss
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet_functions import get_name, get_input_size, prepare_logging
@@ -12,89 +13,91 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefm
 
 
 if __name__ == '__main__':
-	###############
-	### PARSING ###
-	###############
+    ###############
+    ### PARSING ###
+    ###############
 
-	args = parser.parse_args()
-	save_config(vars(args), args.config)
+    args = parser.parse_args()
+    save_config(vars(args), args.config)
 
-	script_path = os.getcwd()
-	config_path = os.path.join(script_path, '../default_values.ini')
-	default_values = configparser.ConfigParser()
-	assert os.path.exists(config_path), 'default_values.ini not found'
-	default_values.read(config_path)
-	default_values = default_values['config']
+    # script_path = os.getcwd()
+    # config_path = os.path.join(script_path, "../default_values.ini")
+    config_path = "/home/kikuko/meegnet/default_values.ini"
+    default_values = configparser.ConfigParser()
+    assert os.path.exists(config_path), "default_values.ini not found"
+    default_values.read(config_path)
+    default_values = default_values["config"]
 
-	fold = None if args.fold == -1 else int(args.fold)
+    fold = None if args.fold == -1 else int(args.fold)
 
-	input_size = get_input_size(args, default_values)
-	name = get_name(args)
+    input_size = get_input_size(args, default_values)
+    name = get_name(args)
 
-	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 
-	######################
-	### LOGGING CONFIG ###
-	######################
+    ######################
+    ### LOGGING CONFIG ###
+    ######################
 
-	if args.log:
-		prepare_logging('training', args, LOG, fold)
+    if args.log:
+        prepare_logging('training', args, LOG, fold)
 
-	####################
-	### LOADING DATA ###
-	####################
+    ####################
+    ### LOADING DATA ###
+    ####################
 
-	if args.epoched:
-		dataset = EpochedDataset(
-			sfreq=args.sfreq,
-			n_subjects=args.max_subj,
-			n_samples=n_samples,
-			split_sizes=args.train_size,
-			sensortype=args.sensors,
-			lso=args.lso,
-			random_state=args.seed,
-		)
-	else:
-		dataset = ContinuousDataset(
-			window=args.segment_length,
-			overlap=args.overlap,
-			sfreq=args.sfreq,
-			n_subjects=args.max_subj,
-			n_samples=n_samples,
-			split_sizes=args.train_size,
-			sensortype=args.sensors,
-			lso=args.lso,
-			random_state=args.seed,
-		)
+    if args.epoched:
+        dataset = EpochedDataset(
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            split_sizes=args.train_size,
+            sensortype=args.sensors,
+            lso=args.lso,
+            random_state=args.seed,
+        )
+    else:
+        dataset = ContinuousDataset(
+            window=args.segment_length,
+            overlap=args.overlap,
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            split_sizes=args.train_size,
+            sensortype=args.sensors,
+            lso=args.lso,
+            random_state=args.seed,
+        )
 
-	dataset.load(args.save_path)
-	n_outputs = len(np.unique(dataset.labels))
+    dataset.load(args.save_path)
+    n_outputs = len(np.unique(dataset.labels))
 
-	#####################
-	### LOADING MODEL ###
-	#####################
+    #####################
+    ### LOADING MODEL ###
+    #####################
 
-	model_path = '/home/arthur/data/camcan/eventclf/best_net_42_ALL.pt'
+    model_path = "/scratch/kikuko/data/mixed_audit/mixed_audit_meegnet_42_ALL_551.pt"
+    LOG.info('Loading existing model:')
 
-	LOG.info('Loading existing model:')
-	my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
-	my_model.load(model_path)
+    my_model = Model(name, args.net_option, input_size, n_outputs, learning_rate=args.lr, save_path=args.save_path)
+    my_model.load(model_path)
+    
+    ######################
+    ### TRAINING MODEL ###
+    ######################
 
-	my_model.name = my_model.name + f'_from_pretrained_{args.train_size}'
-	LOG.info(my_model.name)
-	LOG.info(my_model.net)
+    train_sub = int(dataset.n_subjects * args.train_size)
+    my_model.name = my_model.name + f"_{train_sub}"
+    LOG.info(my_model.name)
+    LOG.info(my_model.net)
 
-	######################
-	### TRAINING MODEL ###
-	######################
+    my_model.train(dataset)
 
-	my_model.train(dataset)
+    #####################
+    ### TESTING MODEL ###
+    #####################
 
-	#####################
-	### TESTING MODEL ###
-	#####################
+    # LOG.info("Evaluating model:")
+    # evaluate(fold, datasets, args.net_option, args=args)
+    my_model.test(dataset)
 
-	my_model.test(dataset)
-
-	# LOG.info("Evaluating model:")
-	# evaluate(fold, datasets, args.net_option, args=args)

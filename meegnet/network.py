@@ -70,6 +70,7 @@ def create_net(net_option: str, input_size: int, n_outputs: int, net_params: dic
 		'eegnet': lambda: EEGNet(input_size, n_outputs),
 		# "eegnet": lambda: EEGNetv4(input_size, n_outputs),
 		'vanputnet': lambda: VanPutNet(input_size, n_outputs),
+		'vanput': lambda: VanPutNet(input_size, n_outputs),
 		'varcnn': lambda: VarCNN(input_size, n_outputs),
 		'lfcnn': lambda: LfCNN(input_size, n_outputs),
 	}
@@ -818,6 +819,7 @@ class Model:
 		self.criterion = criterion
 		self.save_path = save_path
 		self.lr = learning_rate
+		self._optimizer = optimizer
 		self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
 		self.tracker = TrainingTracker(self.save_path, self.name)
 
@@ -886,6 +888,7 @@ class Model:
 		self.net.train()
 		self.batch_size = batch_size
 		self.num_workers = num_workers
+		self.optimizer = self._optimizer(self.net.parameters(), lr=self.lr)
 
 		# Create data loaders
 		LOG.info('Creating DataLoaders...')
@@ -988,6 +991,20 @@ class Model:
 			faccuracy = accuracy / float(counter)
 			return floss, faccuracy
 
+	def validate(self, dataset):
+		_, valid_index, _ = dataset.split_data()
+		valid_loader = DataLoader(
+			dataset.torchDataset(valid_index),
+			batch_size=self.batch_size,
+			num_workers=self.num_workers,
+			shuffle=True,
+			pin_memory=True,
+		)
+		valid_loss, valid_acc = self.evaluate(valid_loader)
+		LOG.info(f' [LOSS] VALID {valid_loss:.4f}')
+		LOG.info(f' [ACC] VALID {100 * valid_acc:.2f}%')
+		return valid_loss, valid_acc
+
 	def test(self, dataset):
 		_, _, test_index = dataset.split_data()
 		test_loader = DataLoader(
@@ -998,8 +1015,8 @@ class Model:
 			pin_memory=True,
 		)
 		test_loss, test_acc = self.evaluate(test_loader)
-		LOG.info(f' [LOSS] TEST {test_loss}')
-		LOG.info(f' [ACC] TEST {test_acc}')
+		LOG.info(f' [LOSS] TEST {test_loss:.4f}')
+		LOG.info(f' [ACC] TEST {100 * test_acc:.2f}%')
 		return test_loss, test_acc
 
 	def n_parameters(self, model: nn.Module = None):

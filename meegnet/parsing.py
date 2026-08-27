@@ -44,18 +44,11 @@ parser.add(
 	help='will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true',
 )
 parser.add(
-	'--net-option',
-	default='meegnet',
-	choices=['custom', 'MEEGNet', 'meegnet', 'EEGNet', 'eegnet', 'vgg', 'VGG', 'vanPutNet', 'mlp', 'MLP'],
-)
-parser.add(
 	'--epoched',
 	action='store_true',
 	help='Flag data as epoched if it is already epoched in the data files. otherwise the dataloader will segment data according to set parameters',
 )
 parser.add('--crossval', action='store_true', help='wether to do a 4-FOLD cross-validation on the train+valid set.')
-parser.add('--n-samples', type=int, default=-1, help='limit of number of samples per subjects')
-parser.add('-f', '--filters', default=8, type=int, help='The size of the first convolution')
 parser.add(
 	'--segment-length',
 	type=float,
@@ -129,15 +122,44 @@ parser.add(
 	help='wether or not to to compute psd using saliency windows in the compute_saliency_maps.py script.',
 )
 parser.add(
+    "--net-option",
+    default="meegnet",
+    choices=[
+        "custom",
+        "MEEGNet",
+        "meegnet",
+        "EEGNet",
+        "eegnet",
+        "vgg",
+        "VGG",
+        "vanPutNet",
+        "vanput",
+        "mlp",
+        "MLP",
+    ],
+)
+parser.add(
+    "--n-samples",
+    type=int,
+    default=-1,
+    help="limit of number of samples per subjects",
+)
+parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
+parser.add(
+    "--overlap",
+    type=float,
+    default=0,
+    help="the overlap value between segments for continous data.",
+)
+parser.add(
+    "--confidence",
+    type=float,
+    default=0.95,
+    help="the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.",
+)
+parser.add(
 	'--w-size',
 	type=int,
 	default=300,
 	help='The window size for saliency based psd computation in the compute_saliency_maps.py script.',
-)
-parser.add('--overlap', type=float, default=0, help='the overlap value between segments for continous data.')
-parser.add(
-	'--confidence',
-	type=float,
-	default=0.98,
-	help='the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.',
 )
