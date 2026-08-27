@@ -126,14 +126,14 @@ class EpochedDataset:
 	def __init__(
 		self,
 		sfreq: float = 500,
-		n_subjects: int = None,
+		n_subjects: int | None = None,
 		scaling: str = 'minmax',
-		n_samples: int = None,
+		n_samples: int | None = None,
 		split_sizes: tuple = (0.8, 0.1, 0.1),
-		sensortype: str = None,
+		sensortype: str | None = None,
 		lso: bool = False,
 		random_state: int = 0,
-		target_labels: list = None,
+		target_labels: list | None = None,
 	):
 		if isinstance(split_sizes, float):
 			split_sizes = split_sizes, (1 - split_sizes) / 2, (1 - split_sizes) / 2

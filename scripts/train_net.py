@@ -3,6 +3,7 @@ import logging
 import configparser
 import numpy as np
 from meegnet.dataloaders import EpochedDataset, ContinuousDataset
+from torch.nn import MSELoss
 from meegnet.parsing import parser, save_config
 from meegnet.network import Model
 from meegnet_functions import get_name, get_input_size, prepare_logging
@@ -19,8 +20,9 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	save_config(vars(args), args.config)
 
-	script_path = os.getcwd()
-	config_path = os.path.join(script_path, '../default_values.ini')
+	# script_path = os.getcwd()
+	# config_path = os.path.join(script_path, "../default_values.ini")
+	config_path = '/home/kikuko/meegnet/default_values.ini'
 	default_values = configparser.ConfigParser()
 	assert os.path.exists(config_path), 'default_values.ini not found'
 	default_values.read(config_path)
@@ -78,6 +80,8 @@ if __name__ == '__main__':
 	my_model = Model(
 		name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
 	)
+	train_sub = int(dataset.n_subjects * args.train_size)
+	my_model.name = my_model.name + f'_{train_sub}'
 
 	LOG.info(my_model.name)
 	LOG.info(my_model.net)

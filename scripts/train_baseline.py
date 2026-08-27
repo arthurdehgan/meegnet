@@ -2,141 +2,167 @@ import os
 import logging
 import configparser
 import numpy as np
-from meegnet.dataloaders import EpochedDataset, ContinuousDataset
-from meegnet.parsing import parser, save_config
 from joblib import Parallel, delayed
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import accuracy_score
+from multiprocessing import shared_memory
+from meegnet.dataloaders import EpochedDataset, ContinuousDataset
+from meegnet.parsing import parser, save_config
 from meegnet.utils import compute_psd
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+LOG = logging.getLogger('meegnet')
 
+def process_sensor(sensor_type, sensor, train_index, test_index, shm_name, labels, fs, shape):
+    LOG.info(f"Processing sensor_type {sensor_type}, sensor {sensor}")
 
-def process_sensor(sensor_type, sensor, train_index, test_index, data, labels, fs):
-	LOG.info(f'Processing sensor_type {sensor_type}, sensor {sensor}')
+    # Access shared memory
+    existing_shm = shared_memory.SharedMemory(name=shm_name)
+    data = np.ndarray(shape, dtype=np.float32, buffer=existing_shm.buf)
 
-	# Compute PSD for the specific sensor
-	psd_data = compute_psd(data[:, sensor_type, sensor], fs=fs)
+    # Extract slice for the current sensor
+    data_slice = data[:, sensor_type, sensor]
 
-	# Split data into train and test sets
-	X_train, y_train = psd_data[train_index], labels[train_index]
-	X_test, y_test = psd_data[test_index], labels[test_index]
+    # Compute PSD for the specific sensor
+    psd_data = compute_psd(data_slice, fs=fs)
 
-	param_distributions = {
-		'C': np.logspace(-2, 2, 10),
-		'penalty': ['l1', 'l2'],
-		'solver': ['liblinear'],
-		'max_iter': [100, 200, 500, 1000],
-		'tol': [1e-4, 1e-3, 1e-2, 1e-1],
-		'fit_intercept': [True, False],
-		'class_weight': [None, 'balanced'],
-	}
+    # Split data into train and test sets
+    X_train, y_train = psd_data[train_index], labels[train_index]
+    X_test, y_test = psd_data[test_index], labels[test_index]
 
-	# Logistic Regression model
-	model = LogisticRegression()
+    param_distributions = {
+        'C': np.logspace(-2, 2, 10),
+        'penalty': ['l1', 'l2'],
+        'solver': ['liblinear'],
+        'max_iter': [100, 200, 500, 1000],
+        'tol': [1e-4, 1e-3, 1e-2, 1e-1],
+        'fit_intercept': [True, False],
+        'class_weight': [None, 'balanced'],
+    }
 
-	# Randomized Search
-	random_search = RandomizedSearchCV(
-		model, param_distributions, n_iter=100, cv=5, scoring='accuracy', random_state=42
-	)
-	random_search.fit(X_train, y_train)
+    # Logistic Regression model
+    model = LogisticRegression()
 
-	# Best model parameters and validation accuracy
-	best_params = random_search.best_params_
-	val_accuracy = random_search.best_score_
+    # Randomized Search
+    random_search = RandomizedSearchCV(
+        model, param_distributions, n_iter=100, cv=5, scoring='accuracy', random_state=42
+    )
+    random_search.fit(X_train, y_train)
 
-	# Train the best model on the full training set
-	best_model = random_search.best_estimator_
-	best_model.fit(X_train, y_train)
+    # Best model parameters and validation accuracy
+    best_params = random_search.best_params_
+    val_accuracy = random_search.best_score_
 
-	# Evaluate on the test set
-	y_test_pred = best_model.predict(X_test)
-	test_accuracy = accuracy_score(y_test, y_test_pred)
+    # Train the best model on the full training set
+    best_model = random_search.best_estimator_
+    best_model.fit(X_train, y_train)
 
-	# Evaluate on the training set
-	y_train_pred = best_model.predict(X_train)
-	train_accuracy = accuracy_score(y_train, y_train_pred)
+    # Evaluate on the test set
+    y_test_pred = best_model.predict(X_test)
+    test_accuracy = accuracy_score(y_test, y_test_pred)
 
-	results = {
-		'sensor_type': sensor_type,
-		'sensor': sensor,
-		'train_accuracy': train_accuracy,
-		'validation_accuracy': val_accuracy,
-		'test_accuracy': test_accuracy,
-		'best_parameters': best_params,
-	}
-	LOG.info(f'Finished processing sensor_type {sensor_type}, sensor {sensor}')
-	return results
+    # Evaluate on the training set
+    y_train_pred = best_model.predict(X_train)
+    train_accuracy = accuracy_score(y_train, y_train_pred)
+
+    results = {
+        "sensor_type": sensor_type,
+        "sensor": sensor,
+        "train_accuracy": train_accuracy,
+        "validation_accuracy": val_accuracy,
+        "test_accuracy": test_accuracy,
+        "best_parameters": best_params,
+    }
+    LOG.info(f"Finished processing sensor_type {sensor_type}, sensor {sensor}")
+    existing_shm.close()  # Close shared memory in this worker
+    return results
 
 
 if __name__ == '__main__':
-	###############
-	### PARSING ###
-	###############
+    ###############
+    ### PARSING ###
+    ###############
 
-	args = parser.parse_args()
-	save_config(vars(args), args.config)
+    args = parser.parse_args()
+    save_config(vars(args), args.config)
 
-	script_path = os.getcwd()
-	config_path = os.path.join(script_path, '../default_values.ini')
-	default_values = configparser.ConfigParser()
-	assert os.path.exists(config_path), 'default_values.ini not found'
-	default_values.read(config_path)
-	default_values = default_values['config']
+    config_path = "/home/kikuko/meegnet/default_values.ini"
+    default_values = configparser.ConfigParser()
+    assert os.path.exists(config_path), 'default_values.ini not found'
+    default_values.read(config_path)
+    default_values = default_values['config']
 
-	fold = None if args.fold == -1 else int(args.fold)
-	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
+    fold = None if args.fold == -1 else int(args.fold)
+    n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 
-	####################
-	### LOADING DATA ###
-	####################
+    ####################
+    ### LOADING DATA ###
+    ####################
 
-	if args.epoched:
-		dataset = EpochedDataset(
-			sfreq=args.sfreq, n_subjects=args.max_subj, n_samples=n_samples, sensortype=args.sensors, lso=args.lso
-		)
-	else:
-		dataset = ContinuousDataset(
-			window=args.segment_length,
-			overlap=args.overlap,
-			sfreq=args.sfreq,
-			n_subjects=args.max_subj,
-			n_samples=n_samples,
-			sensortype=args.sensors,
-			lso=args.lso,
-		)
+    if args.epoched:
+        dataset = EpochedDataset(
+            sfreq=args.sfreq, n_subjects=args.max_subj, n_samples=n_samples, sensortype=args.sensors, lso=args.lso
+        )
+    else:
+        dataset = ContinuousDataset(
+            window=args.segment_length,
+            overlap=args.overlap,
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            sensortype=args.sensors,
+            lso=args.lso,
+        )
 
-	dataset.load(args.save_path)
-	data, labels = dataset.data, dataset.labels
+    dataset.load(args.save_path)
+    data, labels = dataset.data, dataset.labels
 
-	# Split data into train and test sets
-	train_index, test_index, _ = dataset.split_data(0.9, 0.1, 0)
+    # Split data into train and test sets
+    train_index, test_index, _ = dataset.split_data(0.9, 0.1, 0)
 
-	########################
-	### START PROCESSING ###
-	########################
+    # Convert data to numpy array and float32 for memory efficiency
+    LOG.info(f"Converting data to numpy array and np.float32 from {type(data)}")
+    data = np.array(data, dtype=np.float32)
 
-	LOG.info('Starting parallel processing...')
-	all_results = Parallel(n_jobs=-1)(
-		delayed(process_sensor)(sensor_type, sensor, train_index, test_index, data, labels, args.sfreq)
-		for sensor_type in [0, 1, 2]
-		for sensor in range(102)
-	)
+    # Create shared memory
+    shm = shared_memory.SharedMemory(create=True, size=data.nbytes)
+    shared_data = np.ndarray(data.shape, dtype=np.float32, buffer=shm.buf)
+    np.copyto(shared_data, data)
 
-	#######################
-	### FIND BEST RESULT ###
-	#######################
+    ########################
+    ### START PROCESSING ###
+    ########################
 
-	best_result = max(all_results, key=lambda x: x['validation_accuracy'])
-	LOG.info('Best sensor combination:')
-	LOG.info(best_result)
+    LOG.info("Starting parallel processing...")
+    all_results = Parallel(n_jobs=-1)(
+        delayed(process_sensor)(
+            sensor_type, sensor, train_index, test_index, shm.name, labels, args.sfreq, data.shape
+        )
+        for sensor_type in [0, 1, 2]
+        for sensor in range(102)
+    )
 
-	#######################
-	### SAVING RESULTS ###
-	#######################
+    ########################
+    ### CLEAN UP MEMORY ###
+    ########################
 
-	output_file = os.path.join(args.save_path, f'baseline_performance.npy')
-	np.save(output_file, all_results)
+    shm.close()
+    shm.unlink()  # Remove shared memory
 
-	LOG.info('Performance metrics saved.')
+    #######################
+    ### FIND BEST RESULT ###
+    #######################
+
+    best_result = max(all_results, key=lambda x: x['validation_accuracy'])
+    LOG.info('Best sensor combination:')
+    LOG.info(best_result)
+
+    #######################
+    ### SAVING RESULTS ###
+    #######################
+
+    output_file = os.path.join(args.save_path, f'baseline_performance.npy')
+    np.save(output_file, all_results)
+
+    LOG.info('Performance metrics saved.')
