@@ -18,7 +18,8 @@ dependencies = [
     "huggingface-hub (>=1.8.0,<2.0.0)",
     "torch (>=2.11.0,<3.0.0)",
     "torchvision (>=0.26.0,<0.27.0)",
-    "grad-cam (>=1.5.5,<2.0.0)"
+    "grad-cam (>=1.5.5,<2.0.0)",
+    "ipykernel (>=7.3.0,<8.0.0)"
 ]
 
 [build-system]
@@ -27,5 +28,6 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "ipykernel (>=7.2.0,<8.0.0)"
+    "ipykernel (>=7.2.0,<8.0.0)",
+    "ruff (>=0.12.0,<1.0.0)"
 ]

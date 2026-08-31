@@ -49,7 +49,11 @@ parser.add(
 	action='store_true',
 	help='Flag data as epoched if it is already epoched in the data files. otherwise the dataloader will segment data according to set parameters',
 )
-parser.add('--crossval', action='store_true', help='Wether to do a K-FOLD cross-validation (no holdout test set) over all subjects.')
+parser.add(
+	'--crossval',
+	action='store_true',
+	help='Wether to do a K-FOLD cross-validation (no holdout test set) over all subjects.',
+)
 parser.add(
 	'--segment-length',
 	type=float,

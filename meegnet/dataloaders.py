@@ -507,7 +507,7 @@ class EpochedDataset:
 		fold_subjects = [subjects[i::n_folds] for i in range(n_folds)]
 		test_subjects = fold_subjects.pop(fold)
 		remain = [sub for fold_subs in fold_subjects for sub in fold_subs]
-		n_train = int(round(len(remain) * train_size / (train_size + valid_size)))
+		n_train = round(len(remain) * train_size / (train_size + valid_size))
 		train_subjects, valid_subjects = random_split(remain, [n_train, len(remain) - n_train], generator)
 		train_index = [idx for sub in train_subjects for idx in np.where(self.groups == sub)[0].tolist()]
 		valid_index = [idx for sub in valid_subjects for idx in np.where(self.groups == sub)[0].tolist()]
@@ -538,7 +538,7 @@ class EpochedDataset:
 			buckets = [perm[i::n_folds] for i in range(n_folds)]
 			test_index.extend(group[p] for p in buckets[fold])
 			remain = [p for i in range(n_folds) if i != fold for p in buckets[i]]
-			n_train = int(round(len(remain) * train_size / (train_size + valid_size)))
+			n_train = round(len(remain) * train_size / (train_size + valid_size))
 			train_part, valid_part = random_split(remain, [n_train, len(remain) - n_train], generator)
 			train_index.extend(group[p] for p in train_part)
 			valid_index.extend(group[p] for p in valid_part)
