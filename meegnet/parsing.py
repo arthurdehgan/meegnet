@@ -1,4 +1,8 @@
 import configparser
+import os
+import tempfile
+import time
+
 import configargparse
 
 parser = configargparse.ArgParser()
@@ -7,17 +11,31 @@ parser = configargparse.ArgParser()
 def save_config(args: dict, config_filepath: str = 'config.ini'):
 	"""Saves a dictionnary to a given path.
 
+	Configuration saved in configs directory, with timestamp in filename and SLURM job id when available.
+
 	Args:
 	    args (dict): The argument dictionnary to be saved to the config filepath.
 	    config_filepath (str): The filepath to be used to save the config file.
 	"""
-	with open(config_filepath, 'w') as conf:
-		config_object = configparser.ConfigParser()
-		config_object.add_section('config')
-		for key, value in args.items():
-			config_object.set('config', key.replace('_', '-'), str(value))
-		config_object.write(conf)
-	return
+	ini_base = os.path.splitext(os.path.basename(config_filepath))[0]
+	config_dir = os.path.join(os.path.dirname(os.path.abspath(config_filepath)), 'configs')
+	os.makedirs(config_dir, exist_ok=True)
+	run_id = os.environ.get('SLURM_JOB_ID') or time.strftime('%Y%m%d-%H%M%S')
+	target = os.path.join(config_dir, f'{ini_base}-{run_id}.ini')
+
+	config_object = configparser.ConfigParser()
+	config_object.add_section('config')
+	for key, value in args.items():
+		config_object.set('config', key.replace('_', '-'), str(value))
+
+	fd, tmp = tempfile.mkstemp(dir=config_dir, suffix='.tmp')
+	try:
+		with os.fdopen(fd, 'w') as conf:
+			config_object.write(conf)
+		os.replace(tmp, target)
+	except BaseException:
+		os.unlink(tmp)
+		raise
 
 
 parser.add('-c', '--config', is_config_file=True, default='../default.ini', help='config file path')
@@ -127,40 +145,18 @@ parser.add(
 	help='wether or not to to compute psd using saliency windows in the compute_saliency_maps.py script.',
 )
 parser.add(
-    "--net-option",
-    default="meegnet",
-    choices=[
-        "custom",
-        "MEEGNet",
-        "meegnet",
-        "EEGNet",
-        "eegnet",
-        "vgg",
-        "VGG",
-        "vanPutNet",
-        "vanput",
-        "mlp",
-        "MLP",
-    ],
+	'--net-option',
+	default='meegnet',
+	choices=['custom', 'MEEGNet', 'meegnet', 'EEGNet', 'eegnet', 'vgg', 'VGG', 'vanPutNet', 'vanput', 'mlp', 'MLP'],
 )
+parser.add('--n-samples', type=int, default=-1, help='limit of number of samples per subjects')
+parser.add('-f', '--filters', default=8, type=int, help='The size of the first convolution')
+parser.add('--overlap', type=float, default=0, help='the overlap value between segments for continous data.')
 parser.add(
-    "--n-samples",
-    type=int,
-    default=-1,
-    help="limit of number of samples per subjects",
-)
-parser.add("-f", "--filters", default=8, type=int, help="The size of the first convolution")
-parser.add(
-    "--overlap",
-    type=float,
-    default=0,
-    help="the overlap value between segments for continous data.",
-)
-parser.add(
-    "--confidence",
-    type=float,
-    default=0.95,
-    help="the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.",
+	'--confidence',
+	type=float,
+	default=0.95,
+	help='the confidence threshold needed for a trial to be selected for visualisation in the compute_ and visu_saliency_maps.py script.',
 )
 parser.add(
 	'--w-size',
