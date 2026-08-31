@@ -206,7 +206,7 @@ class EpochedDataset:
 			self.dataframe = dataframe
 
 		# Update instance attributes
-		LOG.info(f'Logging subjects and targets from {data_path}...')
+		LOG.info(f'Loading subjects and targets from {data_path}...')
 		self.data_path = data_path
 		self.subject_list = self.dataframe[subject_col].tolist()
 
