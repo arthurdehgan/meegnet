@@ -29,6 +29,7 @@ if __name__ == '__main__':
 	default_values = default_values['config']
 
 	fold = None if args.fold == -1 else int(args.fold)
+	folds = list(range(int(args.n_folds))) if args.crossval else [fold]
 
 	input_size = get_input_size(args, default_values)
 	name = get_name(args)
@@ -39,7 +40,7 @@ if __name__ == '__main__':
 	### LOGGING CONFIG ###
 	######################
 
-	if args.log:
+	if args.log and not args.crossval:
 		prepare_logging('training', args, LOG, fold)
 
 	####################
@@ -76,26 +77,43 @@ if __name__ == '__main__':
 	### LOADING MODEL ###
 	#####################
 
-	LOG.info('Training model:')
-	my_model = Model(
-		name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
-	)
 	train_sub = int(dataset.n_subjects * args.train_size)
-	my_model.name = my_model.name + f'_{train_sub}'
+	n_folds = len(folds)
+	cv_accuracies = []
 
-	LOG.info(my_model.name)
-	LOG.info(my_model.net)
+	for fold in folds:
+		if args.log and args.crossval:
+			args.fold = fold
+			prepare_logging('training', args, LOG, fold)
 
-	LOG.info(f'dataset contains a total of {len(dataset)} trials.')
+		LOG.info('Training model:')
+		my_model = Model(
+			name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
+		)
+		my_model.name = my_model.name + (f'_{train_sub}_fold{fold}' if fold is not None else f'_{train_sub}')
 
-	######################
-	### TRAINING MODEL ###
-	######################
+		LOG.info(my_model.name)
+		LOG.info(my_model.net)
 
-	my_model.train(dataset)
+		LOG.info(f'dataset contains a total of {len(dataset)} trials.')
 
-	#####################
-	### TESTING MODEL ###
-	#####################
+		######################
+		### TRAINING MODEL ###
+		######################
 
-	my_model.test(dataset)
+		my_model.train(dataset, fold=fold)
+
+		#####################
+		### TESTING MODEL ###
+		#####################
+
+		test_loss, test_acc = my_model.test(dataset, fold=fold)
+		cv_accuracies.append(test_acc)
+
+		if args.crossval:
+			LOG.info(f'Fold {fold + 1}/{n_folds} test accuracy: {100 * test_acc:.2f}%')
+
+	if args.crossval:
+		cv_mean = np.mean(cv_accuracies)
+		cv_std = np.std(cv_accuracies)
+		LOG.info(f'{n_folds}-fold cross-validation mean accuracy: {100 * cv_mean:.2f}% +/- {100 * cv_std:.2f}%')

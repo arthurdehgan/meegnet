@@ -43,12 +43,13 @@ parser.add(
 	type=int,
 	help='will only do a specific fold if specified. must be between 0 and 3, or 0 and 4 if testsplit option is true',
 )
+parser.add('--n-folds', default=5, type=int, help='number of folds to use when crossval is enabled')
 parser.add(
 	'--epoched',
 	action='store_true',
 	help='Flag data as epoched if it is already epoched in the data files. otherwise the dataloader will segment data according to set parameters',
 )
-parser.add('--crossval', action='store_true', help='wether to do a 4-FOLD cross-validation on the train+valid set.')
+parser.add('--crossval', action='store_true', help='Wether to do a K-FOLD cross-validation (no holdout test set) over all subjects.')
 parser.add(
 	'--segment-length',
 	type=float,

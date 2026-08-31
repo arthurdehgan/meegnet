@@ -835,6 +835,7 @@ class Model:
 	def train(
 		self,
 		dataset,
+		fold: int = None,
 		batch_size: int = 128,
 		patience: int = 10,
 		max_epoch: int = None,
@@ -892,7 +893,10 @@ class Model:
 
 		# Create data loaders
 		LOG.info('Creating DataLoaders...')
-		train_index, valid_index, _ = dataset.split_data()
+		if fold is None:
+			train_index, valid_index, _ = dataset.split_data()
+		else:
+			train_index, valid_index, _ = dataset.split_data_cv(fold, n_folds=self.n_folds)
 		trainloader = DataLoader(
 			dataset.torchDataset(train_index),
 			batch_size=batch_size,
@@ -991,8 +995,11 @@ class Model:
 			faccuracy = accuracy / float(counter)
 			return floss, faccuracy
 
-	def validate(self, dataset):
-		_, valid_index, _ = dataset.split_data()
+	def validate(self, dataset, fold: int = None):
+		if fold is None:
+			_, valid_index, _ = dataset.split_data()
+		else:
+			_, valid_index, _ = dataset.split_data_cv(fold, n_folds=self.n_folds)
 		valid_loader = DataLoader(
 			dataset.torchDataset(valid_index),
 			batch_size=self.batch_size,
@@ -1005,8 +1012,11 @@ class Model:
 		LOG.info(f' [ACC] VALID {100 * valid_acc:.2f}%')
 		return valid_loss, valid_acc
 
-	def test(self, dataset):
-		_, _, test_index = dataset.split_data()
+	def test(self, dataset, fold: int = None):
+		if fold is None:
+			_, _, test_index = dataset.split_data()
+		else:
+			_, _, test_index = dataset.split_data_cv(fold, n_folds=self.n_folds)
 		test_loader = DataLoader(
 			dataset.torchDataset(test_index),
 			batch_size=self.batch_size,

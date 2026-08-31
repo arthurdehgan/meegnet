@@ -500,6 +500,20 @@ class EpochedDataset:
 			indexes[i] = [idx for sub in split for idx in np.where(self.groups == sub)[0].tolist()]
 		return tuple(indexes)
 
+	def _leave_subjects_out_cv_split(self, n_folds, fold, train_size, valid_size, generator):
+		"""Subject-level K-fold split: whole subjects in train/valid/test, no overlap."""
+		assert self.n_subjects >= n_folds, 'Cannot do subject-level K-fold with more folds than subjects.'
+		subjects = torch.randperm(self.n_subjects, generator=generator).tolist()
+		fold_subjects = [subjects[i::n_folds] for i in range(n_folds)]
+		test_subjects = fold_subjects.pop(fold)
+		remain = [sub for fold_subs in fold_subjects for sub in fold_subs]
+		n_train = int(round(len(remain) * train_size / (train_size + valid_size)))
+		train_subjects, valid_subjects = random_split(remain, [n_train, len(remain) - n_train], generator)
+		train_index = [idx for sub in train_subjects for idx in np.where(self.groups == sub)[0].tolist()]
+		valid_index = [idx for sub in valid_subjects for idx in np.where(self.groups == sub)[0].tolist()]
+		test_index = [idx for sub in test_subjects for idx in np.where(self.groups == sub)[0].tolist()]
+		return train_index, valid_index, test_index
+
 	def _within_subject_split(self, sizes, generator):
 		"""Splits data within each subject."""
 		indexes = []
@@ -510,6 +524,25 @@ class EpochedDataset:
 			indexes.append(random_split(group, sizes, generator))
 		indexes = zip(*[random_split(group, sizes, generator) for group in index_groups])
 		return tuple(sum(map(list, index), []) for index in indexes)
+
+	def _within_subject_cv_split(self, n_folds, fold, train_size, valid_size, generator):
+		"""Trial-level K-fold split: every subject has trials in train, valid and test."""
+		index_groups = [[] for _ in range(self.n_subjects)]
+		for index, group in enumerate(self.groups):
+			index_groups[group].append(index)
+		test_index = []
+		train_index = []
+		valid_index = []
+		for group in index_groups:
+			perm = torch.randperm(len(group), generator=generator).tolist()
+			buckets = [perm[i::n_folds] for i in range(n_folds)]
+			test_index.extend(group[p] for p in buckets[fold])
+			remain = [p for i in range(n_folds) if i != fold for p in buckets[i]]
+			n_train = int(round(len(remain) * train_size / (train_size + valid_size)))
+			train_part, valid_part = random_split(remain, [n_train, len(remain) - n_train], generator)
+			train_index.extend(group[p] for p in train_part)
+			valid_index.extend(group[p] for p in valid_part)
+		return train_index, valid_index, test_index
 
 	def split_data(self, train_size: float = None, valid_size: float = None, test_size: float = None):
 		"""
@@ -546,6 +579,38 @@ class EpochedDataset:
 			return self._within_subject_split(sizes, generator)
 		else:
 			return random_split(np.arange(len(self)), sizes, generator)
+
+	def split_data_cv(self, fold: int, n_folds: int = 5, train_size: float = None, valid_size: float = None):
+		"""
+		Splits data into training, validation, and test sets for one fold of K-fold cross-validation.
+
+		Parameters
+		----------
+		fold : int
+		    The fold to return (0-indexed).
+		n_folds : int, optional
+		    Number of folds. Defaults to 5.
+		train_size : float, optional
+		    Train set ratio relative to train+valid.
+		valid_size : float, optional
+		    Valid set ratio relative to train+valid.
+
+		Returns
+		-------
+		tuple
+		    Indices for the (train, valid, test) sets of the requested fold.
+		"""
+		assert 0 <= fold < n_folds, f'fold must be between 0 and {n_folds - 1}'
+		if train_size is None:
+			train_size = self.split_sizes[0]
+		if valid_size is None:
+			valid_size = self.split_sizes[1]
+
+		generator = torch.Generator().manual_seed(self.random_state)
+		if self.lso:
+			return self._leave_subjects_out_cv_split(n_folds, fold, train_size, valid_size, generator)
+		else:
+			return self._within_subject_cv_split(n_folds, fold, train_size, valid_size, generator)
 
 	def torchDataset(self, index):
 		"""Returns a Torch dataset instance of the torch Dataset class for the given index."""
