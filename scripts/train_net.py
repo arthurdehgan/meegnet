@@ -21,8 +21,9 @@ if __name__ == '__main__':
 	save_config(vars(args), args.config)
 
 	# script_path = os.getcwd()
-	# config_path = os.path.join(script_path, "../default_values.ini")
-	config_path = '/home/kikuko/meegnet/default_values.ini'
+	config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../default_values.ini')
+	if not os.path.exists(config_path):
+		config_path = '/home/kikuko/meegnet/default_values.ini'
 	default_values = configparser.ConfigParser()
 	assert os.path.exists(config_path), 'default_values.ini not found'
 	default_values.read(config_path)
@@ -87,10 +88,10 @@ if __name__ == '__main__':
 			prepare_logging('training', args, LOG, fold)
 
 		LOG.info('Training model:')
+		model_name = name + (f'_{train_sub}_fold{fold}' if fold is not None else f'_{train_sub}')
 		my_model = Model(
-			name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
+			model_name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
 		)
-		my_model.name = my_model.name + (f'_{train_sub}_fold{fold}' if fold is not None else f'_{train_sub}')
 
 		LOG.info(my_model.name)
 		LOG.info(my_model.net)
