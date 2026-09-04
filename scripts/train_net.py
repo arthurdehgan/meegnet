@@ -106,6 +106,7 @@ if __name__ == '__main__':
 		#####################
 
 		test_loss, test_acc = my_model.test(dataset, fold=fold)
+		my_model.tracker.set_test_metrics(test_loss, test_acc)
 		cv_accuracies.append(test_acc)
 
 		if args.crossval:

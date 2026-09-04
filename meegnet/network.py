@@ -1013,6 +1013,9 @@ class Model:
 		return valid_loss, valid_acc
 
 	def test(self, dataset, fold: int = None):
+		# Restore the best checkpoint (early-stopped epoch) before evaluating on the test set.
+		if os.path.exists(self.tracker.model_path):
+			self.load()
 		if fold is None:
 			_, _, test_index = dataset.split_data()
 		else:
@@ -1130,6 +1133,7 @@ class TrainingTracker:
 			'validation_accuracy': 0,
 			'epoch': 0,
 		}
+		self.test = {'test_loss': float('nan'), 'test_accuracy': float('nan')}
 		self.patience_state = 0
 		self.save_path = save_path
 		self.name = name
@@ -1166,14 +1170,28 @@ class TrainingTracker:
 			checkpoint = {'state_dict': net.state_dict(), 'optimizer': optimizer.state_dict()}
 			self.save(checkpoint)
 
-	def save(self, checkpoint) -> None:
-		"""Save model to file."""
+	def set_test_metrics(self, test_loss: float, test_accuracy: float) -> None:
+		"""Store test metrics and rewrite the .mat summary (leaves the .pt checkpoint untouched)."""
+		self.test['test_loss'] = test_loss
+		self.test['test_accuracy'] = test_accuracy
+		self.save_mat()
+
+	def save_mat(self) -> None:
+		"""Save training summary (.mat) only, without the network checkpoint."""
 		mat_path = self.model_path[:-2] + 'mat'
 		try:
-			torch.save(checkpoint, self.model_path)
 			save_dict = {key: value for key, value in self.progress.items()}
 			save_dict.update({key: value for key, value in self.best.items()})
+			save_dict.update({key: value for key, value in self.test.items()})
 			savemat(mat_path, save_dict)
+		except OSError:
+			LOG.error(f'Error saving model summary to file: {mat_path}')
+
+	def save(self, checkpoint) -> None:
+		"""Save model to file."""
+		try:
+			torch.save(checkpoint, self.model_path)
+			self.save_mat()
 		except OSError:
 			LOG.error(f'Error saving model to file: {self.model_path}')
 
@@ -1184,6 +1202,8 @@ class TrainingTracker:
 				self.progress[key] = np.array(value).squeeze()
 			elif key in self.best.keys():
 				self.best[key] = np.array(value).squeeze()
+			elif key in self.test:
+				self.test[key] = float(np.array(value).squeeze())
 
 	def plot_metric(self, metric_type: str, option: str = 'both', early_stop: bool = True):
 		assert option in ['both', 'train', 'valid']
