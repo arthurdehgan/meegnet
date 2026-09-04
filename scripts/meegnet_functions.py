@@ -34,13 +34,18 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 	return dataset
 
 
-def prepare_logging(name, args, LOG, fold=None):
-	log_name = f'{args.model_name}_{args.seed}_{args.sensors}'
+def prepare_logging(name, args, LOG, fold=None, *, model_name=None):
+	"""Sets up logging to `{model_name}[_fold{N}]_{name}.log` inside args.save_path.
+
+	`name` is the log type suffix (e.g. 'training', 'saliencies').
+	`model_name` should be the base model name as built by meegnet.parsing.get_model_name.
+	"""
+	log_name = model_name if model_name is not None else f'{args.model_name}_{args.seed}_{args.sensors}'
 	if fold is not None:
-		log_name += f'_fold{args.fold}'
+		log_name += f'_fold{fold}'
 	log_name += f'_{name}.log'
 	log_file = os.path.join(args.save_path, log_name)
-	logging.basicConfig(filename=log_file, filemode='a')
+	logging.basicConfig(filename=log_file, filemode='a', force=True)
 	LOG.info(f'Starting logging in {log_file}')
 
 
@@ -67,18 +72,3 @@ def get_input_size(args, default_values):
 		if args.flat
 		else (n_channels // int(default_values['N_CHANNELS_MAG']), int(default_values['N_CHANNELS_MAG']), trial_length)
 	)
-
-
-def get_name(args):
-	name = f'{args.model_name}_{args.net_option}_{args.seed}_{args.sensors}'
-	suffixes = ''
-	if args.net_option == 'custom_net':
-		if args.batchnorm:
-			suffixes += '_BN'
-		if args.maxpool != 0:
-			suffixes += f'_maxpool{args.maxpool}'
-
-		name += f'_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}'
-		name += suffixes
-
-	return name

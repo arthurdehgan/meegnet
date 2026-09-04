@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 import logging
 from mne.viz import plot_topomap
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.network import Model
-from meegnet_functions import load_single_subject, prepare_logging, get_name, get_input_size, load_info
+from meegnet_functions import load_single_subject, prepare_logging, get_input_size, load_info
 
 
 LOG = logging.getLogger('meegnet')
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 		assert args.datatype != 'rest', 'datatype must be set to passive in order to run event classification'
 
 	input_size = get_input_size(args)
-	name = get_name(args)
+	name = get_model_name(args)
 
 	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 	if args.clf_type == 'subclf':
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 	######################
 
 	if args.log:
-		prepare_logging('filter_computations', args, LOG, fold)
+		prepare_logging('filter_computations', args, LOG, fold, model_name=name)
 
 	##############################
 	### PREPARING SAVE FOLDERS ###

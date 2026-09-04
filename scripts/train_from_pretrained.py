@@ -4,9 +4,9 @@ import configparser
 import numpy as np
 from meegnet.dataloaders import EpochedDataset, ContinuousDataset
 from torch.nn import MSELoss
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.network import Model
-from meegnet_functions import get_name, get_input_size, prepare_logging
+from meegnet_functions import get_input_size, prepare_logging
 
 LOG = logging.getLogger('meegnet')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     fold = None if args.fold == -1 else int(args.fold)
 
     input_size = get_input_size(args, default_values)
-    name = get_name(args)
+    name = get_model_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     ######################
 
     if args.log:
-        prepare_logging('training', args, LOG, fold)
+        prepare_logging('training', args, LOG, fold, model_name=name)
 
     ####################
     ### LOADING DATA ###
@@ -86,8 +86,6 @@ if __name__ == '__main__':
     ### TRAINING MODEL ###
     ######################
 
-    train_sub = int(dataset.n_subjects * args.train_size)
-    my_model.name = my_model.name + f"_{train_sub}"
     LOG.info(my_model.name)
     LOG.info(my_model.net)
 

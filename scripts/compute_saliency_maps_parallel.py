@@ -3,11 +3,11 @@ import multiprocessing
 import os
 import logging
 import pandas as pd
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.network import Model
 from meegnet.dataloaders import Dataset, RestDataset
 from meegnet.viz import compute_saliency_maps
-from meegnet_functions import get_input_size, get_name, prepare_logging
+from meegnet_functions import get_input_size, prepare_logging
 
 
 LOG = logging.getLogger('meegnet')
@@ -77,7 +77,7 @@ if __name__ == '__main__':
 		labels = []
 
 	input_size = get_input_size(args)
-	name = get_name(args)
+	name = get_model_name(args)
 
 	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 	if args.clf_type == 'subclf':
@@ -94,7 +94,7 @@ if __name__ == '__main__':
 	######################
 
 	if args.log:
-		prepare_logging('saliencies', args, LOG, fold)
+		prepare_logging('saliencies', args, LOG, fold, model_name=name)
 
 	##############################
 	### PREPARING SAVE FOLDERS ###

@@ -5,9 +5,9 @@ import logging
 from collections import defaultdict
 import numpy as np
 import pandas as pd
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.viz import generate_saliency_figure
-from meegnet_functions import prepare_logging, get_name, load_info
+from meegnet_functions import prepare_logging, load_info
 
 
 LOG = logging.getLogger('meegnet')
@@ -51,7 +51,7 @@ if __name__ == '__main__':
 	else:
 		labels = []
 
-	name = get_name(args)
+	name = get_model_name(args)
 
 	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 	if args.clf_type == 'subclf':
@@ -68,7 +68,7 @@ if __name__ == '__main__':
 	######################
 
 	if args.log:
-		prepare_logging('gradcam_computations', args, LOG, fold)
+		prepare_logging('gradcam_computations', args, LOG, fold, model_name=name)
 
 	##############################
 	### PREPARING SAVE FOLDERS ###

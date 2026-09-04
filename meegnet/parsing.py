@@ -38,6 +38,25 @@ def save_config(args: dict, config_filepath: str = 'config.ini'):
 		raise
 
 
+def get_model_name(args) -> str:
+	"""Builds the model name used for saving/loading .pt, .mat and log files.
+
+	Format: `{model_name}_{net_option}_{max_subj}_{seed}_{sensors}[_custom_net extras]`
+	"""
+	name = f'{args.model_name}_{args.net_option}_{args.max_subj}_{args.seed}_{args.sensors}'
+	suffixes = ''
+	if args.net_option == 'custom_net':
+		if args.batchnorm:
+			suffixes += '_BN'
+		if args.maxpool != 0:
+			suffixes += f'_maxpool{args.maxpool}'
+
+		name += f'_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}'
+		name += suffixes
+
+	return name
+
+
 parser.add('-c', '--config', is_config_file=True, default='../default.ini', help='config file path')
 parser.add(
 	'--testsplit',

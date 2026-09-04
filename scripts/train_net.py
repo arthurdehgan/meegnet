@@ -4,9 +4,9 @@ import configparser
 import numpy as np
 from meegnet.dataloaders import EpochedDataset, ContinuousDataset
 from torch.nn import MSELoss
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.network import Model
-from meegnet_functions import get_name, get_input_size, prepare_logging
+from meegnet_functions import get_input_size, prepare_logging
 
 LOG = logging.getLogger('meegnet')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -33,7 +33,7 @@ if __name__ == '__main__':
 	folds = list(range(int(args.n_folds))) if args.crossval else [fold]
 
 	input_size = get_input_size(args, default_values)
-	name = get_name(args)
+	name = get_model_name(args)
 
 	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 
@@ -41,8 +41,8 @@ if __name__ == '__main__':
 	### LOGGING CONFIG ###
 	######################
 
-	if args.log and not args.crossval:
-		prepare_logging('training', args, LOG, fold)
+	if args.log:
+		prepare_logging('training', args, LOG, None if args.crossval else fold, model_name=name)
 
 	####################
 	### LOADING DATA ###
@@ -78,17 +78,14 @@ if __name__ == '__main__':
 	### LOADING MODEL ###
 	#####################
 
-	train_sub = int(dataset.n_subjects * args.train_size)
 	n_folds = len(folds)
 	cv_accuracies = []
 
 	for fold in folds:
 		if args.log and args.crossval:
-			args.fold = fold
-			prepare_logging('training', args, LOG, fold)
-
+			prepare_logging('training', args, LOG, fold, model_name=name)
 		LOG.info('Training model:')
-		model_name = name + (f'_{train_sub}_fold{fold}' if fold is not None else f'_{train_sub}')
+		model_name = name + (f'_fold{fold}' if fold is not None else '')
 		my_model = Model(
 			model_name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
 		)

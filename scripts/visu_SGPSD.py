@@ -12,7 +12,7 @@ from mne.viz import plot_topomap
 
 # from scipy.signal import welch
 from meegnet_functions import load_single_subject
-from meegnet.parsing import parser, save_config
+from meegnet.parsing import parser, save_config, get_model_name
 from meegnet.utils import load_checkpoint, compute_psd, cuda_check
 from meegnet.dataloaders import BANDS, load_data
 from pytorch_grad_cam import GuidedBackpropReLUModel
@@ -132,16 +132,7 @@ if __name__ == "__main__":
         )
     )
 
-    name = f"{args.clf_type}_{args.model_name}_{args.seed}_{args.sensors}"
-    suffixes = ""
-    if args.net_option == "custom_net":
-        if args.batchnorm:
-            suffixes += "_BN"
-        if args.maxpool != 0:
-            suffixes += f"_maxpool{args.maxpool}"
-
-        name += f"_dropout{args.dropout}_filter{args.filters}_nchan{args.nchan}_lin{args.linear}_depth{args.hlayers}"
-        name += suffixes
+    name = get_model_name(args)
 
     n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
     if args.clf_type == "subclf":
@@ -153,7 +144,6 @@ if __name__ == "__main__":
         n_outputs = 2
         lso = True
 
-    )
     save_config(vars(args), args.config)
     with open("default_values.toml", "r") as f:
         default_values = toml.load(f)
@@ -163,9 +153,9 @@ if __name__ == "__main__":
     ######################
 
     if args.log:
-        log_name = f"{args.model_name}_{args.seed}_{args.sensors}"
+        log_name = name
         if fold is not None:
-            log_name += f"_fold{args.fold}"
+            log_name += f"_fold{fold}"
         log_name += "_filter_computations.log"
         log_file = os.path.join(args.save_path, log_name)
         logging.basicConfig(filename=log_file, filemode="a")
