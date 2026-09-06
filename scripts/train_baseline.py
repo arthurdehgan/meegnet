@@ -102,7 +102,12 @@ if __name__ == '__main__':
 
     if args.epoched:
         dataset = EpochedDataset(
-            sfreq=args.sfreq, n_subjects=args.max_subj, n_samples=n_samples, sensortype=args.sensors, lso=args.lso
+            sfreq=args.sfreq,
+            n_subjects=args.max_subj,
+            n_samples=n_samples,
+            split_sizes=(0.9, 0.1, 0),  # test_size=0: no holdout, legacy behaviour for the baseline
+            sensortype=args.sensors,
+            lso=args.lso,
         )
     else:
         dataset = ContinuousDataset(
@@ -111,6 +116,7 @@ if __name__ == '__main__':
             sfreq=args.sfreq,
             n_subjects=args.max_subj,
             n_samples=n_samples,
+            split_sizes=(0.9, 0.1, 0),  # test_size=0: no holdout, legacy behaviour for the baseline
             sensortype=args.sensors,
             lso=args.lso,
         )

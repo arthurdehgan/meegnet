@@ -1016,12 +1016,10 @@ class Model:
 		# Restore the best checkpoint (early-stopped epoch) before evaluating on the test set.
 		if os.path.exists(self.tracker.model_path):
 			self.load()
-		if fold is None:
-			_, _, test_index = dataset.split_data()
-		else:
-			_, _, test_index = dataset.split_data_cv(fold, n_folds=self.n_folds)
+		# fold kept for backwards compatibility: the test set is now the subject holdout
+		# selected at load time (see dataset preload) and is identical for every fold.
 		test_loader = DataLoader(
-			dataset.torchDataset(test_index),
+			dataset.testDataset(),
 			batch_size=self.batch_size,
 			num_workers=self.num_workers,
 			shuffle=True,

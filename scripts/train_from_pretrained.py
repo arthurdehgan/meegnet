@@ -97,5 +97,6 @@ if __name__ == '__main__':
 
     # LOG.info("Evaluating model:")
     # evaluate(fold, datasets, args.net_option, args=args)
+    # fold kept for BC: Model.test now evaluates the subject holdout from preload.
     my_model.test(dataset)
 

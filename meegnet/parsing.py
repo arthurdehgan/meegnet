@@ -110,7 +110,13 @@ parser.add('--hlayers', type=int, default=1, help='number of hidden layers')
 parser.add('--patience', type=int, default=20, help='patience for early stopping')
 parser.add('--model-name', type=str, default='net', help='Name of the network for file_save')
 parser.add('--num-workers', type=int, default=4, help='number of workers to load data while gpu is processing')
-parser.add('--train-size', type=float, default=0.8, help='The proportion of data to use in the train set')
+parser.add(
+	'--train-size',
+	type=float,
+	default=0.7,
+	help='Proportion of the total pool used for the train set. The test holdout is 10%% of the total pool and '
+	'validation takes the remainder (default 0.7 -> 7/9 train, 2/9 valid of the non-test pool).',
+)
 parser.add(
 	'--model-path', type=str, default=None, help='The default path to save all computed data, model and visualisations.'
 )

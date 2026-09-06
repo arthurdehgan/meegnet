@@ -105,6 +105,8 @@ if __name__ == '__main__':
 		### TESTING MODEL ###
 		#####################
 
+		# fold kept for Compatibility: Model.test now evaluates the subject holdout from preload
+		# so cross-validation folds is ignored here.
 		test_loss, test_acc = my_model.test(dataset, fold=fold)
 		my_model.tracker.set_test_metrics(test_loss, test_acc)
 		cv_accuracies.append(test_acc)
