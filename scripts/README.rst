@@ -59,6 +59,25 @@ Config files in this folder control model, sampling, and output paths:
 * ``eventclf.ini`` for event classification.
 * ``subclf.ini`` for subject classification.
 
+Subject Size Experiment
+=======================
+
+To reproduce the effect of training set size on performance, train one model per subject count.
+Run from ``scripts/``:
+
+.. code-block:: bash
+
+   for max_subj in 25 50 100 150 200 300 450; do
+     poetry run python train_net.py \
+       --config eventclf.ini \
+       --save-path /workspace/camcan/eventclf \
+       --model-name "eventclf_meegnet_42_ALL_${max_subj}" \
+       --max-subj "$max_subj"
+   done
+
+Each run produces a separate model under ``--save-path``, named with the subject count.
+Compare test metrics across runs to reproduce the subject-size scaling curve from the paper.
+
 Expected Outputs
 ================
 
