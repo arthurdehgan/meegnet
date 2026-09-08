@@ -52,7 +52,7 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
 	row = [sub, info]
 	with open(df_path, 'r') as f:
 		df = pd.read_csv(f, index_col=0)
-	df = df._append({key: val for key, val in zip(df.columns, row)}, ignore_index=True)
+	df = pd.concat([df, pd.DataFrame([{key: val for key, val in zip(df.columns, row)}])], ignore_index=True)
 	with open(df_path, 'w') as f:
 		df.to_csv(f)
 
@@ -200,8 +200,8 @@ def load_and_process(sub_folder: str, sfreq: int, data_path: str, save_path: str
 	rest_labels = ['rest'] * n_epochs
 	row.append(labels + rest_labels)
 	if sub not in good_subs_df['sub'].tolist():
-		good_subs_df = good_subs_df._append(
-			{key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
+		good_subs_df = pd.concat(
+			[good_subs_df, pd.DataFrame([{key: val for key, val in zip(good_subs_df.columns, row)}])], ignore_index=True
 		)
 		with open(good_csv_path, 'w') as f:
 			good_subs_df.to_csv(f)

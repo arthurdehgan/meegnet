@@ -7,175 +7,185 @@ websitde in order to get access (https://camcan-archive.mrc-cbu.cam.ac.uk/dataac
 This script assumes a copy of the cc700 and dataman folders to a data path parsed
 through the argparser.
 
+Parallel model: a multiprocessing.Pool of worker processes, each one loading,
+resampling and saving a whole subject before moving to the next. No shared queue,
+no giant-array pickling across processes, no producer/consumer threads. Processing
+is idempotent: subjects already saved (present in participants_info.csv and whose
+.npy exists) are skipped, so a rerun resumes where it stopped. Use --max-procs to
+cap worker count (raw data on external drives and RAM usage scale with it).
+
 example on how to run the script:
 python prepare_data_parallel.py --config="config.ini" --raw-path="/home/user/data/camcan/" --save-path="/home/user/data"
 """
 
-import os
+import fcntl
 import logging
+import multiprocessing as mp
+import os
+
 import mne
-import pandas as pd
 import numpy as np
-import threading
-import multiprocessing
+import pandas as pd
+
 from meegnet.parsing import parser, save_config
-from prepare_data import bad_subj_found
 
 LOG = logging.getLogger('meegnet')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
-# Define the maximum number of threads that can access the disk at once
-MAX_DISK_READERS = 1
-# Create a semaphore with the maximum number of readers
-disk_semaphore = threading.Semaphore(MAX_DISK_READERS)
+
+def _good_csv_columns(dataset):
+	columns = ['sub', 'age', 'label', 'hand', 'Coil', 'MT_TR']
+	if dataset != 'rest':
+		columns.append('event_labels')
+	return columns
 
 
-def process_data(args):
-	global disk_semaphore
-	q, sfreq, datatype = args
-	while True:
-		data, filepath, stop = q.get()
-		if stop is None:
-			break
-		elif data is not None:
-			data = data.resample(sfreq=sfreq)
-			data = np.array(
-				[data.get_data(picks='mag'), data.get_data(picks='planar1'), data.get_data(picks='planar2')]
-			)
-			if datatype == 'passive':
-				data = data.swapaxes(0, 1)
-			np.save(filepath, data)
-		else:
-			continue
+def _read_csv(path: str, columns):
+	try:
+		if not os.path.exists(path) or os.path.getsize(path) == 0:
+			return pd.DataFrame({}, columns=columns)
+		return pd.read_csv(path, index_col=0)
+	except (pd.errors.EmptyDataError, pd.errors.ParserError):
+		return pd.DataFrame({}, columns=columns)
 
 
-def load_data(q, sub_folder: str, data_path: str, save_path: str, datatype: str = 'rest', epoched: bool = False):
-	global disk_semaphore
-	with disk_semaphore:
-		if datatype == 'rest':
+def _append_bad_subject(save_path: str, sub: str, info: str, message: str):
+	LOG.info(message)
+	path = os.path.join(save_path, 'bad_participants_info.csv')
+	columns = ['sub', 'error']
+	with open(path, 'a+') as fh:
+		fcntl.flock(fh, fcntl.LOCK_EX)
+		df = _read_csv(path, columns)
+		fh.seek(0)
+		fh.truncate()
+		df = pd.concat([df, pd.DataFrame([{key: val for key, val in zip(df.columns, [sub, info])}])], ignore_index=True)
+		df.to_csv(fh)
+
+
+def _append_good_subject(save_path: str, dataset: str, sub: str, row):
+	path = os.path.join(save_path, 'participants_info.csv')
+	columns = _good_csv_columns(dataset)
+	with open(path, 'a+') as fh:
+		fcntl.flock(fh, fcntl.LOCK_EX)
+		df = _read_csv(path, columns)
+		cached_sub = df['sub'].tolist() if 'sub' in df.columns else []
+		if sub in cached_sub:
+			return
+		fh.seek(0)
+		fh.truncate()
+		df = pd.concat([df, pd.DataFrame([{key: val for key, val in zip(df.columns, row)}])], ignore_index=True)
+		df.to_csv(fh)
+
+
+def _already_processed(save_path: str, dataset: str, sub: str, filepath: str) -> bool:
+	bad_csv_path = os.path.join(save_path, 'bad_participants_info.csv')
+	if sub in _read_csv(bad_csv_path, ['sub', 'error'])['sub'].tolist():
+		return True
+	good_csv_path = os.path.join(save_path, 'participants_info.csv')
+	return sub in _read_csv(good_csv_path, _good_csv_columns(dataset))['sub'].tolist() and os.path.exists(filepath)
+
+
+def _process_one_subject(job):
+	sub_folder, data_path, save_path, dataset, epoched, sfreq = job
+	result = {'sub_folder': sub_folder, 'status': 'done', 'info': ''}
+	try:
+		if dataset == 'rest':
 			assert not epoched, "Can't load epoched resting state data as there are no events for it"
-		row = None
 
 		data_filepath = os.path.join(
 			data_path,
 			'cc700/meg/pipeline/release005/BIDSsep/',
-			f'derivatives_{datatype}',
+			f'derivatives_{dataset}',
 			'aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/',
 		)
 		user = os.listdir(os.path.join(data_path, 'dataman/useraccess/processed/'))[0]
 		source_csv_path = os.path.join(data_path, f'dataman/useraccess/processed/{user}/standard_data.csv')
-		with open(source_csv_path, 'r') as f:
-			df = pd.read_csv(f)
+		df = pd.read_csv(source_csv_path)
 
 		fif_file = ''
 		file_list = os.listdir(os.path.join(data_filepath, sub_folder))
 		while not fif_file.endswith('.fif'):
 			fif_file = os.path.join(data_filepath, sub_folder, file_list.pop())
-
 		sub = sub_folder.split('-')[1]
+
 		if epoched:
-			assert args.datatype != 'rest', 'Cannot generate epochs for resting-state data'
-			filename = f'{datatype}_{sub}_epoched.npy'
+			assert dataset != 'rest', 'Cannot generate epochs for resting-state data'
+			filename = f'{sub}_{dataset}_epoched.npy'
 		else:
-			filename = f'{datatype}_{sub}.npy'
-		out_path = os.path.join(args.save_path, f'downsampled_{args.sfreq}')
-		if not os.path.exists(out_path):
-			os.makedirs(out_path)
+			filename = f'{sub}_{dataset}.npy'
+		out_path = os.path.join(save_path, f'downsampled_{sfreq}')
+		os.makedirs(out_path, exist_ok=True)
 		filepath = os.path.join(out_path, filename)
 
-		bad_csv_path = os.path.join(save_path, 'bad_participants_info.csv')
-		if os.path.exists(bad_csv_path):
-			with open(bad_csv_path, 'r') as f:
-				bad_subs_df = pd.read_csv(f, index_col=0)
-		else:
-			bad_subs_df = pd.DataFrame({}, columns=['sub', 'error'])
-			with open(bad_csv_path, 'w') as f:
-				bad_subs_df.to_csv(f)
-
-		good_csv_path = os.path.join(save_path, 'participants_info.csv')
-		columns = ['sub', 'age', 'label', 'hand', 'Coil', 'MT_TR']
-		if datatype != 'rest':
-			columns.append('event_labels')
-		if os.path.exists(good_csv_path):
-			with open(good_csv_path, 'r') as f:
-				good_subs_df = pd.read_csv(f, index_col=0)
-		else:
-			good_subs_df = pd.DataFrame({}, columns=columns)
-			with open(good_csv_path, 'w') as f:
-				good_subs_df.to_csv(f)
-
-		if sub in bad_subs_df['sub'].tolist():
-			q.put((None, None, 0))
-			return
-		elif sub in good_subs_df['sub'].tolist() and os.path.exists(filepath):
-			q.put((None, None, 0))
-			return
+		if _already_processed(save_path, dataset, sub, filepath):
+			result['status'] = 'skipped'
+			return result
 
 		raw = mne.io.read_raw_fif(fif_file, preload=True, verbose=False)
 		bads = raw.info['bads']
-		if bads == []:
-			if epoched and datatype in ('passive', 'smt'):  # datatype != "rest"
-				try:
-					events = mne.find_events(raw)
-				except ValueError as e:
-					bad_subj_found(
-						sub=sub,
-						info='wrong event timings',
-						message=f'{sub} could not be used because of {e}',
-						df_path=bad_csv_path,
-					)
-					q.put((None, None, 0))
-					return
-				unique_events = set(events[:, -1])
-				if unique_events == {6, 7, 8, 9}:
-					event_dict = {6: 'auditory1', 7: 'auditory2', 8: 'auditory3', 9: 'visual'}
-					labels = [event_dict[event] for event in events[:, -1]]
-				else:
-					bad_subj_found(
-						sub=sub,
-						info=f'wrong event found: {unique_events}',
-						message=f'a different event has been found in {sub}: {unique_events}',
-						df_path=bad_csv_path,
-					)
-					q.put((None, None, 0))
-					return
-				data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
+		if bads != []:
+			_append_bad_subject(save_path, sub, 'bad channels', f'{sub} was dropped because of bad channels {bads}')
+			result['status'] = 'bad'
+			return result
+		if epoched and dataset == 'passive':
+			try:
+				events = mne.find_events(raw)
+			except ValueError as e:
+				_append_bad_subject(save_path, sub, 'wrong event timings', f'{sub} could not be used because of {e}')
+				result['status'] = 'bad'
+				return result
+			unique_events = set(events[:, -1])
+			if unique_events == {6, 7, 8, 9}:
+				event_dict = {6: 'auditory1', 7: 'auditory2', 8: 'auditory3', 9: 'visual'}
+				labels = [event_dict[event] for event in events[:, -1]]
 			else:
-				data = raw
-
-			row = df[df['CCID'] == sub].values.tolist()[0]
-			if datatype in ('passive', 'smt'):
-				row.append(labels)
+				_append_bad_subject(
+					save_path,
+					sub,
+					f'wrong event found: {unique_events}',
+					f'a different event has been found in {sub}: {unique_events}',
+				)
+				result['status'] = 'bad'
+				return result
+			data = mne.Epochs(raw, events, tmin=-0.15, tmax=0.65, preload=True)
 		else:
-			bad_subj_found(
-				sub=sub,
-				info='bad channels',
-				message=f'{sub} was dropped because of bad channels {bads}',
-				df_path=bad_csv_path,
-			)
-			q.put((None, None, 0))
-			return
+			data = raw
 
-		if sub not in good_subs_df['sub'].tolist():
-			good_subs_df = good_subs_df._append(
-				{key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
-			)
-			with open(good_csv_path, 'w') as f:
-				good_subs_df.to_csv(f)
-		q.put((data, filepath, 1))
-		return
+		data = data.resample(sfreq=sfreq)
+		data = np.array([data.get_data(picks='mag'), data.get_data(picks='planar1'), data.get_data(picks='planar2')])
+		if dataset == 'passive':
+			data = data.swapaxes(0, 1)
+		np.save(filepath, data)
+
+		row = df[df['CCID'] == sub].values.tolist()[0]
+		if dataset == 'passive':
+			row.append(labels)
+		_append_good_subject(save_path, dataset, sub, row)
+		return result
+	except Exception as e:  # noqa: BLE001 - one bad subject must not kill the pool
+		LOG.error('Failed %s: %s: %s', sub_folder, type(e).__name__, e)
+		result['status'] = 'error'
+		result['info'] = f'{type(e).__name__}: {e}'
+		return result
 
 
 if __name__ == '__main__':
+	parser.add(
+		'--max-procs',
+		type=int,
+		default=None,
+		help='Number of parallel workers (default: min(4, os.cpu_count())). Cap it when reading from slow '
+		'external drives or when RAM is limited.',
+	)
 	args = parser.parse_args()
 	save_config(vars(args), args.config)
 
 	if not os.path.exists(args.save_path):
 		os.makedirs(args.save_path)
 
-	################
-	# Starting log #
-	################
+	######################
+	### LOGGING CONFIG ###
+	######################
 
 	if args.log:
 		log_file = os.path.join(args.save_path, 'prepare_data.log')
@@ -200,45 +210,21 @@ if __name__ == '__main__':
 	data_filepath = os.path.join(
 		args.raw_path,
 		'cc700/meg/pipeline/release005/BIDSsep/',
-		f'derivatives_{args.datatype}',
+		f'derivatives_{args.dataset}',
 		'aa/AA_movecomp_transdef/aamod_meg_maxfilt_00003/',
 	)
-	subj_count = len(os.listdir(data_filepath))
+	subjects = sorted(os.listdir(data_filepath))
+	subj_count = len(subjects)
 
 	#######################
-	### PRODUCE CONSUME ###
+	### PARALLEL POOL   ###
 	#######################
 
-	# Define the maximum size of the queue
-	MAX_QUEUE_SIZE = 1  # Adjust this value based on your memory constraints
-	NUM_CONSUMERS = 1
-
-	# Create a bounded queue with the maximum size
-	q = multiprocessing.Manager().Queue(maxsize=MAX_QUEUE_SIZE)
-
-	# Start the producer threads
-	threads = []
-	LOG.info('Starting the producer threads...')
-	for sub in os.listdir(data_filepath):
-		t = threading.Thread(
-			target=load_data, args=(q, sub, args.raw_path, args.save_path, args.datatype, args.epoched)
-		)
-		t.start()
-		threads.append(t)
-
-	# Start the consumer processes
-	LOG.info('Starting consumer threads...')
-	pool = multiprocessing.Pool(processes=NUM_CONSUMERS)
-	pool.map(process_data, [(q, args.sfreq, args.datatype)] * NUM_CONSUMERS)
-
-	# Wait for all producer threads to finish
-	for t in threads:
-		t.join()
+	n_workers = args.max_procs or min(4, os.cpu_count() or 1)
+	n_workers = min(n_workers, subj_count)
+	LOG.info(f'Processing {subj_count} subjects with {n_workers} workers...')
+	jobs = [(sub, args.raw_path, args.save_path, args.dataset, args.epoched, args.sfreq) for sub in subjects]
+	with mp.Pool(processes=n_workers) as pool:
+		for res in pool.imap_unordered(_process_one_subject, jobs, chunksize=1):
+			LOG.info(f'Finished {res["sub_folder"]}: {res["status"]}' + (f' ({res["info"]})' if res['info'] else ''))
 	LOG.info('Processing done !')
-
-	# Signal the consumer processes to exit
-	for _ in range(NUM_CONSUMERS):
-		q.put((None, None, None))
-
-	pool.close()
-	pool.join()
