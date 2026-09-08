@@ -838,6 +838,7 @@ class Model:
 		fold: int = None,
 		batch_size: int = 128,
 		patience: int = 10,
+		min_epoch: int = 20,
 		max_epoch: int = None,
 		model_path: str = None,
 		early_stop: str = 'loss',
@@ -856,6 +857,9 @@ class Model:
 		    Batch size for training. Defaults to 128.
 		patience : int, optional
 		    Patience for early stopping. Defaults to 10.
+		min_epoch : int, optional
+		    Minimum number of epochs to train before early stopping can trigger. Defaults to 20.
+		    Ignored when continue_training is True.
 		max_epoch : int, optional
 		    Maximum number of epochs to train. Defaults to None.
 		model_path : str, optional
@@ -917,6 +921,7 @@ class Model:
 		LOG.info(f'Batch size: {batch_size}')
 		LOG.info(f'Learning rate: {self.lr}')
 		LOG.info(f'Patience: {patience}')
+		LOG.info(f'Minimum Epoch: {min_epoch if not continue_training else 0}')
 		if max_epoch is not None:
 			LOG.info(f'Maximum Epoch: {max_epoch}')
 
@@ -925,7 +930,9 @@ class Model:
 			epoch = self.tracker.best['epoch'] + 1
 			self.tracker.patience_state = 0
 
-		while self.tracker.patience_state < patience and (max_epoch is None or epoch < max_epoch):
+		while self.tracker.patience_state < patience or epoch < (min_epoch if not continue_training else 0):
+			if max_epoch is not None and epoch >= max_epoch:
+				break
 			self.train_epoch(epoch, trainloader, verbose=verbose)
 			train_loss, train_acc = self.evaluate(trainloader)
 			valid_loss, valid_acc = self.evaluate(validloader)

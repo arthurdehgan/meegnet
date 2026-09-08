@@ -99,7 +99,7 @@ if __name__ == '__main__':
 		### TRAINING MODEL ###
 		######################
 
-		my_model.train(dataset, fold=fold)
+		my_model.train(dataset, fold=fold, min_epoch=args.min_epoch)
 
 		#####################
 		### TESTING MODEL ###

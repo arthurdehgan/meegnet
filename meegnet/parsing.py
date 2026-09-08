@@ -108,6 +108,9 @@ parser.add('--log', action='store_true', help='stores all prints in a logfile in
 parser.add('--lr', type=float, default=0.00001, help='the starting learning rate of the optimizer')
 parser.add('--hlayers', type=int, default=1, help='number of hidden layers')
 parser.add('--patience', type=int, default=20, help='patience for early stopping')
+parser.add(
+	'--min-epoch', type=int, default=20, help='Minimum number of epochs to train before early stopping can trigger.'
+)
 parser.add('--model-name', type=str, default='net', help='Name of the network for file_save')
 parser.add('--num-workers', type=int, default=4, help='number of workers to load data while gpu is processing')
 parser.add(
