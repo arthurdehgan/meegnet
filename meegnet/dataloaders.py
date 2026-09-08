@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import random_split
 from scipy.stats import zscore
-from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedShuffleSplit
 from meegnet.utils import strip_string, stratified_sampling, string_to_int
 
 LOG = logging.getLogger('meegnet')
@@ -656,12 +656,69 @@ class EpochedDataset:
 			test_size = 0
 		assert sum((train_size, valid_size, test_size)) == 1, 'sum of data ratios must be equal to 1'
 
+	def _subject_labels(self):
+		"""Majority trial label per subject (subject index order 0..n_subjects-1)."""
+		labels = []
+		for sub in range(self.n_subjects):
+			trial_labels = self.targets[np.where(self.groups == sub)[0]].numpy()
+			values, counts = np.unique(trial_labels, return_counts=True)
+			labels.append(values[np.argmax(counts)])
+		return np.asarray(labels)
+
+	def _stratified_subject_split(self, sizes):
+		"""Stratified subject-whole split by each subject's majority trial label.
+
+		Keeps whole subjects per split. Splits off a test set first when sizes[2] > 0,
+		then a validation set from the remainder. Falls back to a plain random subject
+		split in _leave_subjects_out_split when sklearn cannot stratify (e.g. more
+		classes than members of a split, singleton classes).
+		"""
+		total = sum(sizes)
+		valid_frac = sizes[1] / total
+		test_frac = sizes[2] / total if len(sizes) > 2 else 0.0
+		subjects = np.arange(self.n_subjects)
+		labels = self._subject_labels()
+
+		if test_frac > 0:
+			n_test = round(self.n_subjects * test_frac)
+			sss = StratifiedShuffleSplit(n_splits=1, test_size=n_test, random_state=self.random_state)
+			rest_idx, test_idx = next(sss.split(subjects, labels))
+			rest_subjects = subjects[rest_idx]
+			rest_labels = labels[rest_idx]
+			test_subjects = subjects[test_idx]
+			n_rest = len(rest_subjects)
+			valid_frac_rest = sizes[1] / (sizes[0] + sizes[1])
+			n_valid = round(n_rest * valid_frac_rest)
+		else:
+			rest_subjects = subjects
+			rest_labels = labels
+			test_subjects = np.array([], dtype=int)
+			n_valid = round(self.n_subjects * valid_frac)
+
+		sss = StratifiedShuffleSplit(n_splits=1, test_size=n_valid, random_state=self.random_state)
+		train_idx, valid_idx = next(sss.split(rest_subjects, rest_labels))
+		train_subjects = rest_subjects[train_idx]
+		valid_subjects = rest_subjects[valid_idx]
+
+		return (
+			[idx for sub in train_subjects for idx in np.where(self.groups == sub)[0].tolist()],
+			[idx for sub in valid_subjects for idx in np.where(self.groups == sub)[0].tolist()],
+			[idx for sub in test_subjects for idx in np.where(self.groups == sub)[0].tolist()],
+		)
+
 	def _leave_subjects_out_split(self, sizes, generator):
-		"""Leaves subjects out split."""
-		indexes = [[], [], []]
-		for i, split in enumerate(random_split(np.arange(self.n_subjects), sizes, generator)):
-			indexes[i] = [idx for sub in split for idx in np.where(self.groups == sub)[0].tolist()]
-		return tuple(indexes)
+		"""Leaves subjects out split, stratified by subject labels when possible."""
+		try:
+			return self._stratified_subject_split(sizes)
+		except ValueError:
+			LOG.info(
+				'Subject-level stratification failed (too few subjects per class or class count too high); '
+				'using a random subject split.'
+			)
+			indexes = [[], [], []]
+			for i, split in enumerate(random_split(np.arange(self.n_subjects), sizes, generator)):
+				indexes[i] = [idx for sub in split for idx in np.where(self.groups == sub)[0].tolist()]
+			return tuple(indexes)
 
 	def _leave_subjects_out_cv_split(self, n_folds, fold, generator):
 		"""Subject-level K-fold split: fold subjects = validation, rest = training."""
