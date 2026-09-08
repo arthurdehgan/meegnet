@@ -50,7 +50,7 @@ def bad_subj_found(sub: str, info: str, message: str, df_path: str):
 	row = [sub, info]
 	with open(df_path, 'r') as f:
 		df = pd.read_csv(f, index_col=0)
-	df = df._append({key: val for key, val in zip(df.columns, row)}, ignore_index=True)
+	df = pd.concat([df, pd.DataFrame([{key: val for key, val in zip(df.columns, row)}])], ignore_index=True)
 	with open(df_path, 'w') as f:
 		df.to_csv(f)
 
@@ -64,7 +64,9 @@ def process_data(data, filepath, sfreq, dataset):
 		np.save(filepath, data)
 
 
-def load_data(sub_folder: str, data_path: str, save_path: str, dataset: str = 'rest', epoched: bool = False):
+def load_data(
+	sub_folder: str, data_path: str, save_path: str, dataset: str = 'rest', epoched: bool = False, sfreq: int = 500
+):
 	if dataset == 'rest':
 		assert not epoched, "Can't load epoched resting state data as there are no events for it"
 	row = None
@@ -87,11 +89,11 @@ def load_data(sub_folder: str, data_path: str, save_path: str, dataset: str = 'r
 
 	sub = sub_folder.split('-')[1]
 	if epoched:
-		assert args.dataset != 'rest', 'Cannot generate epochs for resting-state data'
+		assert dataset != 'rest', 'Cannot generate epochs for resting-state data'
 		filename = f'{sub}_{dataset}_epoched.npy'
 	else:
 		filename = f'{sub}_{dataset}.npy'
-	out_path = os.path.join(args.save_path, f'downsampled_{args.sfreq}')
+	out_path = os.path.join(save_path, f'downsampled_{sfreq}')
 	if not os.path.exists(out_path):
 		os.makedirs(out_path)
 	filepath = os.path.join(out_path, filename)
@@ -165,8 +167,8 @@ def load_data(sub_folder: str, data_path: str, save_path: str, dataset: str = 'r
 		return None, None
 
 	if sub not in good_subs_df['sub'].tolist():
-		good_subs_df = good_subs_df._append(
-			{key: val for key, val in zip(good_subs_df.columns, row)}, ignore_index=True
+		good_subs_df = pd.concat(
+			[good_subs_df, pd.DataFrame([{key: val for key, val in zip(good_subs_df.columns, row)}])], ignore_index=True
 		)
 		with open(good_csv_path, 'w') as f:
 			good_subs_df.to_csv(f)
@@ -217,5 +219,5 @@ if __name__ == '__main__':
 	##################################
 
 	for sub in os.listdir(data_filepath):
-		data, filepath = load_data(sub, args.raw_path, args.save_path, args.dataset, args.epoched)
+		data, filepath = load_data(sub, args.raw_path, args.save_path, args.dataset, args.epoched, args.sfreq)
 		process_data(data, filepath, args.sfreq, args.dataset)
