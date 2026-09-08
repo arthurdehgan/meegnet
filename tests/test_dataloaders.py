@@ -189,6 +189,42 @@ class TestSplitDataCV(unittest.TestCase):
         self.assertEqual(len(train_subjects & valid_subjects), 0)
         self.assertEqual(train_subjects | valid_subjects, set(range(20)))
 
+    def test_cv_folds_stratified_single_label_subjects(self):
+        # sexclf-like: each subject holds one label across all its trials
+        data = np.random.rand(40 * 10, 10, 500)
+        targets = np.repeat(np.arange(40) % 2, 10)
+        groups = np.repeat(np.arange(40), 10)
+        dataset = EpochedDataset(sfreq=500, lso=True)
+        dataset.set_data(data, targets, groups)
+        seen_valid_subjects = set()
+        for fold in range(5):
+            train_idx, valid_idx, test = dataset.split_data_cv(fold, n_folds=5)
+            self.assertIsNone(test)
+            valid_labels = {dataset.targets[i].item() for i in valid_idx}
+            self.assertEqual(valid_labels, {0, 1})  # both classes in every fold
+            valid_subjects = {dataset.groups[i].item() for i in valid_idx}
+            train_subjects = {dataset.groups[i].item() for i in train_idx}
+            self.assertEqual(len(train_subjects & valid_subjects), 0)
+            seen_valid_subjects |= valid_subjects
+        self.assertEqual(seen_valid_subjects, set(range(40)))
+
+    def test_cv_fallback_single_label_subjects_as_classes(self):
+        # age-like degenerate: one class per subject, many trials each;
+        # StratifiedGroupKFold cannot spread each class over 5 folds -> random subject folds
+        data = np.random.rand(20 * 10, 10, 500)
+        targets = np.repeat(np.arange(20), 10)
+        groups = np.repeat(np.arange(20), 10)
+        dataset = EpochedDataset(sfreq=500, lso=True)
+        dataset.set_data(data, targets, groups)
+        for fold in range(5):
+            train_idx, valid_idx, test = dataset.split_data_cv(fold, n_folds=5)
+            self.assertIsNone(test)
+            valid_subjects = {dataset.groups[i].item() for i in valid_idx}
+            train_subjects = {dataset.groups[i].item() for i in train_idx}
+            self.assertEqual(len(train_subjects & valid_subjects), 0)
+            self.assertEqual(train_subjects | valid_subjects, set(range(20)))
+            self.assertEqual(len(valid_subjects), 4)  # whole subjects per fold (20/5)
+
     def test_testdataset_empty_without_holdout(self):
         dataset = EpochedDataset(sfreq=500, n_samples=50)
         dataset.set_data(self.data, self.targets, self.groups)
@@ -346,6 +382,53 @@ class TestSplitSizes(unittest.TestCase):
         self.assertEqual(len(train_subjects), 7)
         self.assertEqual(len(valid_subjects), 2)
         self.assertEqual(train_subjects | valid_subjects, set(range(9)))
+
+
+class TestStratifiedSubjectSplit(unittest.TestCase):
+    def _dataset(self, n_subjects, n_trials=10, n_classes=2, random_state=0):
+        data = np.random.rand(n_subjects * n_trials, 10, 500)
+        # Subjects keep a single class label across all their trials.
+        targets = np.repeat(np.arange(n_subjects) % n_classes, n_trials)
+        groups = np.repeat(np.arange(n_subjects), n_trials)
+        dataset = EpochedDataset(sfreq=500, lso=True, random_state=random_state)
+        dataset.set_data(data, targets, groups)
+        return dataset
+
+    def test_stratified_keeps_all_classes_in_valid(self):
+        dataset = self._dataset(n_subjects=30, n_classes=2)
+        train_idx, valid_idx, test = dataset.split_data()
+        train_labels = {dataset.targets[i].item() for i in train_idx}
+        valid_labels = {dataset.targets[i].item() for i in valid_idx}
+        self.assertIsNone(test)
+        self.assertEqual(train_labels, {0, 1})
+        self.assertEqual(valid_labels, {0, 1})
+
+    def test_stratified_legacy_three_way_keeps_classes(self):
+        dataset = self._dataset(n_subjects=30, n_classes=2)
+        train_idx, valid_idx, test_idx = dataset.split_data(0.6, 0.2, 0.2)
+        for idx in (train_idx, valid_idx, test_idx):
+            self.assertEqual({dataset.targets[i].item() for i in idx}, {0, 1})
+        self.assertEqual(len(train_idx) + len(valid_idx) + len(test_idx), len(dataset))
+
+    def test_degenerate_pool_falls_back_to_random(self):
+        # 7 classes over 25 subjects: the validation set (6 subjects) cannot hold 7
+        # classes, so sklearn raises and the split must fall back without crashing.
+        dataset = self._dataset(n_subjects=25, n_classes=7)
+        train_idx, valid_idx, test = dataset.split_data()
+        self.assertIsNone(test)
+        self.assertEqual(len(train_idx) + len(valid_idx), len(dataset))
+        train_subjects = {dataset.groups[i].item() for i in train_idx}
+        valid_subjects = {dataset.groups[i].item() for i in valid_idx}
+        self.assertEqual(len(train_subjects & valid_subjects), 0)
+        self.assertEqual(train_subjects | valid_subjects, set(range(25)))
+
+    def test_stratified_split_deterministic(self):
+        ds1 = self._dataset(n_subjects=30, random_state=42)
+        ds2 = self._dataset(n_subjects=30, random_state=42)
+        train1, valid1, _ = ds1.split_data()
+        train2, valid2, _ = ds2.split_data()
+        self.assertEqual({ds1.groups[i].item() for i in train1}, {ds2.groups[i].item() for i in train2})
+        self.assertEqual({ds1.groups[i].item() for i in valid1}, {ds2.groups[i].item() for i in valid2})
 
 
 if __name__ == "__main__":
