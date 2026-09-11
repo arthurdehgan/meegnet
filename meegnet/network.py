@@ -1,4 +1,5 @@
 import os
+import time
 from collections import OrderedDict
 import logging
 from typing import Tuple
@@ -11,6 +12,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from huggingface_hub import hf_hub_download
 from meegnet.layer import Flatten, DepthwiseConv2d, SeparableConv2d, Conv2dWithConstraint
+from meegnet.utils import nice_time
 
 LOG = logging.getLogger('meegnet')
 
@@ -933,9 +935,11 @@ class Model:
 		while self.tracker.patience_state < patience or epoch < (min_epoch if not continue_training else 0):
 			if max_epoch is not None and epoch >= max_epoch:
 				break
+			self.tracker.start_epoch()
 			self.train_epoch(epoch, trainloader, verbose=verbose)
 			train_loss, train_acc = self.evaluate(trainloader)
 			valid_loss, valid_acc = self.evaluate(validloader)
+			epoch_time = self.tracker.stop_epoch()
 			self.tracker.update(
 				epoch, train_loss, train_acc, valid_loss, valid_acc, self.net, self.optimizer, early_stop=early_stop
 			)
@@ -943,6 +947,8 @@ class Model:
 				LOG.info(f'Epoch: {epoch}')
 				LOG.info(f' [LOSS] TRAIN {train_loss:.4f} / VALID {valid_loss:.4f}')
 				LOG.info(f' [ACC] TRAIN {100 * train_acc:.2f}% / VALID {100 * valid_acc:.2f}%')
+			if verbose >= 3:
+				LOG.info(f' [TIME] EPOCH {nice_time(epoch_time)} / TOTAL {self.tracker.format_total_time()}')
 			epoch += 1
 
 	def fit(self, *args, **kwargs):
@@ -1130,6 +1136,7 @@ class TrainingTracker:
 			'train_accuracies': [],
 			'validation_losses': [],
 			'validation_accuracies': [],
+			'epoch_times': [],
 		}
 		self.best = {
 			'train_loss': float('inf'),
@@ -1139,11 +1146,33 @@ class TrainingTracker:
 			'epoch': 0,
 		}
 		self.test = {'test_loss': float('nan'), 'test_accuracy': float('nan')}
+		self.total_training_time = 0.0
 		self.patience_state = 0
 		self.save_path = save_path
 		self.name = name
+		self._epoch_start = None
 
 		self.set_model_path(model_path)
+
+	def start_epoch(self) -> None:
+		self._epoch_start = time.time()
+
+	def stop_epoch(self) -> float:
+		if self._epoch_start is None:
+			return 0.0
+		epoch_time = time.time() - self._epoch_start
+		self._epoch_start = None
+
+		# Overwrite semantics: matches re-updated epochs in update()
+		if len(self.progress['epoch_times']) < len(self.progress['train_losses']):
+			self.progress['epoch_times'][len(self.progress['epoch_times'])] = epoch_time
+		else:
+			self.progress['epoch_times'].append(epoch_time)
+		self.total_training_time += epoch_time
+		return epoch_time
+
+	def format_total_time(self) -> str:
+		return nice_time(self.total_training_time)
 
 	def set_model_path(self, model_path: str = None) -> None:
 		self.model_path = os.path.join(self.save_path, self.name + '.pt') if model_path is None else model_path
@@ -1188,6 +1217,7 @@ class TrainingTracker:
 			save_dict = {key: value for key, value in self.progress.items()}
 			save_dict.update({key: value for key, value in self.best.items()})
 			save_dict.update({key: value for key, value in self.test.items()})
+			save_dict['total_training_time'] = self.total_training_time
 			savemat(mat_path, save_dict)
 		except OSError:
 			LOG.error(f'Error saving model summary to file: {mat_path}')
@@ -1203,12 +1233,16 @@ class TrainingTracker:
 	def load(self, mat_path):
 		data = loadmat(mat_path)
 		for key, value in data.items():
+			if key.startswith('__'):
+				continue
 			if key in self.progress.keys():
 				self.progress[key] = np.array(value).squeeze()
 			elif key in self.best.keys():
 				self.best[key] = np.array(value).squeeze()
 			elif key in self.test:
 				self.test[key] = float(np.array(value).squeeze())
+			elif key == 'total_training_time':
+				self.total_training_time = float(np.array(value).squeeze())
 
 	def plot_metric(self, metric_type: str, option: str = 'both', early_stop: bool = True):
 		assert option in ['both', 'train', 'valid']
