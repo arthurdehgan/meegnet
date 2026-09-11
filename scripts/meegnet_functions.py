@@ -11,6 +11,7 @@ def load_info():
 def load_single_subject(sub, n_samples, args, verbose=2):
 	data_path = getattr(args, 'data_path', None) or args.save_path
 	csv_path = getattr(args, 'csv_path', None)
+	target_col = getattr(args, 'target_col', None)
 	if args.epoched:
 		dataset = EpochedDataset(
 			sfreq=args.sfreq,
@@ -21,6 +22,7 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 			random_state=args.seed,
 			data_path=data_path,
 			csv_path=csv_path,
+			target_col=target_col,
 		)
 	else:
 		dataset = ContinuousDataset(
@@ -34,6 +36,7 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 			random_state=args.seed,
 			data_path=data_path,
 			csv_path=csv_path,
+			target_col=target_col,
 		)
 
 	dataset.load(one_sub=sub, verbose=verbose)

@@ -135,6 +135,13 @@ parser.add(
 	default=None,
 	help='Full path to participants_info.csv. Defaults to participants_info.csv in data-path.',
 )
+parser.add(
+	'--target-col',
+	type=str,
+	default=None,
+	help="Name of the CSV column holding the target labels. Use 'event_labels' for event classification, "
+	"'label' (subject id) for subject classification. When unset, the dataset falls back to 'label'.",
+)
 parser.add('--raw-path', type=str, default=None, help='The path where the raw data can be found.')
 parser.add(
 	'--visu-path',

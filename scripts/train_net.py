@@ -78,7 +78,7 @@ if __name__ == '__main__':
 			csv_path=args.csv_path,
 		)
 
-	dataset.load()
+	dataset.load(target_col=args.target_col)
 	n_outputs = len(np.unique(dataset.targets))
 
 	#####################

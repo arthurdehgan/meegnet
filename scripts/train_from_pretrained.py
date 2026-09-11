@@ -60,6 +60,7 @@ if __name__ == '__main__':
             random_state=args.seed,
             data_path=args.data_path,
             csv_path=args.csv_path,
+            target_col=args.target_col,
         )
     else:
         dataset = ContinuousDataset(
@@ -74,9 +75,10 @@ if __name__ == '__main__':
             random_state=args.seed,
             data_path=args.data_path,
             csv_path=args.csv_path,
+            target_col=args.target_col,
         )
 
-    dataset.load()
+    dataset.load(target_col=args.target_col)
     n_outputs = len(np.unique(dataset.targets))
 
     #####################

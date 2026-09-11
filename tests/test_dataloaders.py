@@ -485,5 +485,51 @@ class TestPathHandling(unittest.TestCase):
             dataset.load()
 
 
+class TestTargetColPrecedence(unittest.TestCase):
+    """target_col resolution: explicit arg > instance state > 'label' fallback."""
+
+    @staticmethod
+    def _make_fake_dataset(root, n_trials=4, n_sensors=2, n_times=10):
+        data_dir = os.path.join(root, 'downsampled_500')
+        os.makedirs(data_dir, exist_ok=True)
+        with open(os.path.join(root, 'participants_info.csv'), 'w') as f:
+            f.write('sub,label,event_labels\n')
+            f.write('sub01,SEX1,"[\'a\', \'b\', \'a\', \'b\']"\n')
+            f.write('sub02,SEX2,"[\'a\', \'b\', \'a\', \'b\']"\n')
+        rng = np.random.RandomState(0)
+        for sub in ('sub01', 'sub02'):
+            np.save(os.path.join(data_dir, f'{sub}_epoched.npy'), rng.rand(n_trials, n_sensors, n_times))
+        return root
+
+    def test_explicit_arg_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False, target_col='label')
+            dataset.load(tmp, target_col='event_labels')
+            self.assertEqual(list(dataset.target_labels), ['a', 'b'])
+
+    def test_sticky_from_init(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False, target_col='event_labels')
+            dataset.load(tmp)
+            self.assertEqual(list(dataset.target_labels), ['a', 'b'])
+
+    def test_sticky_from_preload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False)
+            dataset.preload(tmp, target_col='event_labels')
+            dataset.load()
+            self.assertEqual(list(dataset.target_labels), ['a', 'b'])
+
+    def test_fallback_to_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False)
+            dataset.load(tmp)
+            self.assertEqual(list(dataset.target_labels), ['SEX1', 'SEX2'])
+
+
 if __name__ == "__main__":
     unittest.main()

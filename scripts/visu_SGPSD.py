@@ -139,10 +139,8 @@ if __name__ == "__main__":
         data_path = os.path.join(args.save_path, f"downsampled_{args.sfreq}")
         n_subjects = len(os.listdir(data_path))
         n_outputs = min(n_subjects, args.max_subj)
-        lso = False
     else:
         n_outputs = 2
-        lso = True
 
     save_config(vars(args), args.config)
     with open("default_values.toml", "r") as f:
@@ -234,7 +232,7 @@ if __name__ == "__main__":
     # Incrementing and changing subject in case there is an error with loading subject data
     while data == []:
         sub = subj_list[i]
-        data = load_single_subject(sub, n_samples, lso, args).data
+        data = load_single_subject(sub, n_samples, args).data
         i += 1
 
     logging.info(f"loading random subject {sub}")

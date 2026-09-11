@@ -51,10 +51,8 @@ if __name__ == '__main__':
 		data_path = os.path.join(args.save_path, f'downsampled_{args.sfreq}')
 		n_subjects = len(os.listdir(data_path))
 		n_outputs = min(n_subjects, args.max_subj)
-		lso = False
 	else:
 		n_outputs = 2
-		lso = True
 
 	######################
 	### LOGGING CONFIG ###
@@ -113,7 +111,7 @@ if __name__ == '__main__':
 		all_cams = []
 		all_trials = None
 		for sub in subj_list:
-			data = load_single_subject(sub, n_samples, lso, args, verbose=0).data
+			data = load_single_subject(sub, n_samples, args, verbose=0).data
 			if data == []:
 				continue
 			input_tensor = data.to(torch.float)  # can be multiple images

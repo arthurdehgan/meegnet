@@ -42,10 +42,8 @@ if __name__ == '__main__':
 		data_path = os.path.join(args.save_path, f'downsampled_{args.sfreq}')
 		n_subjects = len(os.listdir(data_path))
 		n_outputs = min(n_subjects, args.max_subj)
-		lso = False
 	else:
 		n_outputs = 2
-		lso = True
 
 	######################
 	### LOGGING CONFIG ###
@@ -113,7 +111,7 @@ if __name__ == '__main__':
 	# Incrementing and changing subject in case there is an error with loading subject data
 	data = []
 	while data == []:
-		data = load_single_subject('random', n_samples, lso, args).data
+		data = load_single_subject('random', n_samples, args).data
 
 	input_tensor = data.to(torch.float).cpu()
 
