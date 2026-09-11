@@ -795,7 +795,8 @@ class Model:
 		n_outputs : int
 		    Number of output classes.
 		save_path : str, optional
-		    Model save path. Defaults to None.
+		    Base save path. Model outputs (checkpoint .pt, tracker .mat) are saved
+		    under a `{name}` subfolder of this path. Defaults to None.
 		learning_rate : float, optional
 		    Learning rate. Defaults to 0.00001.
 		optimizer : callable, optional
@@ -819,7 +820,9 @@ class Model:
 		self.n_outputs = n_outputs
 		self.n_folds = n_folds
 		self.criterion = criterion
-		self.save_path = save_path
+		self.save_path = os.path.join(save_path, name) if save_path is not None else None
+		if self.save_path is not None:
+			os.makedirs(self.save_path, exist_ok=True)
 		self.lr = learning_rate
 		self._optimizer = optimizer
 		self.optimizer = optimizer(self.net.parameters(), lr=learning_rate)
