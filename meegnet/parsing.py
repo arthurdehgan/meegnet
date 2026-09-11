@@ -126,6 +126,15 @@ parser.add(
 parser.add(
 	'--save-path', type=str, default='.', help='The default path to save all computed data, model and visualisations.'
 )
+parser.add(
+	'--data-path', type=str, default=None, help='The path where the downsampled data samples can be found.'
+)
+parser.add(
+	'--csv-path',
+	type=str,
+	default=None,
+	help='Full path to participants_info.csv. Defaults to participants_info.csv in data-path.',
+)
 parser.add('--raw-path', type=str, default=None, help='The path where the raw data can be found.')
 parser.add(
 	'--visu-path',
@@ -133,7 +142,6 @@ parser.add(
 	default=None,
 	help='The path where the visualisation matrices wil be saved to and loaded from.',
 )
-parser.add('--processed-path', type=str, default=None, help='The path where the data samples can be found.')
 parser.add('--seed', default=42, type=int, help='Seed to use for random splits.')
 parser.add('--max-subj', default=1000, type=int, help='maximum number of subjects to use (1000 uses all subjects)')
 parser.add(
