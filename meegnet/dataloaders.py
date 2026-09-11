@@ -186,6 +186,10 @@ class EpochedDataset:
 	    Can also be set later through load()/load_from_path().
 	csv_path : str, optional
 	    Full path to the participants info CSV file. Defaults to participants_info.csv in data_path.
+	target_col : str, optional
+	    Name of the CSV column holding the target labels (e.g. "event_labels" for event
+	    classification). Stored on the instance and reused by load()/load_from_path() when
+	    no explicit target_col is passed; falls back to "label" when unset.
 
 	Attributes
 	----------
@@ -222,6 +226,7 @@ class EpochedDataset:
 		target_labels: list | None = None,
 		data_path: str | None = None,
 		csv_path: str | None = None,
+		target_col: str | None = None,
 	):
 		if isinstance(split_sizes, float):
 			# train = fraction of all data, test holdout fixed at 10%, valid takes the remainder.
@@ -247,6 +252,7 @@ class EpochedDataset:
 		self.sensors = self._select_sensors(sensortype)
 		self.random_state = random_state
 		self.target_labels = target_labels
+		self.target_col = target_col
 		self._reset_seed()
 
 		self.data = []
@@ -266,6 +272,11 @@ class EpochedDataset:
 		np.random.seed(self.random_state)
 		random.seed(self.random_state)
 		torch.manual_seed(self.random_state)
+
+	@staticmethod
+	def _resolve_target_col(target_col: str | None, instance_col: str | None) -> str:
+		"""Explicit arg > instance state > 'label' fallback."""
+		return target_col if target_col is not None else (instance_col or 'label')
 
 	def _load_csv(self, csv_file: str) -> pd.DataFrame:
 		"""Loads a CSV file, handling index column."""
@@ -289,7 +300,8 @@ class EpochedDataset:
 		subject_col : str, optional
 		    Column holding the subject ids.
 		target_col : str, optional
-		    Column holding the target labels, used to stratify the holdout.
+		    Column holding the target labels, used to stratify the holdout. Explicit
+		    arg overrides the instance state; falls back to 'label' when unset.
 
 		Returns
 		-------
@@ -303,9 +315,11 @@ class EpochedDataset:
 		else:
 			dataframe = self._load_csv(data_path)
 
+		self.target_col = self._resolve_target_col(target_col, self.target_col)
+
 		if self.lso:
 			test_dataframe, dataframe = _split_holdout(
-				dataframe, self.test_size, self.random_state, target_col=target_col, subject_col=subject_col
+				dataframe, self.test_size, self.random_state, target_col=self.target_col, subject_col=subject_col
 			)
 		else:
 			test_dataframe = dataframe.iloc[0:0]
@@ -445,7 +459,7 @@ class EpochedDataset:
 		csv_path: str = None,
 		one_sub: str = None,
 		verbose: int = 2,
-		target_col: str = 'label',
+		target_col: str | None = None,
 		subject_col: str = 'sub',
 	) -> None:
 		"""
@@ -462,7 +476,8 @@ class EpochedDataset:
 		verbose : int, optional
 		    Logging verbosity level (0-2).
 		target_col : str, optional
-		    Column name for targets in the CSV file.
+		    Column name for targets in the CSV file. When None, reuses the instance's
+		    target_col (set through __init__ or preload), falling back to 'label'.
 		"""
 
 		# Ensure data_path is set
@@ -518,7 +533,7 @@ class EpochedDataset:
 				continue  # skip subject if there are no data in the loaded file
 
 			# Process data and targets
-			target = row[target_col].item()
+			target = row[self.target_col].item()
 			processed_targets = self._process_targets(target, len(sub_data))
 
 			if len(sub_data) == len(processed_targets):
@@ -927,15 +942,19 @@ class ContinuousDataset(EpochedDataset):
 	    in which case the test size is deduced to be 10% of the total pool and the valid size the remainder.
 	sensortype : str, optional
 	    Sensor type. Defaults to None.
-	lso : bool, optional
-	    Leave subjects out. Defaults to False.
+lso : bool, optional
+		Leave subjects out. Defaults to False.
 	random_state : int, optional
-	    Random state for reproducibility. Defaults to 0.
+		Random state for reproducibility. Defaults to 0.
 	data_path : str, optional
-	    Path to the folder containing the dataset (with the downsampled_{sfreq} subfolder).
-	    Can also be set later through load()/load_from_path().
+		Path to the folder containing the dataset (with the downsampled_{sfreq} subfolder).
+		Can also be set later through load()/load_from_path().
 	csv_path : str, optional
-	    Full path to the participants info CSV file. Defaults to participants_info.csv in data_path.
+		Full path to the participants info CSV file. Defaults to participants_info.csv in data_path.
+	target_col : str, optional
+		Name of the CSV column holding the target labels. Stored on the instance and
+		reused by load()/load_from_path() when no explicit target_col is passed;
+		falls back to "label" when unset.
 
 	Attributes
 	----------
@@ -977,17 +996,18 @@ class ContinuousDataset(EpochedDataset):
 		n_samples: int = None,
 		split_sizes: tuple = (0.7, 0.2, 0.1),
 		sensortype: str = None,
-		lso: bool = False,
+lso: bool = False,
 		random_state: int = 0,
 		data_path: str | None = None,
 		csv_path: str | None = None,
+		target_col: str | None = None,
 	) -> None:
 		"""
 				Initializes the ContinuousDataset.
 
 		Args:
 				window (int): Window size in seconds.
-				overlap (float): Overlap between windows.
+				overlap (float): Window overlap.
 				offset (int): Offset in seconds.
 				sfreq (int): Sampling frequency.
 				n_subjects (int): Number of subjects.
@@ -1001,6 +1021,7 @@ class ContinuousDataset(EpochedDataset):
 				random_state (int): Random state for reproducibility.
 				data_path (str): Path to the folder containing the dataset.
 				csv_path (str): Full path to the participants info CSV file.
+				target_col (str): Name of the CSV column holding the target labels.
 		"""
 
 		super().__init__(
@@ -1014,6 +1035,7 @@ class ContinuousDataset(EpochedDataset):
 			random_state,
 			data_path=data_path,
 			csv_path=csv_path,
+			target_col=target_col,
 		)
 
 		if scaling == 'zscore':

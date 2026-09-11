@@ -12,6 +12,7 @@ meegnet.egg-info
 dist
 configs
 cluster
+outputs
 
 *.png
 *.out
