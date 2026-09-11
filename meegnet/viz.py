@@ -703,6 +703,10 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 	assert len(dataset.data) == 0, 'Do not load the dataset before using this function.'
 	all_cams = [[], []]
 
+	# GradCAM requires inference mode: dropout off and BatchNorm using running stats.
+	was_training = net.training
+	net.eval()
+
 	for sub in dataset.subject_list:
 		sub_dataset = copy.deepcopy(dataset)
 		if verbose > 2:
@@ -738,6 +742,8 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 				if len(valid_cams) > 0:
 					average_cam = np.mean(valid_cams, axis=0)
 					all_cams[i].append(average_cam)
+
+	net.train(was_training)
 
 	return [np.array(label_cams) for label_cams in all_cams]
 
