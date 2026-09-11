@@ -2,6 +2,8 @@ from meegnet.dataloaders import Dataset, RestDataset
 
 
 def load_single_subject(sub, n_samples, lso, args):
+	data_path = getattr(args, 'data_path', None) or args.save_path
+	csv_path = getattr(args, 'csv_path', None)
 	if args.datatype == 'rest':
 		dataset = RestDataset(
 			window=args.segment_length,
@@ -12,6 +14,8 @@ def load_single_subject(sub, n_samples, lso, args):
 			sensortype=args.sensors,
 			lso=lso,
 			random_state=args.seed,
+			data_path=data_path,
+			csv_path=csv_path,
 		)
 	else:
 		dataset = Dataset(
@@ -21,6 +25,8 @@ def load_single_subject(sub, n_samples, lso, args):
 			sensortype=args.sensors,
 			lso=lso,
 			random_state=args.seed,
+			data_path=data_path,
+			csv_path=csv_path,
 		)
-	dataset.load(args.save_path, one_sub=sub)
+	dataset.load(one_sub=sub)
 	return dataset

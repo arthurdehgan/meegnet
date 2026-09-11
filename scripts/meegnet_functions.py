@@ -9,6 +9,8 @@ def load_info():
 
 
 def load_single_subject(sub, n_samples, args, verbose=2):
+	data_path = getattr(args, 'data_path', None) or args.save_path
+	csv_path = getattr(args, 'csv_path', None)
 	if args.epoched:
 		dataset = EpochedDataset(
 			sfreq=args.sfreq,
@@ -17,6 +19,8 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=data_path,
+			csv_path=csv_path,
 		)
 	else:
 		dataset = ContinuousDataset(
@@ -28,14 +32,16 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=data_path,
+			csv_path=csv_path,
 		)
 
-	dataset.load(args.save_path, one_sub=sub, verbose=verbose)
+	dataset.load(one_sub=sub, verbose=verbose)
 	return dataset
 
 
 def prepare_logging(name, args, LOG, fold=None, *, model_name=None):
-	"""Sets up logging to `{model_name}[_fold{N}]_{name}.log` inside args.save_path.
+	"""Sets up logging to `{model_name}[_fold{N}]_{name}.log` inside args.save_path/{model_name}.
 
 	`name` is the log type suffix (e.g. 'training', 'saliencies').
 	`model_name` should be the base model name as built by meegnet.parsing.get_model_name.
@@ -44,7 +50,9 @@ def prepare_logging(name, args, LOG, fold=None, *, model_name=None):
 	if fold is not None:
 		log_name += f'_fold{fold}'
 	log_name += f'_{name}.log'
-	log_file = os.path.join(args.save_path, log_name)
+	log_dir = os.path.join(args.save_path, model_name)
+	os.makedirs(log_dir, exist_ok=True)
+	log_file = os.path.join(log_dir, log_name)
 	logging.basicConfig(filename=log_file, filemode='a', force=True)
 	LOG.info(f'Starting logging in {log_file}')
 

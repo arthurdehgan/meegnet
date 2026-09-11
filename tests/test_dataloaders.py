@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 import torch
 import numpy as np
@@ -429,6 +431,58 @@ class TestStratifiedSubjectSplit(unittest.TestCase):
         train2, valid2, _ = ds2.split_data()
         self.assertEqual({ds1.groups[i].item() for i in train1}, {ds2.groups[i].item() for i in train2})
         self.assertEqual({ds1.groups[i].item() for i in valid1}, {ds2.groups[i].item() for i in valid2})
+
+
+class TestPathHandling(unittest.TestCase):
+    """load()/load_from_path() resolve data_path, csv_path and the downsampled subfolder."""
+
+    @staticmethod
+    def _make_fake_dataset(root, n_trials=4, n_sensors=2, n_times=10, csv_name='participants_info.csv'):
+        # subject files use the prepare_data layout: (n_trials, n_sensors, n_times)
+        data_dir = os.path.join(root, 'downsampled_500')
+        os.makedirs(data_dir, exist_ok=True)
+        with open(os.path.join(root, csv_name), 'w') as f:
+            f.write('sub,label\nsub01,LABEL1\nsub02,LABEL2\n')
+        rng = np.random.RandomState(0)
+        for sub in ('sub01', 'sub02'):
+            np.save(os.path.join(data_dir, f'{sub}_epoched.npy'), rng.rand(n_trials, n_sensors, n_times))
+        return root
+
+    def test_load_from_data_path_root_csv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False)
+            dataset.load(tmp)
+            self.assertEqual(len(dataset), 8)  # 2 subjects x 4 trials
+            self.assertTrue(dataset.data_path.endswith('downsampled_500'))
+            self.assertEqual(sorted(dataset.subject_list), ['sub01', 'sub02'])
+
+    def test_load_explicit_csv_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data_dir = os.path.join(tmp, 'data')
+            self._make_fake_dataset(data_dir)
+            csv_dir = os.path.join(tmp, 'csvs')
+            os.makedirs(csv_dir)
+            csv_file = os.path.join(csv_dir, 'participants_info.csv')
+            with open(os.path.join(data_dir, 'participants_info.csv')) as f, open(csv_file, 'w') as g:
+                g.write(f.read())
+            os.remove(os.path.join(data_dir, 'participants_info.csv'))
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False)
+            dataset.load(data_dir, csv_path=csv_file)
+            self.assertEqual(len(dataset), 8)
+            self.assertEqual(sorted(dataset.subject_list), ['sub01', 'sub02'])
+
+    def test_load_csv_path_from_init(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_fake_dataset(tmp)
+            dataset = EpochedDataset(sfreq=500, n_subjects=2, lso=False, data_path=tmp)
+            dataset.load()
+            self.assertEqual(len(dataset), 8)
+
+    def test_load_without_data_path_raises(self):
+        dataset = EpochedDataset(sfreq=500)
+        with self.assertRaises(ValueError):
+            dataset.load()
 
 
 if __name__ == "__main__":

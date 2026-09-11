@@ -15,6 +15,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', datefm
 
 
 def produce_data(queue, sub, args, disk_semaphore):
+	data_path = getattr(args, 'data_path', None) or args.save_path
+	csv_path = getattr(args, 'csv_path', None)
 	with disk_semaphore:
 		if args.datatype == 'rest':
 			dataset = RestDataset(
@@ -26,6 +28,8 @@ def produce_data(queue, sub, args, disk_semaphore):
 				sensortype=args.sensors,
 				lso=lso,
 				random_state=args.seed,
+				data_path=data_path,
+				csv_path=csv_path,
 			)
 		else:
 			dataset = Dataset(
@@ -35,8 +39,10 @@ def produce_data(queue, sub, args, disk_semaphore):
 				sensortype=args.sensors,
 				lso=lso,
 				random_state=args.seed,
+				data_path=data_path,
+				csv_path=csv_path,
 			)
-		dataset.load(args.save_path, one_sub=sub)
+		dataset.load(one_sub=sub)
 		if len(dataset) == 0:
 			logging.info(f'data from {sub} is empty.')
 			queue.put(tuple([None] * 2 + [0]))

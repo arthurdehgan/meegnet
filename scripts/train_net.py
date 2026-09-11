@@ -20,6 +20,9 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	save_config(vars(args), args.config)
 
+	if not args.data_path:
+		parser.error('--data-path is required')
+
 	# script_path = os.getcwd()
 	config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../default_values.ini')
 	if not os.path.exists(config_path):
@@ -57,6 +60,8 @@ if __name__ == '__main__':
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=args.data_path,
+			csv_path=args.csv_path,
 		)
 	else:
 		dataset = ContinuousDataset(
@@ -69,9 +74,11 @@ if __name__ == '__main__':
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=args.data_path,
+			csv_path=args.csv_path,
 		)
 
-	dataset.load(args.save_path)
+	dataset.load()
 	n_outputs = len(np.unique(dataset.targets))
 
 	#####################

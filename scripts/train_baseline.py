@@ -97,6 +97,9 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	save_config(vars(args), args.config)
 
+	if not args.data_path:
+		parser.error('--data-path is required')
+
 	n_samples = None if int(args.n_samples) == -1 else int(args.n_samples)
 	name = get_model_name(args)
 
@@ -113,6 +116,8 @@ if __name__ == '__main__':
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=args.data_path,
+			csv_path=args.csv_path,
 		)
 	else:
 		dataset = ContinuousDataset(
@@ -125,9 +130,11 @@ if __name__ == '__main__':
 			sensortype=args.sensors,
 			lso=args.lso,
 			random_state=args.seed,
+			data_path=args.data_path,
+			csv_path=args.csv_path,
 		)
 
-	dataset.load(args.save_path)
+	dataset.load()
 	LOG.info(f'dataset contains a total of {len(dataset)} trials.')
 
 	train_index, valid_index, _ = dataset.split_data()
@@ -193,7 +200,8 @@ if __name__ == '__main__':
 	### SAVING RESULTS ###
 	#######################
 
-	output_file = os.path.join(args.save_path, f'baseline_performance_{name}.npy')
+	output_file = os.path.join(args.save_path, name, f'baseline_performance_{name}.npy')
+	os.makedirs(os.path.dirname(output_file), exist_ok=True)
 	np.save(output_file, {'results': all_results, 'best': best_result})
 
 	LOG.info('Performance metrics saved.')
