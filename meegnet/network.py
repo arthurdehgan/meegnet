@@ -988,6 +988,8 @@ class Model:
 			self.display_progress(i, epoch, loss, n_batches, verbose=verbose)
 
 	def evaluate(self, dataloader):
+		was_training = self.net.training
+		self.net.eval()
 		with torch.no_grad():
 			losses = 0
 			accuracy = 0
@@ -1009,6 +1011,8 @@ class Model:
 				counter += n
 			floss = losses / float(counter)
 			faccuracy = accuracy / float(counter)
+			if was_training:
+				self.net.train()
 			return floss, faccuracy
 
 	def validate(self, dataset, fold: int = None):
@@ -1046,7 +1050,7 @@ class Model:
 		LOG.info(f' [ACC] TEST {100 * test_acc:.2f}%')
 		return test_loss, test_acc
 
-	def n_parameters(self, model: nn.Module = None):
+	def n_parameters(self, model: nn.Module | None = None):
 		if model is None:
 			model = self.net
 		model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -1066,7 +1070,7 @@ class Model:
 		model_path = self._get_from_hub(repo)
 		self.load(model_path)
 
-	def _load_net(self, model_path: str = None) -> Tuple:
+	def _load_net(self, model_path: str | None = None) -> Tuple:
 		"""Load network state and optimizer state from file."""
 		if model_path is None:
 			model_path = self.tracker.model_path
