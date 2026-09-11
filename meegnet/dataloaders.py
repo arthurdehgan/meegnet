@@ -181,6 +181,11 @@ class EpochedDataset:
 	    Leave subjects out. If False, within-subject splitting is used, by default False.
 	random_state : int, optional
 	    The random state for reproducibility, by default 0.
+	data_path : str, optional
+	    Path to the folder containing the dataset (with the downsampled_{sfreq} subfolder).
+	    Can also be set later through load()/load_from_path().
+	csv_path : str, optional
+	    Full path to the participants info CSV file. Defaults to participants_info.csv in data_path.
 
 	Attributes
 	----------
@@ -200,6 +205,8 @@ class EpochedDataset:
 	    The subject list.
 	data_path : str
 	    The path to the data.
+	csv_path : str
+	    The path to the participants info CSV file.
 	"""
 
 	def __init__(
@@ -213,6 +220,8 @@ class EpochedDataset:
 		lso: bool = False,
 		random_state: int = 0,
 		target_labels: list | None = None,
+		data_path: str | None = None,
+		csv_path: str | None = None,
 	):
 		if isinstance(split_sizes, float):
 			# train = fraction of all data, test holdout fixed at 10%, valid takes the remainder.
@@ -244,7 +253,8 @@ class EpochedDataset:
 		self.targets = []
 		self.groups = []
 		self.subject_list = []
-		self.data_path = None
+		self.data_path = data_path
+		self.csv_path = csv_path
 		self.dataframe = None
 		self.test_data = []
 		self.test_targets = []
@@ -274,7 +284,8 @@ class EpochedDataset:
 		data_path : str
 		    Path to the folder containing the dataset.
 		csv_path : str, optional
-		    Path to the CSV file. Defaults to "participants_info.csv" in the data_path.
+		    Full path to the CSV file. When given but not found or None, falls back to
+		    "participants_info.csv" inside data_path.
 		subject_col : str, optional
 		    Column holding the subject ids.
 		target_col : str, optional
@@ -445,7 +456,7 @@ class EpochedDataset:
 		data_path : str, optional
 		    Path to the data. Defaults to self.data_path if None.
 		csv_path : str, optional
-		    Path to the CSV file. Defaults to "participants_info.csv" in data_path.
+		    Full path to the CSV file. Defaults to participants_info.csv in data_path.
 		one_sub : str, optional
 		    Subject ID or "random" to select a random subject.
 		verbose : int, optional
@@ -455,9 +466,15 @@ class EpochedDataset:
 		"""
 
 		# Ensure data_path is set
+		data_path = data_path if data_path is not None else self.data_path
 		if data_path is None:
-			assert self.data_path is not None, 'data_path must be set'
-			data_path = self.data_path
+			raise ValueError('data_path must be set')
+
+		# csv defaults to data_path root (before downsampled folder resolution)
+		if csv_path is None:
+			csv_path = self.csv_path
+		if csv_path is None:
+			csv_path = os.path.join(data_path, 'participants_info.csv')
 
 		# Use downsampled subfolder if available
 		downsampled_path = os.path.join(data_path, f'downsampled_{self.sfreq}')
@@ -914,6 +931,11 @@ class ContinuousDataset(EpochedDataset):
 	    Leave subjects out. Defaults to False.
 	random_state : int, optional
 	    Random state for reproducibility. Defaults to 0.
+	data_path : str, optional
+	    Path to the folder containing the dataset (with the downsampled_{sfreq} subfolder).
+	    Can also be set later through load()/load_from_path().
+	csv_path : str, optional
+	    Full path to the participants info CSV file. Defaults to participants_info.csv in data_path.
 
 	Attributes
 	----------
@@ -957,27 +979,42 @@ class ContinuousDataset(EpochedDataset):
 		sensortype: str = None,
 		lso: bool = False,
 		random_state: int = 0,
+		data_path: str | None = None,
+		csv_path: str | None = None,
 	) -> None:
 		"""
-		Initializes the ContinuousDataset.
+				Initializes the ContinuousDataset.
 
 		Args:
-		window (int): Window size in seconds.
-		overlap (float): Overlap between windows.
-		offset (int): Offset in seconds.
-		sfreq (int): Sampling frequency.
-		n_subjects (int): Number of subjects.
-		scaling (str): The scaling method used.
-		n_samples (int): Number of samples per subject.
-		split_sizes(tuple or int): a tuple of (train_size, valid_size, test_size)
-		    for splits or a float <= 1, in which case the test size is deduced to be
-		    10% of the total pool and the valid size the remainder.
-		sensortype (str): Sensor type.
-		lso (bool): Leave subjects out.
-		random_state (int): Random state for reproducibility.
+				window (int): Window size in seconds.
+				overlap (float): Overlap between windows.
+				offset (int): Offset in seconds.
+				sfreq (int): Sampling frequency.
+				n_subjects (int): Number of subjects.
+				scaling (str): The scaling method used.
+				n_samples (int): Number of samples per subject.
+				split_sizes(tuple or int): a tuple of (train_size, valid_size, test_size)
+				    for splits or a float <= 1, in which case the test size is deduced to be
+				    10%% of the total pool and the valid size the remainder.
+				sensortype (str): Sensor type.
+				lso (bool): Leave subjects out.
+				random_state (int): Random state for reproducibility.
+				data_path (str): Path to the folder containing the dataset.
+				csv_path (str): Full path to the participants info CSV file.
 		"""
 
-		super().__init__(sfreq, n_subjects, scaling, n_samples, split_sizes, sensortype, lso, random_state)
+		super().__init__(
+			sfreq,
+			n_subjects,
+			scaling,
+			n_samples,
+			split_sizes,
+			sensortype,
+			lso,
+			random_state,
+			data_path=data_path,
+			csv_path=csv_path,
+		)
 
 		if scaling == 'zscore':
 			self.scaler = lambda x: zscore(x, axis=-1)
