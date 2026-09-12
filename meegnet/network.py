@@ -884,7 +884,8 @@ class Model:
 		-----
 		This method trains the model using the provided dataset and hyperparameters.
 		It uses early stopping based on the validation loss and saves the model
-		periodically.
+		periodically. The training summary (.mat) is rewritten on every epoch.
+		the checkpoint is only rewritten when the early	stopping criterion improves.
 		"""
 		assert len(dataset.data) > 0, 'Dataset is empty.'
 		# Check dataset compatibility
@@ -1153,6 +1154,7 @@ class TrainingTracker:
 			'epoch': 0,
 		}
 		self.test = {'test_loss': float('nan'), 'test_accuracy': float('nan')}
+		self.early_stop = 'loss'
 		self.total_training_time = 0.0
 		self.patience_state = 0
 		self.save_path = save_path
@@ -1185,7 +1187,15 @@ class TrainingTracker:
 		self.model_path = os.path.join(self.save_path, self.name + '.pt') if model_path is None else model_path
 
 	def update(self, epoch, tloss, tacc, vloss, vacc, net, optimizer, early_stop: str = 'loss') -> None:
+		"""
+		Record metrics for one epoch and persist them.
+
+		Metrics are appended to the progress history. The .mat summary is rewritten on every
+		epoch; the checkpoint is only rewritten when the early stopping	criterion improves.
+		"""
 		assert early_stop in ('loss', 'accuracy'), f'{early_stop} is not a valid early_stop option.'
+		self.early_stop = early_stop
+		self.early_stop = early_stop
 
 		if epoch < len(self.progress['train_losses']):
 			self.progress['train_losses'][epoch] = tloss
@@ -1210,6 +1220,12 @@ class TrainingTracker:
 			self.patience_state = 0
 			checkpoint = {'state_dict': net.state_dict(), 'optimizer': optimizer.state_dict()}
 			self.save(checkpoint)
+		else:
+			# Save the summary (.mat) every epoch so that metrics from epochs
+			# after the last improvement are not lost (e.g. patience tail or
+			# max_epoch cap, or a crash during training). The checkpoint (.pt)
+			# is still only written when the early stopping criterion improves.
+			self.save_mat()
 
 	def set_test_metrics(self, test_loss: float, test_accuracy: float) -> None:
 		"""Store test metrics and rewrite the .mat summary (leaves the .pt checkpoint untouched)."""
@@ -1218,13 +1234,19 @@ class TrainingTracker:
 		self.save_mat()
 
 	def save_mat(self) -> None:
-		"""Save training summary (.mat) only, without the network checkpoint."""
+		"""
+		Save training summary (.mat) only, without the network checkpoint.
+
+		Contains per-epoch metrics (train/validation losses and accuracies, epoch times),
+		of all epochs.
+		"""
 		mat_path = self.model_path[:-2] + 'mat'
 		try:
 			save_dict = {key: value for key, value in self.progress.items()}
 			save_dict.update({key: value for key, value in self.best.items()})
 			save_dict.update({key: value for key, value in self.test.items()})
 			save_dict['total_training_time'] = self.total_training_time
+			save_dict['early_stop'] = self.early_stop
 			savemat(mat_path, save_dict)
 		except OSError:
 			LOG.error(f'Error saving model summary to file: {mat_path}')
@@ -1250,6 +1272,8 @@ class TrainingTracker:
 				self.test[key] = float(np.array(value).squeeze())
 			elif key == 'total_training_time':
 				self.total_training_time = float(np.array(value).squeeze())
+			elif key == 'early_stop':
+				self.early_stop = str(np.array(value).squeeze())
 
 	def plot_metric(self, metric_type: str, option: str = 'both', early_stop: bool = True):
 		assert option in ['both', 'train', 'valid']

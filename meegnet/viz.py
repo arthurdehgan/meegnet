@@ -49,7 +49,7 @@ def compute_saliency_maps(dataset, net, sal_path, threshold=0.95, labels=None, e
 		X = trial
 		while len(X.shape) < 4:
 			X = X[np.newaxis, :]
-		X = X.to(device)
+		X = X.float().to(device)
 		# Compute predictions of the trained network, and confidence
 		preds = torch.nn.Softmax(dim=1)(net(X)).detach().cpu()
 		pred = preds.argmax().item()
@@ -748,7 +748,7 @@ def compute_cams(net, target_layers, dataset, verbose=3):
 	return [np.array(label_cams) for label_cams in all_cams]
 
 
-def plot_cam(input_tensor, cams, name, label, out_path='.', colorbar=True):
+def plot_cam(input_tensor, cams, name, label, out_path='.', colorbar=True, cmap='viridis'):
 	cam_output_path = os.path.join(out_path, f'{name}_{label}_GradCAM.png')
 
 	grayscale_cam = cams.mean(axis=0)
@@ -768,7 +768,7 @@ def plot_cam(input_tensor, cams, name, label, out_path='.', colorbar=True):
 	# Plot with colorbar and axis labels
 	fig, ax = plt.subplots()
 	ax.imshow(img, aspect='auto')  # Show the original image
-	im = ax.imshow(grayscale_cam, cmap='coolwarm', alpha=0.7)  # Overlay heatmap
+	im = ax.imshow(grayscale_cam, cmap=cmap, alpha=0.7)  # Overlay heatmap
 	ax.set_title(f'{name}_{method}_{label} Grad-CAM')
 	ax.set_xlabel('Time (s)')
 	ax.set_ylabel('Sensors')
