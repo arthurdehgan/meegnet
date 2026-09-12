@@ -88,7 +88,10 @@ if __name__ == '__main__':
     model_path = "/scratch/kikuko/data/mixed_audit/mixed_audit_meegnet_42_ALL_551.pt"
     LOG.info('Loading existing model:')
 
-    my_model = Model(name, args.net_option, input_size, n_outputs, learning_rate=args.lr, save_path=args.save_path)
+    my_model = Model(
+        name, args.net_option, input_size, n_outputs, learning_rate=args.lr,
+        save_path=os.path.join(args.save_path, args.model_name)
+    )
     my_model.load(model_path)
     
     ######################

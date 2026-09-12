@@ -128,7 +128,9 @@ if __name__ == '__main__':
 		LOG.info(f'{model_path} does not exist. Creating folders')
 		os.makedirs(model_path)
 
-	my_model = Model(name, args.net_option, input_size, n_outputs, save_path=args.save_path)
+	my_model = Model(
+		name, args.net_option, input_size, n_outputs, save_path=os.path.join(args.save_path, args.model_name)
+	)
 	my_model.from_pretrained()
 	# my_model.load()
 

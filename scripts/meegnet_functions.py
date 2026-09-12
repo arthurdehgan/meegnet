@@ -44,7 +44,7 @@ def load_single_subject(sub, n_samples, args, verbose=2):
 
 
 def prepare_logging(name, args, LOG, fold=None, *, model_name=None):
-	"""Sets up logging to `{model_name}[_fold{N}]_{name}.log` inside args.save_path/{model_name}.
+	"""Sets up logging to `{model_name}[_fold{N}]_{name}.log` inside args.save_path/{args.model_name}.
 
 	`name` is the log type suffix (e.g. 'training', 'saliencies').
 	`model_name` should be the base model name as built by meegnet.parsing.get_model_name.
@@ -53,7 +53,7 @@ def prepare_logging(name, args, LOG, fold=None, *, model_name=None):
 	if fold is not None:
 		log_name += f'_fold{fold}'
 	log_name += f'_{name}.log'
-	log_dir = os.path.join(args.save_path, model_name)
+	log_dir = os.path.join(args.save_path, args.model_name)
 	os.makedirs(log_dir, exist_ok=True)
 	log_file = os.path.join(log_dir, log_name)
 	logging.basicConfig(filename=log_file, filemode='a', force=True)

@@ -94,7 +94,8 @@ if __name__ == '__main__':
 		LOG.info('Training model:')
 		model_name = name + (f'_fold{fold}' if fold is not None else '')
 		my_model = Model(
-			model_name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr), save_path=args.save_path
+			model_name, args.net_option, input_size, n_outputs, learning_rate=float(args.lr),
+			save_path=os.path.join(args.save_path, args.model_name)
 		)
 
 		LOG.info(my_model.name)

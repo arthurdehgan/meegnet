@@ -59,6 +59,7 @@ def run(max_subj):
         sensortype=None,
         lso=True,
         random_state=SEED,
+        target_col=TARGET_COL,
     )
     df = ds.preload(SAVE_PATH, target_col=TARGET_COL)
 
