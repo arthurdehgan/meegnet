@@ -9,6 +9,9 @@ Welcome to MEEGNet!
 
 MEEGNet is an open-source Python toolbox for neuroscientists interested in using Artificial Neural Networks (ANNs) and more specifically Convolutional Neural Networks (CNNs) for Magnetoencephalography (MEG) and Electroencephalography (EEG) data analysis. Our library focuses on providing tools for interpretability and visualization of latent space, making ANNs more transparent.
 
+If you use MEEGNet in your research, please cite:
+`Dehgan et al. (2025) <https://doi.org/10.1101/2025.03.20.644276>`_
+
 - **Source:** https://github.com/arthurdehgan/meegnet
 - **Bug Reports:** https://github.com/arthurdehgan/meegnet/issues
 - **Documentation:** https://meegnet.readthedocs.io/en/latest/index.html
@@ -17,11 +20,72 @@ MEEGNet is an open-source Python toolbox for neuroscientists interested in using
 Installation
 ============
 
+MEEGNet requires Python 3.12 or higher. Install the released version from PyPI:
+
 .. code-block:: bash
 
    pip install meegnet
 
+To install the latest development version from source:
+
+.. code-block:: bash
+
+   git clone https://github.com/arthurdehgan/meegnet.git
+   cd meegnet
+   poetry install
+
 More installation options can be found in the `online documentation <https://meegnet.readthedocs.io/en/latest/index.html>`_.
+
+Quick Start
+===========
+
+Once your MEG/EEG data has been preprocessed into trials (see the
+`prepare_data.ipynb <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/prepare_data.ipynb>`__
+tutorial), loading data and training a network is done in a few lines:
+
+.. code-block:: python
+
+   from meegnet.dataloaders import EpochedDataset
+   from meegnet.network import Model
+
+   # Load preprocessed data (EpochedDataset expects data already cut into
+   # trials; the RestDataset class creates the trials for you instead).
+   dataset = EpochedDataset(
+       sfreq=500,
+       n_subjects=100,
+       n_samples=100,
+       sensortype='ALL',  # MAG GRAD GRAD
+       lso=True,          # leave-subject-out data split
+   )
+   dataset.load('/path/to/data')
+
+   # Create and train a model.
+   # Architectures: 'eegnet', 'meegnet', 'vgg16', 'mlp'
+   model = Model(
+       'my_model',       # model name, also used as output file prefix
+       'eegnet',
+       input_size=(3, 102, 400),  # (channels, sensors, time points)
+       n_outputs=2,
+       save_path='./outputs',
+   )
+   model.train(dataset, max_epoch=15, verbose=1)
+
+   # Inspect training curves and evaluate on the held-out set.
+   model.plot_accuracy()
+   model.test(dataset)
+
+   # Load a pre-trained network for interpretability analysis.
+   model.load('./outputs/my_model.pt')   # or model.from_pretrained()
+
+   from meegnet.viz import compute_saliency_maps
+
+   compute_saliency_maps(
+       dataset, model.net, './outputs/saliency_maps',
+       labels=dataset.target_labels, epoched=True,
+   )
+
+Grad-CAM and additional visualization tools are available in
+`meegnet.viz`.
 
 Tutorials and Examples
 ======================
@@ -40,6 +104,20 @@ Visualize latent space with Gradcam
 
 Learn about your model using filter visualizations
 `here <https://github.com/arthurdehgan/meegnet/blob/master/notebooks/visu_filters.ipynb>`__
+
+Reproducing the Paper Results
+=============================
+
+The step-by-step pipeline used to produce the paper results — data preparation,
+training, and the subject-size experiment — is documented in
+`scripts/README.rst <scripts/README.rst>`_ and run from ``scripts/``.
+
+The precomputed saliency maps, pre-trained models, and per-experiment
+participant tables used to generate the paper figures are published on
+`Figshare <https://doi.org/10.6084/m9.figshare.33806332>`_. The figure
+notebooks (``notebooks/visu_*``) can reproduce the paper figures without any
+retraining; see the *Reproducing Figures Without Retraining* section of
+`scripts/README.rst <scripts/README.rst>`_ for the exact steps.
 
 Key Features
 ============
@@ -98,7 +176,18 @@ References
 MEEGNet
 -------
 
-Work in Progress
+Dehgan A, Pascarella A, Harel Y, Rish I, Jerbi K. MEEGNet: an open source python library for the application of convolutional neural networks to MEG. bioRxiv. 2025.
+`link <https://doi.org/10.1101/2025.03.20.644276>`__
+
+::
+
+   @article{Dehgan2025,
+       title = {{MEEGNet}: an open source python library for the application of convolutional neural networks to {MEG}},
+       author = {Dehgan, Arthur and Pascarella, Annalisa and Harel, Yann and Rish, Irina and Jerbi, Karim},
+       year = {2025},
+       journal = {bioRxiv},
+       doi = {10.1101/2025.03.20.644276}
+   }
 
 LF-CNN or VAR-CNN
 -----------------
