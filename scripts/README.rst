@@ -97,3 +97,41 @@ Recommended notebooks:
 * ``notebooks/visu_saliency_paper_figure.ipynb`` for paper-ready saliency figure generation.
 
 Open those notebooks only after preprocessing and training completed, since they load saved outputs from prior steps.
+
+Reproducing Figures Without Retraining
+======================================
+
+The precomputed saliency maps, pre-trained models, and outputs of the trained
+networks come from Figshare (https://doi.org/10.6084/m9.figshare.33806332).
+
+To reproduce the paper figures you do **not** need to re-download anything or
+re-train the networks — the required artifacts are assumed to already be in
+place at their default locations:
+
+.. code-block:: text
+
+   saliency_maps.tar.gz            repo root (already extracted to outputs/eventclf/saliency_maps/)
+   eventclf_meegnet_1000_42_ALL.pt repo root (pre-trained model)
+   eventclf_eegnet_1000_42_ALL.pt  repo root (pre-trained model)
+   outputs/eventclf/               trained-network outputs
+   outputs/figures/                rendered figures
+
+* The saliency-map notebooks read from ``outputs/eventclf/saliency_maps/``
+  automatically, so no extraction step is required here.
+* The paper-figure notebook loads its pre-trained checkpoint from the repo
+  root as ``../<model-name>.pt`` (relative to ``notebooks/``), matching the
+  ``*.pt`` files listed above.
+
+To reproduce the figures, skip the Data Preparation and Training steps above and
+run the visualization notebooks directly from the repo root (they set their own
+paths relative to ``notebooks/``):
+
+.. code-block:: bash
+
+   cd notebooks
+   jupyter notebook visu_saliency_paper_figure.ipynb
+
+Use the other notebooks in the Visualisation Notebooks section for the
+remaining interpretability figures; they load the saved outputs from the same
+default paths.
+
