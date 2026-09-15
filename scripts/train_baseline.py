@@ -56,6 +56,9 @@ def process_sensor(
 		'fit_intercept': [True, False],
 		'class_weight': [None, 'balanced'],
 	}
+	if len(np.unique(y_train)) > 2:
+		param_distributions['solver'] = ['lbfgs']
+		param_distributions['penalty'] = ['l2', None]
 
 	model = LogisticRegression()
 
