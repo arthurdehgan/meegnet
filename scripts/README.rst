@@ -92,8 +92,7 @@ Recommended notebooks:
 
 * ``notebooks/visu_saliency.ipynb`` for saliency maps.
 * ``notebooks/visu_gradcam.ipynb`` for Grad-CAM visualizations.
-* ``notebooks/visu_filters.ipynb`` for learned filter inspection.
-* ``notebooks/visu_erps.ipynb`` for ERP-style summaries.
+* ``notebooks/visu_erps.ipynb`` for ERP-style summaries (needs CamCAN, see below).
 * ``notebooks/visu_saliency_paper_figure.ipynb`` for paper-ready saliency figure generation.
 
 Open those notebooks only after preprocessing and training completed, since they load saved outputs from prior steps.
@@ -101,37 +100,79 @@ Open those notebooks only after preprocessing and training completed, since they
 Reproducing Figures Without Retraining
 ======================================
 
-The precomputed saliency maps, pre-trained models, and outputs of the trained
-networks come from Figshare (https://doi.org/10.6084/m9.figshare.33806332).
+The precomputed saliency maps, pre-trained models, and per-experiment participant
+tables used by the figure notebooks are published on Figshare:
+https://doi.org/10.6084/m9.figshare.33806332.
 
-To reproduce the paper figures you do **not** need to re-download anything or
-re-train the networks — the required artifacts are assumed to already be in
-place at their default locations:
+The paper figures can be reproduced without retraining: the notebooks only load
+the shipped artifacts. All commands below run from the repository root.
 
-.. code-block:: text
+1. Get the code at the pinned revision.
 
-   saliency_maps.tar.gz            repo root (already extracted to outputs/eventclf/saliency_maps/)
-   eventclf_meegnet_1000_42_ALL.pt repo root (pre-trained model)
-   eventclf_eegnet_1000_42_ALL.pt  repo root (pre-trained model)
-   outputs/eventclf/               trained-network outputs
-   outputs/figures/                rendered figures
+   .. code-block:: bash
 
-* The saliency-map notebooks read from ``outputs/eventclf/saliency_maps/``
-  automatically, so no extraction step is required here.
-* The paper-figure notebook loads its pre-trained checkpoint from the repo
-  root as ``../<model-name>.pt`` (relative to ``notebooks/``), matching the
-  ``*.pt`` files listed above.
+      git clone https://github.com/arthurdehgan/meegnet.git
+      cd meegnet
+      git checkout c46a71e
 
-To reproduce the figures, skip the Data Preparation and Training steps above and
-run the visualization notebooks directly from the repo root (they set their own
-paths relative to ``notebooks/``):
+2. Install the environment (requires Python 3.12).
 
-.. code-block:: bash
+   .. code-block:: bash
 
-   cd notebooks
-   jupyter notebook visu_saliency_paper_figure.ipynb
+      poetry install
+      poetry run pip install jupyter
 
-Use the other notebooks in the Visualisation Notebooks section for the
-remaining interpretability figures; they load the saved outputs from the same
-default paths.
+   The notebooks run in pure CPU mode but are faster on GPU; the saliency-maps
+   archive is ~4.6 GB, so allow for corresponding disk space and RAM.
+
+3. Download the following artefacts from the Figshare record into the repo
+   root:
+
+   .. code-block:: text
+
+      saliency_maps.tar.gz                        repo root
+      eventclf_eegnet_1000_42_ALL.pt              repo root (used by the figure notebooks)
+      eventclf_meegnet_1000_42_ALL.pt             repo root (used by the extension figures)
+      participants_info.csv (one per experiment)  data/<experiment>/
+
+4. Extract the saliency-maps archive where the notebooks expect it.
+
+   .. code-block:: bash
+
+      mkdir -p outputs/eventclf
+      tar -xzf saliency_maps.tar.gz -C outputs/eventclf
+
+   This places the maps in ``outputs/eventclf/saliency_maps/``, the path the
+   notebooks read from directly. The pre-trained checkpoints are loaded from
+   the repo root via ``os.path.join('..', name + '.pt')`` (the notebooks run
+   with ``notebooks/`` as current working directory).
+
+5. Run the notebooks to generate the figures.
+
+   .. code-block:: bash
+
+      cd notebooks
+      jupyter notebook visu_saliency_paper_figure.ipynb
+
+   ``visu_saliency.ipynb`` and ``visu_gradcam.ipynb`` generate the remaining
+   interpretability figures from the same artefacts. Both use
+   ``net_option = 'eegnet'``, so they resolve to the ``eventclf_eegnet_1000_42_ALL``
+   checkpoint.
+
+The preprocessed epochs under ``data/<experiment>/downsampled_500/`` are used at
+load time to recover the target labels. If they are not part of your Figshare
+download, run the Data Preparation step above from the raw CamCAN data (or
+contact the authors) and place the resulting epochs there.
+
+Expected outputs: figure notebooks save to ``outputs/figures/<model-name>/``,
+e.g. ``outputs/figures/eventclf_eegnet_1000_42_ALL/all_subjects_saliencies_90p_confidence.png``.
+Reproduction is complete when those files appear (no error cells in the
+notebook).
+
+Caveats:
+
+* The ``visu_erps.ipynb`` figures cannot be reproduced from the Figshare record
+  alone: they require the raw CamCAN data, which we are not able to distribute
+  under CamCAN's data regulation.
+* ``visu_filters.ipynb`` is not part of this figure set.
 
